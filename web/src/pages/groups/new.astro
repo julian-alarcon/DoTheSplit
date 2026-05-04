@@ -1,0 +1,28 @@
+---
+import Base from "@/layouts/Base.astro";
+
+const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK", "NOK", "DKK"];
+---
+
+<Base title="New group">
+  <div class="mx-auto max-w-md">
+    <h1 class="mb-6 text-2xl font-semibold">New group</h1>
+    <form method="POST" action="/api/groups" class="flex flex-col gap-3">
+      <label class="flex flex-col gap-1 text-sm">
+        <span>Name</span>
+        <input name="name" required maxlength="80" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900" />
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span>Default currency</span>
+        <select name="default_currency" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+          {currencyChoices.map((c) => (
+            <option value={c} selected={c === "EUR"}>{c}</option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" class="mt-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900">
+        Create group
+      </button>
+    </form>
+  </div>
+</Base>

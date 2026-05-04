@@ -1,0 +1,2 @@
+ALTER TABLE groups
+  ADD COLUMN default_currency CHAR(3) NOT NULL DEFAULT 'EUR';

@@ -1,0 +1,141 @@
+# DoTheSplit App definition
+
+Open-source expense-sharing app.
+
+## Principles
+
+- <100ms perceived interactions
+- simple architecture, no microservices
+- security > features (no plaintext passwords)
+- API contract is the source of truth
+- avoid overengineering
+
+## Tech Stack
+
+- Backend: Go with [Gin](https://github.com/gin-gonic/gin) HTTP web framework
+- Frontend: Astro + Tailwind v4 (mobile-first, PWA-ready; future mobile via wrapper)
+- Database: PostgreSQL 18 (encryption at rest)
+- Infra: Docker Compose on TrueNAS (services: `postgres`, `api`, `web`)
+
+## Repo Structure
+
+```text
+/api               → Go backend
+/web               → Astro frontend
+/docs/openapi.yaml → API contract (OpenAPI 3.0, source of truth)
+/docker-compose.yml
+```
+
+## Architecture
+
+- Flow: Client → API → PostgreSQL
+- Backend: auth, persistence, business logic
+- Frontend: UI state, optimistic updates
+
+### Backend layers (Go)
+
+- handlers (HTTP) → services (business logic) → repositories (DB)
+- no business logic in handlers
+- use transactions for expense creation
+
+## Performance
+
+- API: ≤ 50ms typical response time
+- Minimize API calls and payload size
+- Return computed data (e.g. balances) to avoid round-trips
+
+## UX
+
+- optimistic UI for mutations (no blocking on API)
+- preload group data; avoid loading spinners
+- sync via polling / refresh-on-focus (no real-time in v1)
+
+## Core Data Model
+
+Entities: `users`, `groups`, `group_members`, `expenses`, `splits`, `settlements`, `recurring_expenses`, `categories`, `expense_revisions`.
+
+Rules:
+
+- UUIDs for all IDs
+- amounts as integers (cents)
+- do NOT store balances → compute dynamically
+- every expense belongs to a category (default: `other`)
+- every expense edit appends an immutable row to `expense_revisions`
+
+## Categories
+
+- seeded, read-only set
+- minimum set: Groceries 🛒, Food & Drink 🍽️, Transport 🚗, Housing 🏠, Utilities 💡, Entertainment 🎬, Travel ✈️, Health 💊, Shopping 🛍️, Other 📌
+- `other` is the implicit default whenever a category isn't specified
+
+## API (REST JSON, OpenAPI-first, versioned under `/v1`)
+
+Auth:
+
+- POST /v1/auth/register
+- POST /v1/auth/login
+- POST /v1/auth/logout
+- GET  /v1/me
+
+Groups:
+
+- GET    /v1/groups
+- POST   /v1/groups
+- PATCH  /v1/groups/{id}
+- DELETE /v1/groups/{id}
+- POST   /v1/groups/{id}/members
+
+Expenses:
+
+- GET    /v1/groups/{id}/expenses
+- POST   /v1/groups/{id}/expenses
+- GET    /v1/expenses/{id}
+- PATCH  /v1/expenses/{id}           (description / amount / category)
+- DELETE /v1/expenses/{id}
+- GET    /v1/expenses/{id}/revisions
+
+Balances & settlements:
+
+- GET  /v1/groups/{id}/balances
+- GET  /v1/groups/{id}/settlements
+- POST /v1/groups/{id}/settlements
+
+Recurring:
+
+- GET    /v1/groups/{id}/recurring-expenses
+- POST   /v1/groups/{id}/recurring-expenses
+- DELETE /v1/recurring-expenses/{id}
+
+Categories:
+
+- GET /v1/categories
+
+Health (unversioned):
+
+- GET /healthz
+- GET /readyz
+
+## Security
+
+### Passwords
+
+- Argon2id, store hash+salt only
+- never store plaintext or reversibly encrypted passwords
+- optional server-side pepper
+
+### Email / user data
+
+- `email_hash` for lookup/login
+- `email_encrypted` (AES-GCM) for display
+- encryption key stored outside DB (env/config)
+
+### Other
+
+- rate limit login
+- basic auth validation
+- no sensitive data in logs
+
+## Background Jobs
+
+- separate Go worker process (not in-DB)
+- tasks: recurring expenses

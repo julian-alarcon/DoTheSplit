@@ -1,0 +1,962 @@
+openapi: 3.0.3
+info:
+  title: DoTheSplit API
+  version: 0.2.0
+  description: |
+    Split expenses among group members.
+
+
+    Expense-sharing API for the DoTheSplit app.
+
+    Conventions:
+      * All money values are integer cents (no floats).
+      * All IDs are UUIDs.
+      * Authentication is an opaque session cookie (`dts_session` on plain HTTP,
+        `__Host-dts_session` on HTTPS) set by `/v1/auth/login`.
+      * The session cookie is `SameSite=Lax`; write endpoints rely on that for CSRF.
+      * Request bodies reject unknown fields (`additionalProperties: false`).
+      * Times are RFC 3339 UTC.
+
+    Versioning:
+      * Business endpoints live under `/v1`. Breaking changes → `/v2`.
+      * `/healthz` and `/readyz` are infrastructure endpoints and are NOT versioned.
+  contact:
+    name: DoTheSplit
+    url: https://github.com/julian-alarcon/dothesplit
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+externalDocs:
+  description: Product scope and architecture
+  url: https://github.com/julian-alarcon/dothesplit/blob/main/BLUEPRINT.md
+
+servers:
+  - url: http://localhost:8080
+    description: Local dev (Docker Compose)
+
+tags:
+  - name: auth
+    description: Registration, login, logout, current-user lookup.
+  - name: groups
+    description: Groups and membership. The creator is auto-added; any member can add others.
+  - name: expenses
+    description: Expenses with arbitrary split modes (equal, exact, percent, shares). Soft-deleted. Edits tracked in `expense_revisions`.
+  - name: categories
+    description: Seeded expense categories (emoji + slug). Read-only in v1.
+  - name: balances
+    description: Computed net balances and simplified pairwise debts. Never stored.
+  - name: settlements
+    description: "`X paid Y` records that offset balances."
+  - name: recurring
+    description: Templates materialized into real expenses by the background worker.
+  - name: health
+    description: Liveness and readiness probes (unversioned).
+
+security:
+  - cookieAuth: []
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness
+      operationId: healthz
+      security: []
+      tags: [health]
+      responses:
+        "200":
+          description: OK
+
+  /readyz:
+    get:
+      summary: Readiness (pings DB)
+      operationId: readyz
+      security: []
+      tags: [health]
+      responses:
+        "200":
+          description: OK
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /v1/auth/register:
+    post:
+      summary: Register a new user
+      operationId: register
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: Created; session cookie set
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/auth/login:
+    post:
+      summary: Log in
+      operationId: login
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Logged in; session cookie set
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/auth/logout:
+    post:
+      summary: Log out (clears session)
+      operationId: logout
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out
+
+  /v1/me:
+    get:
+      summary: Get the current user
+      operationId: me
+      tags: [auth]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      summary: Rename the current user
+      operationId: updateMe
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMeRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      summary: Soft-delete the current user (tombstones display_name, scrubs email, clears all sessions)
+      operationId: deleteMe
+      tags: [auth]
+      responses:
+        "204":
+          description: Account deleted; session cleared
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/password:
+    post:
+      summary: Change the current user's password (requires old password)
+      operationId: changePassword
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          description: Password changed
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/avatar:
+    put:
+      summary: Upload a 6x6 avatar PNG (base64-encoded, <= 1024 bytes)
+      operationId: setAvatar
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetAvatarRequest" }
+      responses:
+        "204":
+          description: Avatar saved
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      summary: Remove the current user's avatar (falls back to initials on display)
+      operationId: deleteAvatar
+      tags: [auth]
+      responses:
+        "204":
+          description: Avatar cleared
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/users/{id}/avatar:
+    get:
+      summary: Serve a user's pixelated avatar PNG (group-member access)
+      description: |
+        Returns the stored avatar PNG for the user. The source is a 6x6 bitmap
+        uploaded by the client; the server upscales it with nearest-neighbour
+        sampling before storage so it renders crisp at any CSS size. Callers
+        must share at least one group with the target user. Browsers should
+        cache on `?v={avatar_updated_at}` to avoid stale renders when the owner
+        updates.
+      operationId: getUserAvatar
+      tags: [auth]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: PNG bytes
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/groups:
+    get:
+      summary: List groups the current user belongs to
+      operationId: listGroups
+      tags: [groups]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Group" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      summary: Create a group
+      operationId: createGroup
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGroupRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Group" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/groups/{id}:
+    patch:
+      summary: Update a group (rename or change default currency)
+      operationId: updateGroup
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateGroupRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Group" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Delete a group (creator only; cascades)
+      operationId: deleteGroup
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/groups/{id}/members:
+    post:
+      summary: Add a member to a group (invitee must be registered)
+      operationId: addGroupMember
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddMemberRequest" }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupMember" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/groups/{id}/expenses:
+    get:
+      summary: List group expenses (newest first)
+      operationId: listExpenses
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Expense" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      summary: Create an expense
+      operationId: createExpense
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateExpenseRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/expenses/{id}:
+    get:
+      summary: Fetch a single expense (members only)
+      operationId: getExpense
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/ExpenseId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      summary: Update description, amount, category, or payer (payer or group creator only)
+      description: |
+        Editable fields: `description`, `amount_cents`, `category_id`, `payer_id`.
+        Splits are rescaled proportionally when `amount_cents` changes, preserving
+        each member's relative share. A row is appended to `expense_revisions`
+        for every change.
+      operationId: updateExpense
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/ExpenseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateExpenseRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Soft-delete an expense (payer or group creator only)
+      operationId: deleteExpense
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/ExpenseId"
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/expenses/{id}/revisions:
+    get:
+      summary: Full edit history of an expense (oldest first)
+      operationId: listExpenseRevisions
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/ExpenseId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ExpenseRevision" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/categories:
+    get:
+      summary: List available expense categories (seeded)
+      operationId: listCategories
+      tags: [categories]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/groups/{id}/balances:
+    get:
+      summary: Get net balances + simplified pairwise debts for a group
+      operationId: getBalances
+      tags: [balances]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BalancesResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/groups/{id}/settlements:
+    get:
+      summary: List settlements in a group
+      operationId: listSettlements
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Settlement" }
+    post:
+      summary: Record a settlement (one member pays another)
+      operationId: createSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSettlementRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/groups/{id}/recurring-expenses:
+    get:
+      summary: List recurring expense templates for a group
+      operationId: listRecurringExpenses
+      tags: [recurring]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringExpense" }
+    post:
+      summary: Create a recurring expense template
+      operationId: createRecurringExpense
+      tags: [recurring]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRecurringExpenseRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringExpense" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/recurring-expenses/{id}:
+    delete:
+      summary: Delete a recurring template
+      operationId: deleteRecurringExpense
+      tags: [recurring]
+      parameters:
+        - $ref: "#/components/parameters/RecurringId"
+      responses:
+        "204":
+          description: Deleted
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: dts_session
+      description: |
+        Session cookie. Name is `dts_session` on plain HTTP deployments and
+        `__Host-dts_session` when `COOKIE_SECURE=true`.
+
+  parameters:
+    GroupId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ExpenseId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RecurringId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Invalid input (malformed JSON, failed validation, or unknown field).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing or invalid session cookie.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but not permitted for this resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource does not exist (or is hidden by soft-delete).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Request conflicts with existing state (e.g. duplicate email).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Rate limited. Retry after the `Retry-After` header.
+      headers:
+        Retry-After:
+          description: Seconds until the client may retry.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServiceUnavailable:
+      description: Server is not ready (e.g. DB unreachable).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+    User:
+      type: object
+      required: [id, email, display_name, created_at, has_avatar]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        created_at: { type: string, format: date-time }
+        has_avatar:
+          type: boolean
+          description: True when the user has uploaded a pixel avatar. Fetch it at `/v1/users/{id}/avatar`.
+        avatar_updated_at:
+          type: string
+          format: date-time
+          description: Cache-buster for the avatar URL. Changes on every upload/delete.
+        deleted_at:
+          type: string
+          format: date-time
+          description: Set when the account has been soft-deleted; `display_name` is then a tombstone.
+
+    UpdateMeRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 80 }
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [old_password, new_password]
+      properties:
+        old_password: { type: string, minLength: 1, maxLength: 256 }
+        new_password: { type: string, minLength: 10, maxLength: 256 }
+
+    SetAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [png_base64]
+      properties:
+        png_base64:
+          type: string
+          minLength: 1
+          maxLength: 1500
+          description: Base64-encoded PNG. Decoded size must be <= 1024 bytes and the image exactly 6x6 pixels.
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, display_name]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 256 }
+        display_name: { type: string, minLength: 1, maxLength: 80 }
+      example:
+        email: alice@example.com
+        password: correct-horse-battery-staple
+        display_name: Alice
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    Group:
+      type: object
+      required: [id, name, default_currency, created_by, created_at, members]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        default_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO-4217 code used when expenses omit currency
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/GroupMember" }
+
+    GroupMember:
+      type: object
+      required: [user_id, display_name, joined_at, has_avatar]
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        joined_at: { type: string, format: date-time }
+        has_avatar: { type: boolean }
+        avatar_updated_at: { type: string, format: date-time }
+        deleted_at:
+          type: string
+          format: date-time
+          description: Set when the user has soft-deleted their account; `display_name` is a tombstone.
+
+    CreateGroupRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        default_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: "EUR"
+      example:
+        name: Trip to Lisbon
+        default_currency: EUR
+
+    UpdateGroupRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        default_currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+
+    AddMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    SplitMode:
+      type: string
+      enum: [equal, exact, percent, shares]
+
+    SplitInput:
+      type: object
+      additionalProperties: false
+      required: [user_id]
+      properties:
+        user_id: { type: string, format: uuid }
+        # For mode=exact: value is the absolute amount in cents.
+        # For mode=percent: value is 0..10000 (basis points, 10000 = 100%).
+        # For mode=shares: value is an integer share weight.
+        # For mode=equal: value is ignored (server splits evenly).
+        value: { type: integer, format: int64, minimum: 0 }
+
+    Split:
+      type: object
+      required: [user_id, share_cents]
+      properties:
+        user_id: { type: string, format: uuid }
+        share_cents: { type: integer, format: int64, minimum: 0 }
+
+    CreateExpenseRequest:
+      type: object
+      additionalProperties: false
+      required: [description, amount_cents, payer_id, mode, splits]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 200 }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        payer_id: { type: string, format: uuid }
+        incurred_at: { type: string, format: date-time }
+        category_id:
+          type: string
+          format: uuid
+          description: "Defaults to the `other` category when omitted."
+        mode: { $ref: "#/components/schemas/SplitMode" }
+        splits:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SplitInput" }
+      example:
+        description: Hotel
+        amount_cents: 20000
+        payer_id: 7a1d5b9e-0c0a-4a12-9a55-0c55cf2b6fb1
+        mode: equal
+        splits:
+          - user_id: 7a1d5b9e-0c0a-4a12-9a55-0c55cf2b6fb1
+          - user_id: 9c0e3a31-6b2f-41d7-bf80-7a3f1b6d3d24
+
+    UpdateExpenseRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        description: { type: string, minLength: 1, maxLength: 200 }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        category_id: { type: string, format: uuid }
+        payer_id:
+          type: string
+          format: uuid
+          description: New payer; must be a current group member.
+
+    Expense:
+      type: object
+      required:
+        [id, group_id, description, amount_cents, currency, payer_id, incurred_at, created_at, splits, category_id]
+      properties:
+        id: { type: string, format: uuid }
+        group_id: { type: string, format: uuid }
+        description: { type: string }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        payer_id: { type: string, format: uuid }
+        incurred_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        category_id: { type: string, format: uuid }
+        splits:
+          type: array
+          items: { $ref: "#/components/schemas/Split" }
+
+    Category:
+      type: object
+      required: [id, slug, label, emoji]
+      properties:
+        id:    { type: string, format: uuid }
+        slug:  { type: string, description: "Stable machine identifier (e.g. `groceries`)." }
+        label: { type: string, description: "Human-readable name." }
+        emoji: { type: string, description: "Single emoji used as visual summary." }
+
+    ExpenseRevision:
+      type: object
+      required: [id, expense_id, edited_by, edited_at, field, old_value, new_value]
+      properties:
+        id:         { type: string, format: uuid }
+        expense_id: { type: string, format: uuid }
+        edited_by:  { type: string, format: uuid }
+        edited_at:  { type: string, format: date-time }
+        field:
+          type: string
+          enum: [description, amount_cents, category_id, payer_id]
+          description: Which field was changed.
+        old_value:  { type: string, description: "Previous value, stringified." }
+        new_value:  { type: string, description: "New value, stringified." }
+
+    Balance:
+      type: object
+      required: [user_id, display_name, net_cents]
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        net_cents: { type: integer, format: int64, description: "positive = owed to user; negative = user owes" }
+
+    SimplifiedDebt:
+      type: object
+      required: [from_user_id, to_user_id, amount_cents]
+      properties:
+        from_user_id: { type: string, format: uuid }
+        to_user_id: { type: string, format: uuid }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+
+    BalancesResponse:
+      type: object
+      required: [net, simplified]
+      properties:
+        net:
+          type: array
+          items: { $ref: "#/components/schemas/Balance" }
+        simplified:
+          type: array
+          items: { $ref: "#/components/schemas/SimplifiedDebt" }
+
+    CreateSettlementRequest:
+      type: object
+      additionalProperties: false
+      required: [to_user_id, amount_cents]
+      properties:
+        to_user_id: { type: string, format: uuid }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        note: { type: string, maxLength: 200 }
+        settled_at: { type: string, format: date-time }
+
+    Settlement:
+      type: object
+      required: [id, group_id, from_user_id, to_user_id, amount_cents, settled_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        group_id: { type: string, format: uuid }
+        from_user_id: { type: string, format: uuid }
+        to_user_id: { type: string, format: uuid }
+        amount_cents: { type: integer, format: int64 }
+        note: { type: string }
+        settled_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    Cadence:
+      type: string
+      enum: [daily, weekly, monthly]
+
+    CreateRecurringExpenseRequest:
+      type: object
+      additionalProperties: false
+      required: [description, amount_cents, payer_id, mode, splits, cadence, next_run_at]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 200 }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        payer_id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid, description: "Defaults to the `other` category when omitted." }
+        mode: { $ref: "#/components/schemas/SplitMode" }
+        splits:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SplitInput" }
+        cadence: { $ref: "#/components/schemas/Cadence" }
+        next_run_at: { type: string, format: date-time }
+
+    RecurringExpense:
+      type: object
+      required:
+        [id, group_id, description, amount_cents, currency, payer_id, category_id, mode, splits, cadence, next_run_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        group_id: { type: string, format: uuid }
+        description: { type: string }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        payer_id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        mode: { $ref: "#/components/schemas/SplitMode" }
+        splits:
+          type: array
+          items: { $ref: "#/components/schemas/SplitInput" }
+        cadence: { $ref: "#/components/schemas/Cadence" }
+        next_run_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }

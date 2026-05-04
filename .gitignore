@@ -1,0 +1,25 @@
+# Go
+/api/bin/
+/api/coverage.out
+*.test
+*.out
+
+# Node / Astro
+node_modules/
+.astro/
+/web/dist/
+/web/.output/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Generated code (uncomment if you want to keep generated out of VCS)
+# /api/internal/apigen/*.gen.go
+# /web/src/lib/api/schema.d.ts

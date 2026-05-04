@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.astro
+**/.next
+**/bin
+**/coverage.out
+.git
+.vscode
+.idea
+.env
+.env.*
+!.env.example

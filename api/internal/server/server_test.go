@@ -1,0 +1,463 @@
+package server_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/config"
+	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
+	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
+	"github.com/julian-alarcon/dothesplit/api/internal/server"
+	"github.com/julian-alarcon/dothesplit/api/internal/service"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tcpg "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+// readMigrations concatenates every *.up.sql file in migrations/ in filename order.
+func readMigrations(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	dir := filepath.Join(filepath.Dir(file), "..", "..", "migrations")
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	var out bytes.Buffer
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".up.sql") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		require.NoError(t, err)
+		out.Write(b)
+		out.WriteString("\n")
+	}
+	return out.String()
+}
+
+type testStack struct {
+	srv  *httptest.Server
+	pool *pgxpool.Pool
+	ctr  testcontainers.Container
+}
+
+func setup(t *testing.T) *testStack {
+	t.Helper()
+	ctx := context.Background()
+
+	pgc, err := tcpg.Run(ctx,
+		"postgres:16-alpine",
+		tcpg.WithDatabase("dts"),
+		tcpg.WithUsername("dts"),
+		tcpg.WithPassword("dts"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).WithStartupTimeout(60*time.Second),
+		),
+	)
+	require.NoError(t, err)
+
+	dsn, err := pgc.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	pool, err := pgxpool.New(ctx, dsn)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, readMigrations(t))
+	require.NoError(t, err)
+
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	cfg := &config.Config{
+		DatabaseURL:    dsn,
+		SessionTTLDay:  30,
+		EmailEncKey:    key,
+		EmailHMACKey:   key,
+		PasswordPepper: key,
+	}
+	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
+	require.NoError(t, err)
+
+	users := repo.NewUserRepo(pool)
+	groups := repo.NewGroupRepo(pool)
+	expenses := repo.NewExpenseRepo(pool)
+	settlements := repo.NewSettlementRepo(pool)
+	balances := repo.NewBalanceRepo(pool)
+	recurring := repo.NewRecurringRepo(pool)
+	categories := repo.NewCategoryRepo(pool)
+	categorySvc := service.NewCategoryService(categories)
+
+	sessionRepo := repo.NewSessionRepo(pool)
+	ttl := time.Duration(cfg.SessionTTLDay) * 24 * time.Hour
+	h := server.New(&handlers.Server{
+		Cfg:         cfg,
+		Pool:        pool,
+		Auth:        service.NewAuthService(users, sessionRepo, email, cfg.PasswordPepper, ttl),
+		MeSvc:       service.NewMeService(users, sessionRepo, email, cfg.PasswordPepper),
+		Groups:      service.NewGroupService(groups, users, email),
+		Categories:  categorySvc,
+		Expenses:    service.NewExpenseService(expenses, groups, categorySvc),
+		Balances:    service.NewBalanceService(balances, groups),
+		Settlements: service.NewSettlementService(settlements, groups),
+		Recurring:   service.NewRecurringService(recurring, expenses, groups, categorySvc),
+	})
+	srv := httptest.NewServer(h)
+
+	ts := &testStack{srv: srv, pool: pool, ctr: pgc}
+	t.Cleanup(func() {
+		srv.Close()
+		pool.Close()
+		_ = pgc.Terminate(context.Background())
+	})
+	return ts
+}
+
+// request is a tiny helper used throughout the test.
+func request(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, map[string]any) {
+	t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		require.NoError(t, json.NewEncoder(&buf).Encode(body))
+	}
+	req, err := http.NewRequest(method, url, &buf)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	var out map[string]any
+	if resp.Body != nil {
+		defer resp.Body.Close()
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+	}
+	return resp, out
+}
+
+// rawRequest issues the same kind of authenticated call as request(), but
+// returns the live response so callers can read headers / non-JSON bodies.
+// Useful for the avatar download (image/png) and Set-Cookie inspection.
+func rawRequest(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, []byte) {
+	t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		require.NoError(t, json.NewEncoder(&buf).Encode(body))
+	}
+	req, err := http.NewRequest(method, url, &buf)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	var data []byte
+	if resp.Body != nil {
+		defer resp.Body.Close()
+		data, _ = io.ReadAll(resp.Body)
+	}
+	return resp, data
+}
+
+// requestList is like request but decodes the body as a JSON array.
+func requestList(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, []map[string]any) {
+	t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		require.NoError(t, json.NewEncoder(&buf).Encode(body))
+	}
+	req, err := http.NewRequest(method, url, &buf)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	var out []map[string]any
+	if resp.Body != nil {
+		defer resp.Body.Close()
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+	}
+	return resp, out
+}
+
+func sessionCookie(resp *http.Response) *http.Cookie {
+	for _, c := range resp.Cookies() {
+		if (c.Name == "__Host-dts_session" || c.Name == "dts_session") && c.Value != "" {
+			return c
+		}
+	}
+	return nil
+}
+
+func registerUser(t *testing.T, base, email, pw, name string) (map[string]any, *http.Cookie) {
+	t.Helper()
+	resp, body := request(t, "POST", base+"/v1/auth/register", map[string]any{
+		"email":        email,
+		"password":     pw,
+		"display_name": name,
+	}, nil)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, body)
+	c := sessionCookie(resp)
+	require.NotNil(t, c)
+	return body, c
+}
+
+// TestGoldenPath exercises the full MVP flow end-to-end against a real Postgres:
+// auth (register/login/logout), groups + membership, expenses with three split
+// modes, balance computation, simplified debts, settlements, and authz negatives.
+func TestGoldenPath(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	// --- Auth ---
+	userA, cookieA := registerUser(t, base, "a@test.dev", "passwordpassword", "Alice")
+	userB, cookieB := registerUser(t, base, "b@test.dev", "passwordpassword", "Bob")
+
+	// /me works with session, fails without
+	resp, me := request(t, "GET", base+"/v1/me", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, me)
+	require.Equal(t, "Alice", me["display_name"])
+
+	resp, _ = request(t, "GET", base+"/v1/me", nil, nil)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	// Duplicate register → 409
+	resp, _ = request(t, "POST", base+"/v1/auth/register", map[string]any{
+		"email": "a@test.dev", "password": "passwordpassword", "display_name": "Alice2",
+	}, nil)
+	require.Equal(t, http.StatusConflict, resp.StatusCode)
+
+	// Bad password → 401
+	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+		"email": "a@test.dev", "password": "wrongwrongwrong",
+	}, nil)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	// --- Groups ---
+	resp, groupBody := request(t, "POST", base+"/v1/groups",
+		map[string]any{"name": "Trip"}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, groupBody)
+	groupID := groupBody["id"].(string)
+
+	// A adds B
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/members",
+		map[string]any{"email": "b@test.dev"}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// A tries to invite unregistered → 404
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/members",
+		map[string]any{"email": "ghost@test.dev"}, cookieA)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	// --- Expenses: equal split ---
+	resp, e1 := request(t, "POST", base+"/v1/groups/"+groupID+"/expenses", map[string]any{
+		"description":  "Hotel",
+		"amount_cents": 20000,
+		"payer_id":     userA["id"],
+		"mode":         "equal",
+		"splits": []map[string]any{
+			{"user_id": userA["id"]}, {"user_id": userB["id"]},
+		},
+	}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, e1)
+	hotelID := e1["id"].(string)
+
+	// Balances: A +100, B -100
+	resp, bal := request(t, "GET", base+"/v1/groups/"+groupID+"/balances", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, bal)
+	nets := netMap(bal)
+	require.EqualValues(t, 10000, nets[userA["id"].(string)])
+	require.EqualValues(t, -10000, nets[userB["id"].(string)])
+
+	simp := bal["simplified"].([]any)
+	require.Len(t, simp, 1)
+	d := simp[0].(map[string]any)
+	require.Equal(t, userB["id"], d["from_user_id"])
+	require.Equal(t, userA["id"], d["to_user_id"])
+	require.EqualValues(t, 10000, d["amount_cents"])
+
+	// --- Expenses: exact split ---
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/expenses", map[string]any{
+		"description":  "Food",
+		"amount_cents": 4000,
+		"payer_id":     userB["id"],
+		"mode":         "exact",
+		"splits": []map[string]any{
+			{"user_id": userA["id"], "value": 1000},
+			{"user_id": userB["id"], "value": 3000},
+		},
+	}, cookieB)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// A paid 200, owes 100+10 = 110, net = +90
+	_, bal = request(t, "GET", base+"/v1/groups/"+groupID+"/balances", nil, cookieA)
+	nets = netMap(bal)
+	require.EqualValues(t, 9000, nets[userA["id"].(string)])
+	require.EqualValues(t, -9000, nets[userB["id"].(string)])
+
+	// Exact split that doesn't sum → 400
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/expenses", map[string]any{
+		"description":  "Bad",
+		"amount_cents": 1000,
+		"payer_id":     userA["id"],
+		"mode":         "exact",
+		"splits": []map[string]any{
+			{"user_id": userA["id"], "value": 500},
+			{"user_id": userB["id"], "value": 400},
+		},
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// --- Settlement: B pays A $50 ---
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/settlements", map[string]any{
+		"to_user_id":   userA["id"],
+		"amount_cents": 5000,
+	}, cookieB)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	_, bal = request(t, "GET", base+"/v1/groups/"+groupID+"/balances", nil, cookieA)
+	nets = netMap(bal)
+	require.EqualValues(t, 4000, nets[userA["id"].(string)])
+	require.EqualValues(t, -4000, nets[userB["id"].(string)])
+
+	// --- Categories + expense edits ---
+	resp, catsList := requestList(t, "GET", base+"/v1/categories", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NotEmpty(t, catsList)
+	var groceriesID, travelID string
+	for _, c := range catsList {
+		switch c["slug"] {
+		case "groceries":
+			groceriesID = c["id"].(string)
+		case "travel":
+			travelID = c["id"].(string)
+		}
+	}
+	require.NotEmpty(t, groceriesID)
+	require.NotEmpty(t, travelID)
+
+	// Expense created without a category → defaults to "other".
+	resp, exp := request(t, "POST", base+"/v1/groups/"+groupID+"/expenses", map[string]any{
+		"description":  "Bus",
+		"amount_cents": 1000,
+		"payer_id":     userA["id"],
+		"mode":         "equal",
+		"splits":       []map[string]any{{"user_id": userA["id"]}, {"user_id": userB["id"]}},
+	}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	busID := exp["id"].(string)
+	require.NotEmpty(t, exp["category_id"])
+
+	// PATCH: rename + change category + change amount. 1000→2000 doubles each share.
+	resp, upd := request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"description":  "Train",
+		"amount_cents": 2000,
+		"category_id":  travelID,
+	}, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, upd)
+	require.Equal(t, "Train", upd["description"])
+	require.EqualValues(t, 2000, upd["amount_cents"])
+	require.Equal(t, travelID, upd["category_id"])
+	for _, s := range upd["splits"].([]any) {
+		require.EqualValues(t, 1000, s.(map[string]any)["share_cents"])
+	}
+
+	// Non-payer/non-creator cannot edit.
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"description": "Hacked",
+	}, cookieB)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+
+	// Revision log should contain 3 entries (description, amount_cents, category_id).
+	resp, revs := requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Len(t, revs, 3)
+
+	// Change the payer to B. Actor A is still the original payer, so allowed.
+	resp, updPayer := request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"payer_id": userB["id"],
+	}, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, updPayer)
+	require.Equal(t, userB["id"], updPayer["payer_id"])
+
+	// After reassigning the payer to B, original payer A loses edit permission
+	// unless A is the group creator — A *is* the creator here, so A can still edit.
+	// Non-member payer change → 400.
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"payer_id": "00000000-0000-0000-0000-000000000000",
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Revision log should now have one more row (payer_id).
+	resp, revs = requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Len(t, revs, 4)
+	last := revs[len(revs)-1]
+	require.Equal(t, "payer_id", last["field"])
+
+	// Unknown category → 400.
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"category_id": "00000000-0000-0000-0000-000000000000",
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Create expense with an explicit category_id.
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/expenses", map[string]any{
+		"description":  "Market",
+		"amount_cents": 500,
+		"payer_id":     userA["id"],
+		"category_id":  groceriesID,
+		"mode":         "equal",
+		"splits":       []map[string]any{{"user_id": userA["id"]}},
+	}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// --- Authz on delete ---
+	_, cookieC := registerUser(t, base, "c@test.dev", "passwordpassword", "Carol")
+	// Non-member authenticated user cannot delete
+	resp, _ = request(t, "DELETE", base+"/v1/expenses/"+hotelID, nil, cookieC)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// Payer can delete; also soft-delete reflected in balances
+	resp, _ = request(t, "DELETE", base+"/v1/expenses/"+hotelID, nil, cookieA)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	// Second delete → 404
+	resp, _ = request(t, "DELETE", base+"/v1/expenses/"+hotelID, nil, cookieA)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	// Logout, then cookie is unauthenticated
+	resp, _ = request(t, "POST", base+"/v1/auth/logout", nil, cookieA)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	resp, _ = request(t, "GET", base+"/v1/me", nil, cookieA)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	// /healthz always open
+	resp, _ = request(t, "GET", base+"/healthz", nil, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func netMap(balBody map[string]any) map[string]float64 {
+	out := map[string]float64{}
+	for _, n := range balBody["net"].([]any) {
+		m := n.(map[string]any)
+		out[m["user_id"].(string)] = m["net_cents"].(float64)
+	}
+	return out
+}

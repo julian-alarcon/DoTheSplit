@@ -1,0 +1,95 @@
+// Command worker runs background jobs (recurring expenses for v1).
+// Uses a Postgres advisory lock so only one instance materializes at a time.
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/julian-alarcon/dothesplit/api/internal/config"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
+	"github.com/julian-alarcon/dothesplit/api/internal/service"
+)
+
+// advisoryKey is any fixed int64; this one happens to spell "dtsrec" in hex-ish.
+const advisoryKey int64 = 0x00DEADBEEFDA71EC
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	cfg, err := config.Load()
+	if err != nil {
+		logger.Error("load config", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("pool", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	recurring := repo.NewRecurringRepo(pool)
+	expenses := repo.NewExpenseRepo(pool)
+	groups := repo.NewGroupRepo(pool)
+	categories := repo.NewCategoryRepo(pool)
+	categorySvc := service.NewCategoryService(categories)
+	svc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
+
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	logger.Info("worker started")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("worker stopping")
+			return
+		case <-ticker.C:
+			if err := runOnce(ctx, pool, svc, logger); err != nil {
+				logger.Error("tick", slog.String("err", err.Error()))
+			}
+		}
+	}
+}
+
+// runOnce acquires a session-level advisory lock and ticks the recurring service.
+func runOnce(ctx context.Context, pool *pgxpool.Pool, svc *service.RecurringService, logger *slog.Logger) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	var gotLock bool
+	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", advisoryKey).Scan(&gotLock); err != nil {
+		return err
+	}
+	if !gotLock {
+		logger.Debug("another worker holds the lock; skipping tick")
+		return nil
+	}
+	defer func() {
+		if _, err := conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", advisoryKey); err != nil {
+			logger.Warn("unlock", slog.String("err", err.Error()))
+		}
+	}()
+
+	n, err := svc.Tick(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		logger.Info("materialized recurring expenses", slog.Int("count", n))
+	}
+	return nil
+}

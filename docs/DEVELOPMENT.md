@@ -172,7 +172,7 @@ Run `npm install --save-dev @types/node` in `/web`. This started being required 
 
 ### Test container fails to pull Postgres image
 
-`testcontainers-go` uses the same Docker daemon as compose. If compose works, tests will too. If not: `docker info` and `docker pull postgres:16-alpine` to prime the image cache.
+`testcontainers-go` uses the same Docker daemon as compose. If compose works, tests will too. If not: `docker info` and `docker pull postgres:18-alpine` to prime the image cache.
 
 ### Shiki warning during `astro build` about CSP
 

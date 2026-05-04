@@ -184,11 +184,14 @@ Harmless for us — we don't render Markdown code blocks anywhere. Ignore.
 
 Run `make help` for the full list. The ones you'll actually reach for:
 
-| Target            | What it does                                              |
-| ----------------- | --------------------------------------------------------- |
-| `make gen`        | Regenerate Go + TS API bindings from `docs/openapi.yaml` |
-| `make migrate-up` | Apply all pending migrations                             |
+| Target            | What it does                                               |
+| ----------------- | ---------------------------------------------------------- |
+| `make gen`        | Regenerate Go + TS API bindings from `docs/openapi.yaml`   |
+| `make migrate-up` | Apply all pending migrations                               |
 | `make test-go`    | Full Go test suite (unit + integration via testcontainers) |
-| `make dev-api`    | Run the Go API locally against Docker Postgres           |
-| `make dev-web`    | Run Astro dev server                                     |
-| `make build`      | Build Go binaries (`bin/api`, `bin/worker`)              |
+| `make dev-api`    | Run the Go API locally against Docker Postgres             |
+| `make dev-web`    | Run Astro dev server                                       |
+| `make build`      | Build Go binaries (`bin/api`, `bin/worker`)                |
+| `make up`         | `docker compose up -d --build`, baking current SHA in      |
+
+**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and passes it to the web Dockerfile as a build arg. The SHA ends up in `process.env.BUILD_COMMIT` inside the Astro SSR process, and the shared [`Base.astro`](../web/src/layouts/Base.astro) layout renders a small footer on every page with a link back to `https://github.com/julian-alarcon/dothesplit/commit/<sha>`. When building outside a git checkout (`docker compose build` directly, a tarball, etc.), `BUILD_COMMIT` defaults to `dev` and the footer shows `build dev` with no link.

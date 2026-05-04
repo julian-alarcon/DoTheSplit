@@ -79,6 +79,10 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+      args:
+        # Baked into the image so the footer can show which revision is live.
+        # Use `make up` or export BUILD_COMMIT=$(git rev-parse --short HEAD) to populate.
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
     depends_on:
       - api
     environment:

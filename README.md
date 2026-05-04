@@ -54,8 +54,8 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Themes
 - Frontend UI for **recurring expenses** (the backend + worker are already there).
+- Themes
 - **Non-equal splits in the create-expense form**: the backend accepts all four modes; the web form currently only offers equal splits.
 - **Settlements UI**: list past settlements per group; today you can only record them.
 - **Pagination** on expense and settlement lists. Load first 50 expenses and a a Button at the end to load 25 more.

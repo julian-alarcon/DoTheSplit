@@ -1,4 +1,4 @@
-.PHONY: help gen gen-go gen-ts migrate-up migrate-down test test-go test-web dev dev-api dev-web lint lint-go lint-web build tidy
+.PHONY: help gen gen-go gen-ts migrate-up migrate-down test test-go test-web dev dev-api dev-web lint lint-go lint-web build tidy up
 
 SHELL := /bin/bash
 
@@ -53,3 +53,7 @@ lint-web: ## Lint web
 
 build: ## Build Go binaries
 	cd api && go build -o bin/api ./cmd/api && go build -o bin/worker ./cmd/worker
+
+up: ## Rebuild + start the full stack, baking the current git SHA into the web image
+	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) \
+		docker compose up -d --build

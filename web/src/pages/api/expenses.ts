@@ -13,14 +13,15 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const payerID = String(form.get("payer_id") ?? "");
   const description = String(form.get("description") ?? "");
   const categoryID = (form.get("category_id") ?? "").toString().trim();
-  const splitIDs = form.getAll("split_user_id").map(String).filter(Boolean);
+
+  const { mode, splits } = parseSplitsJSON(form.get("splits_json"));
 
   const body: Record<string, unknown> = {
     description,
     amount_cents: amountCents,
     payer_id: payerID,
-    mode: "equal",
-    splits: splitIDs.map((id) => ({ user_id: id })),
+    mode,
+    splits,
   };
   if (categoryID) body.category_id = categoryID;
 
@@ -31,3 +32,27 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   });
   return redirect(`/groups/${groupID}`, 302);
 };
+
+type SplitPayload = { user_id: string; value?: number };
+
+function parseSplitsJSON(
+  raw: FormDataEntryValue | null,
+): { mode: string; splits: SplitPayload[] } {
+  if (!raw) return { mode: "equal", splits: [] };
+  try {
+    const parsed = JSON.parse(String(raw));
+    const mode = typeof parsed?.mode === "string" ? parsed.mode : "equal";
+    const splits: SplitPayload[] = Array.isArray(parsed?.splits)
+      ? parsed.splits
+          .filter((s: unknown): s is { user_id: string; value?: number } =>
+            typeof (s as { user_id?: unknown })?.user_id === "string",
+          )
+          .map((s: { user_id: string; value?: number }) =>
+            typeof s.value === "number" ? { user_id: s.user_id, value: s.value } : { user_id: s.user_id },
+          )
+      : [];
+    return { mode, splits };
+  } catch {
+    return { mode: "equal", splits: [] };
+  }
+}

@@ -2,7 +2,9 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"time"
 
@@ -161,18 +163,21 @@ func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// UpdateWithRescale applies description / amount / category / payer changes in one tx.
-// If amountCents changed, existing splits are rescaled proportionally so each
-// user's relative share is preserved; any rounding remainder is distributed to
-// the first few splits (matching resolveSplits behavior).
-// Every non-nil change writes an expense_revisions row.
-func (r *ExpenseRepo) UpdateWithRescale(
+// Update applies description / amount / category / payer / splits changes in one tx.
+// If newSplits is non-nil, existing splits are replaced wholesale (the service layer
+// has already resolved per-user shares via resolveSplits). Otherwise, if amountCents
+// changed, existing splits are rescaled proportionally — preserving each user's
+// relative share; rounding remainder goes to the first splits in user_id order.
+// Every non-nil change writes an expense_revisions row; split changes are recorded
+// as a single 'splits' row with JSON before/after.
+func (r *ExpenseRepo) Update(
 	ctx context.Context,
 	id, editorID uuid.UUID,
 	description *string,
 	amountCents *int64,
 	categoryID *uuid.UUID,
 	payerID *uuid.UUID,
+	newSplits []Split,
 ) (*Expense, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -209,7 +214,35 @@ func (r *ExpenseRepo) UpdateWithRescale(
 		revisions = append(revisions, struct{ field, oldV, newV string }{"payer_id", e.PayerID.String(), payerID.String()})
 		e.PayerID = *payerID
 	}
-	rescaledSplits := []Split{}
+
+	existingSplits, err := fetchSplitsForUpdate(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var splitsToWrite []Split
+	splitsChanged := false
+	if newSplits != nil {
+		resolved := make([]Split, len(newSplits))
+		copy(resolved, newSplits)
+		for i := range resolved {
+			resolved[i].ExpenseID = id
+		}
+		splitsChanged = !splitsEqual(existingSplits, resolved)
+		if splitsChanged {
+			oldJSON, err := marshalSplitsForRevision(existingSplits)
+			if err != nil {
+				return nil, err
+			}
+			newJSON, err := marshalSplitsForRevision(resolved)
+			if err != nil {
+				return nil, err
+			}
+			revisions = append(revisions, struct{ field, oldV, newV string }{"splits", oldJSON, newJSON})
+			splitsToWrite = resolved
+		}
+	}
+
 	if amountCents != nil && *amountCents != e.AmountCents {
 		oldAmount := e.AmountCents
 		revisions = append(revisions, struct{ field, oldV, newV string }{
@@ -217,25 +250,12 @@ func (r *ExpenseRepo) UpdateWithRescale(
 			strconv.FormatInt(oldAmount, 10),
 			strconv.FormatInt(*amountCents, 10),
 		})
-
-		srows, qerr := tx.Query(ctx, `SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = $1 ORDER BY user_id`, id)
-		if qerr != nil {
-			return nil, qerr
-		}
-		var existing []Split
-		for srows.Next() {
-			var s Split
-			if err := srows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
-				srows.Close()
-				return nil, err
+		if splitsToWrite == nil {
+			rescaled := rescaleSplits(existingSplits, oldAmount, *amountCents)
+			if !splitsEqual(existingSplits, rescaled) {
+				splitsToWrite = rescaled
 			}
-			existing = append(existing, s)
 		}
-		srows.Close()
-		if err := srows.Err(); err != nil {
-			return nil, err
-		}
-		rescaledSplits = rescaleSplits(existing, oldAmount, *amountCents)
 		e.AmountCents = *amountCents
 	}
 
@@ -250,13 +270,27 @@ func (r *ExpenseRepo) UpdateWithRescale(
 		return nil, err
 	}
 
-	for _, s := range rescaledSplits {
-		if _, err := tx.Exec(ctx, `
-			UPDATE splits SET share_cents = $3 WHERE expense_id = $1 AND user_id = $2
-		`, id, s.UserID, s.ShareCents); err != nil {
+	if splitsChanged {
+		if _, err := tx.Exec(ctx, `DELETE FROM splits WHERE expense_id = $1`, id); err != nil {
 			return nil, err
 		}
+		for _, s := range splitsToWrite {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO splits (expense_id, user_id, share_cents) VALUES ($1, $2, $3)
+			`, id, s.UserID, s.ShareCents); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		for _, s := range splitsToWrite {
+			if _, err := tx.Exec(ctx, `
+				UPDATE splits SET share_cents = $3 WHERE expense_id = $1 AND user_id = $2
+			`, id, s.UserID, s.ShareCents); err != nil {
+				return nil, err
+			}
+		}
 	}
+
 	for _, rv := range revisions {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO expense_revisions (expense_id, edited_by, field, old_value, new_value)
@@ -283,6 +317,58 @@ func (r *ExpenseRepo) UpdateWithRescale(
 		e.Splits = append(e.Splits, s)
 	}
 	return &e, srows.Err()
+}
+
+func fetchSplitsForUpdate(ctx context.Context, tx pgx.Tx, expenseID uuid.UUID) ([]Split, error) {
+	rows, err := tx.Query(ctx, `SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = $1 ORDER BY user_id`, expenseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Split
+	for rows.Next() {
+		var s Split
+		if err := rows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// marshalSplitsForRevision emits a compact JSON array of {user_id, share_cents},
+// sorted by user_id, for stable before/after diffs in expense_revisions.
+func marshalSplitsForRevision(splits []Split) (string, error) {
+	type row struct {
+		UserID     string `json:"user_id"`
+		ShareCents int64  `json:"share_cents"`
+	}
+	rows := make([]row, len(splits))
+	for i, s := range splits {
+		rows[i] = row{UserID: s.UserID.String(), ShareCents: s.ShareCents}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].UserID < rows[j].UserID })
+	b, err := json.Marshal(rows)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func splitsEqual(a, b []Split) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	index := make(map[uuid.UUID]int64, len(a))
+	for _, s := range a {
+		index[s.UserID] = s.ShareCents
+	}
+	for _, s := range b {
+		if v, ok := index[s.UserID]; !ok || v != s.ShareCents {
+			return false
+		}
+	}
+	return true
 }
 
 // ListRevisions returns the full edit history for an expense (oldest first).

@@ -1,6 +1,7 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
+import SplitEditor from "@/components/SplitEditor.astro";
 import { apiFor } from "@/lib/api/client";
 
 const { id } = Astro.params as { id: string };
@@ -294,24 +295,20 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
           ))}
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Split among</span>
-        <div class="flex flex-wrap gap-3 rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950">
-          {group.members.map((m) => (
-            <label class="flex items-center gap-1">
-              <input type="checkbox" name="split_user_id" value={m.user_id} checked />
-              {m.display_name}
-            </label>
-          ))}
-        </div>
-      </label>
+      <div class="flex flex-col gap-1 text-sm">
+        <span>Split</span>
+        <SplitEditor
+          members={group.members}
+          currency={currency}
+          currentUserId={Astro.locals.user?.id}
+        />
+      </div>
       <div class="flex justify-end">
         <button type="submit" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-neutral-100 dark:text-neutral-900">
           Add expense
         </button>
       </div>
     </form>
-    <p class="mt-2 text-xs text-neutral-500">Splits equally between selected members. Non-equal splits coming soon.</p>
   </section>
 
   <section>
@@ -358,5 +355,6 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
 
   <script>
     import "@/scripts/category-picker.ts";
+    import "@/scripts/split-editor.ts";
   </script>
 </Base>

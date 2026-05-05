@@ -54,9 +54,10 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- **Non-equal splits in the create-expense form**: the backend accepts all four modes; the web form currently only offers equal splits.
+- **Group-level default split** (follow-up, not a blocker): in group settings, allow a 2-member group to pin a default non-equal split (e.g. 40/60) that prefills the create-expense form. Store as `(user_id, basis_points)` pairs so the mapping is stable. Invalidate / hide the default automatically when the group grows past 2 members.
 - Frontend UI for **recurring expenses** (the backend + worker are already there).
 - Themes
+  - Use Inter font (in local to avoid calling thirt party entities)
 - **Settlements UI**: list past settlements per group; today you can only record them.
 - **Pagination** on expense and settlement lists. Load first 50 expenses and a a Button at the end to load 25 more.
 - Publishing to gitHub and Github docker registry

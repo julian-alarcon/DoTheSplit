@@ -136,18 +136,22 @@ func (s *ExpenseService) Get(ctx context.Context, actorID, id uuid.UUID) (*repo.
 }
 
 // UpdateExpenseInput mirrors the PATCH body (all fields optional).
+// Mode + Splits must be supplied together to re-resolve per-user shares; if neither
+// is supplied and amount changes, existing splits are rescaled proportionally.
 type UpdateExpenseInput struct {
 	Description *string
 	AmountCents *int64
 	CategoryID  *uuid.UUID
 	PayerID     *uuid.UUID
+	Mode        *SplitMode
+	Splits      []SplitInput
 }
 
-// Update edits description / amount / category / payer on an expense.
-// Only the current payer or group creator may update. Splits are rescaled when amount changes.
+// Update edits description / amount / category / payer / splits on an expense.
+// Any group member may update; the edit history records who made each change.
 // Every changed field appends an expense_revisions row.
 func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUID, in UpdateExpenseInput) (*repo.Expense, error) {
-	if in.Description == nil && in.AmountCents == nil && in.CategoryID == nil && in.PayerID == nil {
+	if in.Description == nil && in.AmountCents == nil && in.CategoryID == nil && in.PayerID == nil && in.Mode == nil && in.Splits == nil {
 		return nil, fmt.Errorf("%w: nothing to update", ErrBadSplit)
 	}
 	if in.AmountCents != nil && *in.AmountCents <= 0 {
@@ -156,6 +160,9 @@ func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUI
 	if in.Description != nil && *in.Description == "" {
 		return nil, fmt.Errorf("%w: description cannot be empty", ErrBadSplit)
 	}
+	if (in.Mode == nil) != (in.Splits == nil) {
+		return nil, fmt.Errorf("%w: mode and splits must be supplied together", ErrBadSplit)
+	}
 	existing, err := s.exps.FindByID(ctx, expenseID)
 	if err != nil {
 		return nil, err
@@ -163,12 +170,8 @@ func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUI
 	if existing.DeletedAt != nil {
 		return nil, repo.ErrNotFound
 	}
-	g, err := s.groups.FindByID(ctx, existing.GroupID)
-	if err != nil {
+	if err := s.requireMember(ctx, existing.GroupID, actorID); err != nil {
 		return nil, err
-	}
-	if actorID != existing.PayerID && actorID != g.CreatedBy {
-		return nil, ErrForbidden
 	}
 	if in.CategoryID != nil {
 		if _, err := s.categories.Resolve(ctx, in.CategoryID); err != nil {
@@ -184,7 +187,29 @@ func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUI
 			return nil, ErrPayerNotMember
 		}
 	}
-	return s.exps.UpdateWithRescale(ctx, expenseID, actorID, in.Description, in.AmountCents, in.CategoryID, in.PayerID)
+
+	var resolved []repo.Split
+	if in.Mode != nil {
+		for _, sp := range in.Splits {
+			ok, err := s.groups.IsMember(ctx, existing.GroupID, sp.UserID)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, ErrSplitNotMember
+			}
+		}
+		amount := existing.AmountCents
+		if in.AmountCents != nil {
+			amount = *in.AmountCents
+		}
+		resolved, err = resolveSplits(*in.Mode, amount, in.Splits)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return s.exps.Update(ctx, expenseID, actorID, in.Description, in.AmountCents, in.CategoryID, in.PayerID, resolved)
 }
 
 // ListRevisions returns the full edit history of an expense (oldest first).

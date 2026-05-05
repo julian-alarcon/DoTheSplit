@@ -531,6 +531,14 @@ export interface components {
              * @description New payer; must be a current group member.
              */
             payer_id?: string;
+            /**
+             * @description Must be supplied together with `splits`. When both are present, the server
+             *     re-resolves per-user shares. When neither is present, existing splits are
+             *     rescaled proportionally if `amount_cents` changes.
+             */
+            mode?: components["schemas"]["SplitMode"];
+            /** @description Must be supplied together with `mode`. */
+            splits?: components["schemas"]["SplitInput"][];
         };
         Expense: {
             /** Format: uuid */

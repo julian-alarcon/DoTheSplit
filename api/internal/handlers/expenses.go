@@ -113,7 +113,8 @@ func (s *Server) GetExpense(c *gin.Context) {
 	c.JSON(http.StatusOK, toAPIExpense(e))
 }
 
-// UpdateExpense edits description / amount / category (payer or group creator).
+// UpdateExpense edits description / amount / category / payer / splits.
+// Any group member may edit; the change is recorded in the revision history.
 func (s *Server) UpdateExpense(c *gin.Context) {
 	u := middleware.User(c)
 	id, ok := parseUUID(c, "id")
@@ -124,24 +125,44 @@ func (s *Server) UpdateExpense(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	out, err := s.Expenses.Update(c.Request.Context(), u.ID, id, service.UpdateExpenseInput{
+	in := service.UpdateExpenseInput{
 		Description: req.Description,
 		AmountCents: req.AmountCents,
 		CategoryID:  req.CategoryId,
 		PayerID:     req.PayerId,
-	})
+	}
+	if req.Mode != nil {
+		m := service.SplitMode(*req.Mode)
+		in.Mode = &m
+	}
+	if req.Splits != nil {
+		splits := make([]service.SplitInput, len(*req.Splits))
+		for i, sp := range *req.Splits {
+			v := int64(0)
+			if sp.Value != nil {
+				v = *sp.Value
+			}
+			splits[i] = service.SplitInput{UserID: sp.UserId, Value: v}
+		}
+		in.Splits = splits
+	}
+
+	out, err := s.Expenses.Update(c.Request.Context(), u.ID, id, in)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
 		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
 		return
-	case errors.Is(err, service.ErrForbidden):
-		writeErr(c, http.StatusForbidden, "forbidden", "only payer or group creator can edit")
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrUnknownCategory):
 		writeErr(c, http.StatusBadRequest, "bad_request", "unknown category_id")
 		return
 	case errors.Is(err, service.ErrPayerNotMember):
 		writeErr(c, http.StatusBadRequest, "bad_request", "payer is not a group member")
+		return
+	case errors.Is(err, service.ErrSplitNotMember):
+		writeErr(c, http.StatusBadRequest, "bad_request", "split user is not a group member")
 		return
 	case errors.Is(err, service.ErrBadSplit):
 		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())

@@ -380,16 +380,23 @@ func TestGoldenPath(t *testing.T) {
 		require.EqualValues(t, 1000, s.(map[string]any)["share_cents"])
 	}
 
-	// Non-payer/non-creator cannot edit.
+	// Non-payer group member CAN now edit (authz loosened; history records editor).
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"description": "Train (edited by B)",
+	}, cookieB)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Non-member cannot edit.
+	_, cookieX := registerUser(t, base, "x@test.dev", "passwordpassword", "Mallory")
 	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
 		"description": "Hacked",
-	}, cookieB)
+	}, cookieX)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
-	// Revision log should contain 3 entries (description, amount_cents, category_id).
+	// Revision log: description (A), amount_cents (A), category_id (A), description (B).
 	resp, revs := requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Len(t, revs, 3)
+	require.Len(t, revs, 4)
 
 	// Change the payer to B. Actor A is still the original payer, so allowed.
 	resp, updPayer := request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
@@ -406,12 +413,60 @@ func TestGoldenPath(t *testing.T) {
 	}, cookieA)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	// Revision log should now have one more row (payer_id).
+	// Revision log should now have one more row (payer_id) — 5 total.
 	resp, revs = requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Len(t, revs, 4)
+	require.Len(t, revs, 5)
 	last := revs[len(revs)-1]
 	require.Equal(t, "payer_id", last["field"])
+
+	// --- Non-equal splits on update ---
+	// Switch to explicit percent mode: 70/30 on a 2000-cent expense.
+	resp, updSplits := request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"mode": "percent",
+		"splits": []map[string]any{
+			{"user_id": userA["id"], "value": 7000},
+			{"user_id": userB["id"], "value": 3000},
+		},
+	}, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, updSplits)
+	shareByUser := map[string]int64{}
+	for _, s := range updSplits["splits"].([]any) {
+		m := s.(map[string]any)
+		shareByUser[m["user_id"].(string)] = int64(m["share_cents"].(float64))
+	}
+	require.EqualValues(t, 1400, shareByUser[userA["id"].(string)])
+	require.EqualValues(t, 600, shareByUser[userB["id"].(string)])
+
+	// Revision log now has a 'splits' row.
+	resp, revs = requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	foundSplits := false
+	for _, rv := range revs {
+		if rv["field"] == "splits" {
+			foundSplits = true
+			var parsed []map[string]any
+			require.NoError(t, json.Unmarshal([]byte(rv["new_value"].(string)), &parsed))
+			require.Len(t, parsed, 2)
+		}
+	}
+	require.True(t, foundSplits, "expected a 'splits' revision row")
+
+	// Percent that doesn't sum to 100 → 400.
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"mode": "percent",
+		"splits": []map[string]any{
+			{"user_id": userA["id"], "value": 5000},
+			{"user_id": userB["id"], "value": 4000},
+		},
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Mode without splits → 400.
+	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
+		"mode": "exact",
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 	// Unknown category → 400.
 	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{

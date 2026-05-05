@@ -826,6 +826,18 @@ components:
           type: string
           format: uuid
           description: New payer; must be a current group member.
+        mode:
+          allOf:
+            - $ref: "#/components/schemas/SplitMode"
+          description: |
+            Must be supplied together with `splits`. When both are present, the server
+            re-resolves per-user shares. When neither is present, existing splits are
+            rescaled proportionally if `amount_cents` changes.
+        splits:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SplitInput" }
+          description: Must be supplied together with `mode`.
 
     Expense:
       type: object

@@ -13,7 +13,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     headers: { cookie },
   });
   if (!res.ok && res.status !== 204) {
-    return redirect(`/groups/${groupID}?settings=1&settings_error=1`, 302);
+    return redirect(`/groups/${groupID}/settings?error=1`, 302);
   }
   return redirect(`/groups`, 302);
 };

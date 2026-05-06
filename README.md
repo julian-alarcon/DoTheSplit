@@ -40,9 +40,9 @@ make test           # unit + integration tests
 
 Currently shipped and usable:
 
-- **Accounts**: register, log in, log out, change display name, change password (old password required), upload an **8×8 pixel avatar** (generated in-browser from any image; falls back to initials), soft-delete your account with a stable tombstone so shared history stays traceable.
-- **Groups**: create, rename, set a per-group default currency (defaults to EUR), invite existing members by email, delete (creator only; cascades).
-- **Expenses**: create with four split modes (equal / exact / percent / shares), categorize with one of ten seeded categories , edit description / amount / category / payer after the fact (payer or group creator; splits rescale proportionally), soft-delete, and inspect the full edit history with who / when / field / old → new.
+- **Accounts**: register, log in, log out, change display name, change password (old password required), upload an **6×6 pixel avatar** (generated in-browser from any image; falls back to initials), soft-delete your account with a stable tombstone so shared history stays traceable.
+- **Groups**: create, rename, set a per-group default currency (defaults to EUR), invite existing members by email, delete (creator only; cascades). Settings live on a dedicated `/groups/{id}/settings` page. For 2-member groups, pin a **default percentage split** (e.g. 60/40) that prefills new expenses; auto-cleared when a 3rd member joins.
+- **Expenses**: create with three split modes via a shared in-app editor — **equal**, **exact** (per-member cents), and **percent** — with live remainder validation and a 2-member "you owe X" framing. Categorize with one of ten seeded categories. Any group member can edit description / amount / category / payer / splits after the fact; splits either rescale proportionally on amount-only edits or are re-resolved when a new mode/split is supplied. Soft-delete (payer or group creator). Inspect the full edit history with who / when / field / old → new, including per-member split diffs.
 - **Balances & settle-up**: net-balance computation over all expenses + settlements, plus a simplified "X owes Y" view. Record settlements directly.
 - **Recurring expenses**: template + background worker that materializes a real expense on each cadence tick (daily / weekly / monthly). Backend API is complete; frontend UI is pending (see Roadmap).
 - **Security**: Argon2id passwords; email stored as HMAC (lookup) + AES-GCM (display) with keys held outside the DB; rate-limited `/v1/auth/*`; strict JSON bodies reject unknown fields; CSP headers with SHA-256 hashes on inline scripts.
@@ -54,12 +54,14 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- **Group-level default split** (follow-up, not a blocker): in group settings, allow a 2-member group to pin a default non-equal split (e.g. 40/60) that prefills the create-expense form. Store as `(user_id, basis_points)` pairs so the mapping is stable. Invalidate / hide the default automatically when the group grows past 2 members.
+- Allow Remove members of a group by the creator/owner. If the user is not creator of the group at least allow leaving the group
+- Group owner can change the owner of the group
 - Frontend UI for **recurring expenses** (the backend + worker are already there).
 - Themes
   - Use Inter font (in local to avoid calling thirt party entities)
 - **Settlements UI**: list past settlements per group; today you can only record them.
-- **Pagination** on expense and settlement lists. Load first 50 expenses and a a Button at the end to load 25 more.
+- **Pagination** on expense and settlement lists. Load first 50 expenses and a Button at the end to load 25 more expenses.
+  - Add a label when there is a new month as part of the list of the expenses page
 - Publishing to gitHub and Github docker registry
 - Deploy in TrueNAS with custom docker-compose
 

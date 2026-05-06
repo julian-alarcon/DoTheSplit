@@ -13,5 +13,5 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     headers: { "Content-Type": "application/json", cookie },
     body: JSON.stringify({ email: form.get("email") }),
   });
-  return redirect(`/groups/${groupID}`, 302);
+  return redirect(`/groups/${groupID}/settings`, 302);
 };

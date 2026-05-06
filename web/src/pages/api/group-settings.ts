@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   if (currency) body.default_currency = currency.toUpperCase();
 
   if (Object.keys(body).length === 0) {
-    return redirect(`/groups/${groupID}?settings=1`, 302);
+    return redirect(`/groups/${groupID}/settings`, 302);
   }
 
   const res = await fetch(`${internalBase}/v1/groups/${groupID}`, {
@@ -26,7 +26,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    return redirect(`/groups/${groupID}?settings=1&settings_error=1`, 302);
+    return redirect(`/groups/${groupID}/settings?error=1`, 302);
   }
-  return redirect(`/groups/${groupID}?settings=1`, 302);
+  return redirect(`/groups/${groupID}/settings`, 302);
 };

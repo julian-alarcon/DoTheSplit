@@ -36,7 +36,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
     {payees.length === 0 ? (
       <p class="rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
         You're the only member of this group, so there's nobody to settle up with yet. Add someone under
-        <a href={`/groups/${id}?settings=1`} class="underline"> Group settings</a>.
+        <a href={`/groups/${id}/settings`} class="underline"> Group settings</a>.
       </p>
     ) : (
       <form

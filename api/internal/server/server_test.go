@@ -552,6 +552,48 @@ func TestGoldenPath(t *testing.T) {
 	resp, _ = request(t, "DELETE", base+"/v1/expenses/"+hotelID, nil, cookieA)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
+	// --- Transfer ownership ---
+	// Fresh group: A is creator, B is a member.
+	resp, transferGroupBody := request(t, "POST", base+"/v1/groups",
+		map[string]any{"name": "TransferTest"}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	tgID := transferGroupBody["id"].(string)
+	resp, _ = request(t, "POST", base+"/v1/groups/"+tgID+"/members",
+		map[string]any{"email": "b@test.dev"}, cookieA)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// Non-creator cannot transfer ownership.
+	resp, _ = request(t, "PATCH", base+"/v1/groups/"+tgID, map[string]any{
+		"created_by": userB["id"],
+	}, cookieB)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+
+	// Creator cannot hand the group to a non-member.
+	stranger, _ := registerUser(t, base, "stranger@test.dev", "passwordpassword", "Stranger")
+	resp, _ = request(t, "PATCH", base+"/v1/groups/"+tgID, map[string]any{
+		"created_by": stranger["id"],
+	}, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// Happy path: A transfers to B.
+	resp, transferred := request(t, "PATCH", base+"/v1/groups/"+tgID, map[string]any{
+		"created_by": userB["id"],
+	}, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode, transferred)
+	require.Equal(t, userB["id"], transferred["created_by"])
+
+	// Now A (former creator) is just a regular member; can no longer transfer.
+	resp, _ = request(t, "PATCH", base+"/v1/groups/"+tgID, map[string]any{
+		"created_by": userA["id"],
+	}, cookieA)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+
+	// B (the new creator) can transfer back to A.
+	resp, _ = request(t, "PATCH", base+"/v1/groups/"+tgID, map[string]any{
+		"created_by": userA["id"],
+	}, cookieB)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
 	// --- Remove members / leave group ---
 	// Fresh group: A is creator, B and Carol are members.
 	resp, removeGroupBody := request(t, "POST", base+"/v1/groups",

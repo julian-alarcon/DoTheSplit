@@ -509,6 +509,12 @@ export interface components {
              *     Only valid when the group has exactly 2 members.
              */
             default_split?: components["schemas"]["DefaultSplitEntry"][] | null;
+            /**
+             * Format: uuid
+             * @description Transfer group ownership to another member. Only the current owner
+             *     may set this; the target must already be a member of the group.
+             */
+            created_by?: string;
         };
         AddMemberRequest: {
             /** Format: email */

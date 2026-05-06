@@ -4,6 +4,17 @@ import { apiFor } from "@/lib/api/client";
 
 const api = apiFor(Astro.locals.cookie);
 const { data: groups = [] } = await api.GET("/v1/groups");
+
+const myID = Astro.locals.user?.id ?? "";
+
+// For each group, resolve the owner's display name from the embedded members
+// list — saves a round-trip per row. Falls back to "Unknown" if the creator
+// row is somehow missing (shouldn't happen given the FK).
+const ownerByGroup = new Map<string, string>();
+for (const g of groups) {
+  const owner = g.members.find((m) => m.user_id === g.created_by);
+  ownerByGroup.set(g.id, owner?.display_name ?? "Unknown");
+}
 ---
 
 <Base title="Groups">
@@ -20,16 +31,25 @@ const { data: groups = [] } = await api.GET("/v1/groups");
     </p>
   ) : (
     <ul class="flex flex-col gap-2">
-      {groups.map((g) => (
-        <li>
-          <a href={`/groups/${g.id}`} class="flex items-center justify-between rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800">
-            <span class="font-medium">{g.name}</span>
-            <span class="text-sm text-neutral-500">
-              {g.members.length} member{g.members.length === 1 ? "" : "s"} · {g.default_currency}
-            </span>
-          </a>
-        </li>
-      ))}
+      {groups.map((g) => {
+        const ownerName = ownerByGroup.get(g.id) ?? "";
+        const youAreOwner = g.created_by === myID;
+        return (
+          <li>
+            <a href={`/groups/${g.id}`} class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800">
+              <span class="flex min-w-0 flex-col">
+                <span class="font-medium truncate">{g.name}</span>
+                <span class="text-xs text-neutral-500">
+                  Created by {youAreOwner ? "you" : ownerName}
+                </span>
+              </span>
+              <span class="shrink-0 text-sm text-neutral-500">
+                {g.members.length} member{g.members.length === 1 ? "" : "s"} · {g.default_currency}
+              </span>
+            </a>
+          </li>
+        );
+      })}
     </ul>
   )}
 </Base>

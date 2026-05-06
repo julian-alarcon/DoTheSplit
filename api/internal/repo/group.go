@@ -130,14 +130,17 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 // UpdateInput captures partial-update fields for a group.
 // nil pointer = leave unchanged. For DefaultSplit: nil = unchanged, non-nil
 // pointer to nil slice = clear it, non-nil pointer to slice = replace it.
+// CreatedBy transfers ownership; service layer enforces that the new owner
+// is already a member.
 type UpdateInput struct {
 	Name            *string
 	DefaultCurrency *string
 	DefaultSplit    *[]DefaultSplitEntry
+	CreatedBy       *uuid.UUID
 }
 
 func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Group, error) {
-	if in.Name == nil && in.DefaultCurrency == nil && in.DefaultSplit == nil {
+	if in.Name == nil && in.DefaultCurrency == nil && in.DefaultSplit == nil && in.CreatedBy == nil {
 		return r.FindByID(ctx, id)
 	}
 
@@ -164,10 +167,11 @@ func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*
 		UPDATE groups SET
 			name             = COALESCE($2, name),
 			default_currency = COALESCE($3, default_currency),
-			default_split    = CASE WHEN $4 THEN $5::jsonb ELSE default_split END
+			default_split    = CASE WHEN $4 THEN $5::jsonb ELSE default_split END,
+			created_by       = COALESCE($6, created_by)
 		WHERE id = $1
 		RETURNING id, name, default_currency, created_by, created_at, default_split
-	`, id, in.Name, in.DefaultCurrency, splitProvided, splitJSON).
+	`, id, in.Name, in.DefaultCurrency, splitProvided, splitJSON, in.CreatedBy).
 		Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

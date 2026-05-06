@@ -67,6 +67,7 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 	in := service.UpdateGroupInput{
 		Name:            req.Name,
 		DefaultCurrency: req.DefaultCurrency,
+		CreatedBy:       req.CreatedBy,
 	}
 	if req.DefaultSplit != nil {
 		entries := make([]repo.DefaultSplitEntry, len(*req.DefaultSplit))
@@ -82,6 +83,12 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		return
 	case errors.Is(err, repo.ErrNotFound):
 		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		return
+	case errors.Is(err, service.ErrNotCreator):
+		writeErr(c, http.StatusForbidden, "forbidden", "only the group creator can transfer ownership")
+		return
+	case errors.Is(err, service.ErrNewOwnerNotMember):
+		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case errors.Is(err, service.ErrBadCurrency), errors.Is(err, service.ErrBadDefaultSplit):
 		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())

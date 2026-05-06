@@ -810,6 +810,12 @@ components:
             Set the default 2-member split. Pass an empty array (or null) to clear it.
             Only valid when the group has exactly 2 members.
           items: { $ref: "#/components/schemas/DefaultSplitEntry" }
+        created_by:
+          type: string
+          format: uuid
+          description: |
+            Transfer group ownership to another member. Only the current owner
+            may set this; the target must already be a member of the group.
 
     AddMemberRequest:
       type: object

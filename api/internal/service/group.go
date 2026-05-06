@@ -19,6 +19,7 @@ var (
 	ErrBadDefaultSplit     = errors.New("invalid default_split")
 	ErrCannotRemoveCreator = errors.New("the group creator cannot leave or be removed; transfer ownership or delete the group")
 	ErrBalanceNotZero      = errors.New("settle up first: removing a member with a non-zero balance would silently drop their share of the ledger")
+	ErrNewOwnerNotMember   = errors.New("new owner must be an existing group member")
 )
 
 // DefaultGroupCurrency is used when a group is created without an explicit currency.
@@ -61,19 +62,23 @@ func (s *GroupService) Create(ctx context.Context, name, defaultCurrency string,
 
 // UpdateGroupInput captures partial-update fields. nil pointer = leave unchanged.
 // For DefaultSplit: pointer to nil/empty slice clears it; pointer to a 2-entry
-// slice replaces it.
+// slice replaces it. CreatedBy transfers ownership; only the current owner
+// may set it, and the target must already be a group member.
 type UpdateGroupInput struct {
 	Name            *string
 	DefaultCurrency *string
 	DefaultSplit    *[]repo.DefaultSplitEntry
+	CreatedBy       *uuid.UUID
 }
 
-// Update applies a partial update. Any group member may update.
+// Update applies a partial update. Any group member may update name /
+// default_currency / default_split; only the current creator may transfer
+// ownership via CreatedBy.
 func (s *GroupService) Update(ctx context.Context, groupID, actorID uuid.UUID, in UpdateGroupInput) (*repo.Group, []repo.GroupMember, error) {
 	if err := s.RequireMember(ctx, groupID, actorID); err != nil {
 		return nil, nil, err
 	}
-	if in.Name == nil && in.DefaultCurrency == nil && in.DefaultSplit == nil {
+	if in.Name == nil && in.DefaultCurrency == nil && in.DefaultSplit == nil && in.CreatedBy == nil {
 		return nil, nil, errors.New("nothing to update")
 	}
 	if in.Name != nil {
@@ -108,10 +113,27 @@ func (s *GroupService) Update(ctx context.Context, groupID, actorID uuid.UUID, i
 			}
 		}
 	}
+	if in.CreatedBy != nil {
+		current, err := s.groups.FindByID(ctx, groupID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if actorID != current.CreatedBy {
+			return nil, nil, ErrNotCreator
+		}
+		ok, err := s.groups.IsMember(ctx, groupID, *in.CreatedBy)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, ErrNewOwnerNotMember
+		}
+	}
 	g, err := s.groups.Update(ctx, groupID, repo.UpdateInput{
 		Name:            in.Name,
 		DefaultCurrency: in.DefaultCurrency,
 		DefaultSplit:    in.DefaultSplit,
+		CreatedBy:       in.CreatedBy,
 	})
 	if err != nil {
 		return nil, nil, err

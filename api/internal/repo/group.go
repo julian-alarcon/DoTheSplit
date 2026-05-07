@@ -254,7 +254,7 @@ func (r *GroupRepo) ShareAnyGroup(ctx context.Context, a, b uuid.UUID) (bool, er
 }
 
 // RemoveMember deletes the membership row. Existing expenses, splits, and
-// settlements remain — they reference users(id) directly, not the membership
+// settlements remain - they reference users(id) directly, not the membership
 // row, so the ledger is preserved. Returns ErrNotFound if the row didn't exist.
 func (r *GroupRepo) RemoveMember(ctx context.Context, groupID, userID uuid.UUID) error {
 	tag, err := r.pool.Exec(ctx, `

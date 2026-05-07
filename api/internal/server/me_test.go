@@ -61,7 +61,7 @@ func TestMeFlows(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// Right old password → 204, and the returned response sets a fresh cookie.
-	// After changing, we expect the *old* cookie to no longer work — server
+	// After changing, we expect the *old* cookie to no longer work - server
 	// destroyed all sessions and issued a replacement via Set-Cookie.
 	resp2, _ := rawRequest(t, "POST", base+"/v1/me/password", map[string]any{
 		"old_password": "passwordpassword",

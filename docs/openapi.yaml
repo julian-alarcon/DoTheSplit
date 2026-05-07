@@ -334,7 +334,7 @@ paths:
       summary: Remove a member (creator removes anyone; members may leave themselves)
       description: |
         The group creator can remove any non-creator member. Any member may
-        remove themselves (leave). The creator cannot leave or be removed —
+        remove themselves (leave). The creator cannot leave or be removed -
         ownership transfer or full group deletion is required first.
         The target's net balance for the group must be exactly zero (settle up
         first), so removing them never silently writes off debt. If the group
@@ -931,7 +931,7 @@ components:
           format: uuid
           description: |
             User who recorded the expense. Distinct from `payer_id` (who fronted
-            the money) — any group member may create an expense on behalf of any
+            the money) - any group member may create an expense on behalf of any
             other member, and the history attributes the action to this user.
         incurred_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }

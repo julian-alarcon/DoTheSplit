@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
       const body = (await res.json()) as { message?: string };
       if (body?.message) message = body.message;
     } catch {
-      // ignore — we'll surface the generic flag
+      // ignore - we'll surface the generic flag
     }
     return redirect(
       `/groups/${groupID}/settings?error=1&reason=${encodeURIComponent(message)}`,

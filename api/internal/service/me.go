@@ -22,7 +22,7 @@ import (
 //   - The server validates it, then upscales to 256x256 via nearest-neighbour
 //     and stores the larger PNG. This keeps the rendered bitmap crisply blocky
 //     on every browser (including ones with inconsistent
-//     `image-rendering: pixelated` support) without leaking more information —
+//     `image-rendering: pixelated` support) without leaking more information -
 //     it's still the same 64 color samples, just represented with more pixels.
 //   - Storage ceiling is generous: a 256x256 low-color PNG comfortably fits in
 //     a few kilobytes.
@@ -112,7 +112,7 @@ func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPas
 // inconsistent support (notably on iOS Safari / some Android WebViews). A
 // pre-scaled 256x256 PNG renders blocky everywhere with no CSS tricks.
 //
-// This doesn't leak more information than the 8x8 source — it's the same
+// This doesn't leak more information than the 8x8 source - it's the same
 // 64 color samples, just represented with more pixels.
 //
 // We also re-encode from a fresh RGBA canvas to strip ancillary PNG chunks

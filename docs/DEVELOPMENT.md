@@ -27,8 +27,8 @@ Web is served at <http://localhost:3000>. API at <http://localhost:8080>. Health
 Any change that touches the HTTP surface goes through the same loop:
 
 1. Edit [docs/openapi.yaml](openapi.yaml) first.
-2. `make gen` — regenerates Go types (`api/internal/apigen/`) and TypeScript types (`web/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
-3. If the DB schema changes, add a migration under [api/migrations/](../api/migrations/) — `NNNN_*.up.sql` + a matching `.down.sql`. Migrations are append-only.
+2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`web/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
+3. If the DB schema changes, add a migration under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`. Migrations are append-only.
 4. Backend order: **repo → service → handlers → router**.
 5. Frontend: rebuild pages against the new types, add/adjust Astro pages and SSR API routes under `web/src/pages/api/`.
 6. Tests, rebuild containers, smoke.
@@ -43,11 +43,11 @@ cd web && npm run check    # astro check (TypeScript + Astro diagnostics)
 cd web && npm run build    # astro build (also catches CSP-bundling issues)
 ```
 
-`astro check` / `astro build` should produce 0 errors. One harmless hint (`ts(7027) unreachable code`) may appear on DOM event-handler scripts — it's a known TypeScript quirk, not a regression.
+`astro check` / `astro build` should produce 0 errors. One harmless hint (`ts(7027) unreachable code`) may appear on DOM event-handler scripts - it's a known TypeScript quirk, not a regression.
 
 ## Test
 
-**Go** — unit + integration. The integration tests use [testcontainers-go](https://golang.testcontainers.org/), so a running Docker daemon is required. Each test run spins up its own short-lived Postgres container, applies all migrations, and tears it down.
+**Go** - unit + integration. The integration tests use [testcontainers-go](https://golang.testcontainers.org/), so a running Docker daemon is required. Each test run spins up its own short-lived Postgres container, applies all migrations, and tears it down.
 
 ```bash
 make test-go                         # all Go tests
@@ -57,7 +57,7 @@ cd api && go test ./internal/server/ -run TestGoldenPath -v    # one test
 
 The E2E suite in [api/internal/server/server_test.go](../api/internal/server/server_test.go) covers the full golden path (register, login, group, members, expense split modes, balances, settlements, soft-delete, category + revision log, payer swap, logout).
 
-**Web** — no test harness wired in yet; rely on `astro check` + manual smoke.
+**Web** - no test harness wired in yet; rely on `astro check` + manual smoke.
 
 ## Build the container images
 
@@ -68,8 +68,8 @@ docker compose build api             # rebuild just one
 
 Images:
 
-- `dothesplit-api` — multi-stage Go build → distroless final stage (serves `/api` and the `/worker` command).
-- `dothesplit-web` — multi-stage Node 24 build → Astro SSR standalone server.
+- `dothesplit-api` - multi-stage Go build → distroless final stage (serves `/api` and the `/worker` command).
+- `dothesplit-web` - multi-stage Node 24 build → Astro SSR standalone server.
 
 ## Run
 
@@ -90,7 +90,7 @@ docker compose down -v               # stop AND destroy the Postgres volume
 | `postgres` | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
 | `migrate`  | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
 | `api`      | `dothesplit-api`    | HTTP API on `:8080`, session cookies              |
-| `worker`   | `dothesplit-api`    | Same image, runs `/worker` — materializes recurring expenses |
+| `worker`   | `dothesplit-api`    | Same image, runs `/worker` - materializes recurring expenses |
 | `web`      | `dothesplit-web`    | Astro SSR on `:3000`                              |
 
 ## Smoke test the running stack
@@ -143,7 +143,7 @@ Migrations run automatically via the `migrate` one-shot on every `up`.
 
 ### Major Postgres upgrades
 
-Postgres's on-disk format is not compatible across major versions. Bumping the image tag alone will not work — the container will refuse to start and log "there appears to be PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)" or similar.
+Postgres's on-disk format is not compatible across major versions. Bumping the image tag alone will not work - the container will refuse to start and log "there appears to be PostgreSQL data in /var/lib/postgresql/data (unused mount/volume)" or similar.
 
 Two paths:
 
@@ -160,11 +160,11 @@ Our SSR handlers under `web/src/pages/api/*.ts` read `process.env.API_BASE_URL_I
 
 ### Login form does nothing / redirects back to /login
 
-Almost always a cookie problem. The session cookie name switches between `dts_session` (HTTP) and `__Host-dts_session` (HTTPS). If you flip `COOKIE_SECURE` but the frontend middleware is still looking for the old name, middleware won't find the session. Both sides should already handle this transparently — if not, grep for `dts_session` in `api/internal/middleware/` and `web/src/middleware.ts`.
+Almost always a cookie problem. The session cookie name switches between `dts_session` (HTTP) and `__Host-dts_session` (HTTPS). If you flip `COOKIE_SECURE` but the frontend middleware is still looking for the old name, middleware won't find the session. Both sides should already handle this transparently - if not, grep for `dts_session` in `api/internal/middleware/` and `web/src/middleware.ts`.
 
 ### A form control doesn't "do" anything (e.g. the category picker doesn't close on select)
 
-CSP is blocking an inline script. We have `security.csp: true` enabled in [../web/astro.config.mjs](../web/astro.config.mjs). Any client-side JS must live in a real module under `web/src/scripts/` and be imported from a `<script>` tag — not written as `<script is:inline>` or a raw inline block inside an `.astro` page. External bundled scripts are covered by `script-src 'self'`; inline scripts need per-hash allowlisting that's brittle across build/serve paths.
+CSP is blocking an inline script. We have `security.csp: true` enabled in [../web/astro.config.mjs](../web/astro.config.mjs). Any client-side JS must live in a real module under `web/src/scripts/` and be imported from a `<script>` tag - not written as `<script is:inline>` or a raw inline block inside an `.astro` page. External bundled scripts are covered by `script-src 'self'`; inline scripts need per-hash allowlisting that's brittle across build/serve paths.
 
 ### `astro check` complains that it can't find `process`
 
@@ -178,7 +178,7 @@ Run `npm install --save-dev @types/node` in `/web`. This started being required 
 
 > "Shiki syntax highlighting uses inline styles that are not compatible with Content Security Policy"
 
-Harmless for us — we don't render Markdown code blocks anywhere. Ignore.
+Harmless for us - we don't render Markdown code blocks anywhere. Ignore.
 
 ## Useful targets
 

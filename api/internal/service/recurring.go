@@ -125,8 +125,8 @@ func (s *RecurringService) Tick(ctx context.Context) (int, error) {
 			return 0, fmt.Errorf("resolve splits for recurring %s: %w", r.ID, err)
 		}
 		// The recurring template doesn't track who set it up, so attribute
-		// materialized expenses to the payer. Good enough — it's the same
-		// user the template "belongs to" — and avoids leaving a NULL behind.
+		// materialized expenses to the payer. Good enough - it's the same
+		// user the template "belongs to" - and avoids leaving a NULL behind.
 		e := &repo.Expense{
 			GroupID:     r.GroupID,
 			PayerID:     r.PayerID,

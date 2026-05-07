@@ -6,7 +6,7 @@
  * shown in-page, and on submit puts the base64 PNG into a hidden input named
  * `png_base64` so the existing form POST works unchanged.
  *
- * Every bit of heavy lifting stays on the client — the server never sees the
+ * Every bit of heavy lifting stays on the client - the server never sees the
  * original image. GDPR-friendly: you can't identify a human in 64 pixels.
  */
 

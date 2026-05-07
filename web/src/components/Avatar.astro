@@ -29,7 +29,7 @@ function initialsOf(name: string): string {
   return "??";
 }
 
-/** Deterministic hsl color derived from the user UUID — every user is stable + distinct. */
+/** Deterministic hsl color derived from the user UUID - every user is stable + distinct. */
 function colorOf(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;

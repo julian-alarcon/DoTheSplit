@@ -75,7 +75,7 @@ func (r *BalanceRepo) NetBalances(ctx context.Context, groupID uuid.UUID) ([]Net
 }
 
 // NetForUser returns one user's net cents for a group, computed from their
-// historical paid/owed/settled rows — independent of current membership.
+// historical paid/owed/settled rows - independent of current membership.
 // Used to gate member removal: a non-zero net would silently disappear from
 // the ledger if we let the user leave.
 func (r *BalanceRepo) NetForUser(ctx context.Context, groupID, userID uuid.UUID) (int64, error) {

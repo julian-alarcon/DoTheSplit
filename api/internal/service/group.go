@@ -264,13 +264,13 @@ func (s *GroupService) AddMember(ctx context.Context, groupID, actorID uuid.UUID
 
 // RemoveMember removes targetID from groupID. Authz: actor must be the group
 // creator (to remove anyone else) OR the actor must equal targetID (leaving).
-// The creator can't leave or be removed — transfer ownership or delete the
+// The creator can't leave or be removed - transfer ownership or delete the
 // group instead.
 //
 // Balance gate: a creator removing somebody *else* is blocked when the target
 // has a non-zero balance, since silently writing off a third party's debt is
 // a high-blast-radius action they didn't consent to. A member leaving on their
-// own accord is allowed regardless — the UI surfaces a warning so they
+// own accord is allowed regardless - the UI surfaces a warning so they
 // understand the consequence. Their splits and settlements stay in the
 // ledger; they just stop showing up in the balance JOIN.
 //

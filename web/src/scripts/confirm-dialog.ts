@@ -2,7 +2,7 @@
 //
 // Trigger buttons on a page set `data-confirm-open` to the id of a
 // <ConfirmDialog id="…"> on the same page. The trigger MUST live inside the
-// <form> that should be submitted on confirm — we walk up to it via .closest().
+// <form> that should be submitted on confirm - we walk up to it via .closest().
 //
 // Backdrop click intentionally does not close (WCAG 2.5.7 pointer
 // cancellation, consistent with the DatePicker dialog). Escape closes via

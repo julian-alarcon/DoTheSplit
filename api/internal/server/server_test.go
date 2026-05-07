@@ -238,7 +238,7 @@ func TestGoldenPath(t *testing.T) {
 	// Defaults: week_start = 1 (Monday).
 	require.EqualValues(t, 1, me["week_start"])
 
-	// PATCH /v1/me — flip week_start to Sunday.
+	// PATCH /v1/me - flip week_start to Sunday.
 	resp, updMe := request(t, "PATCH", base+"/v1/me", map[string]any{"week_start": 0}, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode, updMe)
 	require.EqualValues(t, 0, updMe["week_start"])
@@ -481,14 +481,14 @@ func TestGoldenPath(t *testing.T) {
 	require.Equal(t, userB["id"], updPayer["payer_id"])
 
 	// After reassigning the payer to B, original payer A loses edit permission
-	// unless A is the group creator — A *is* the creator here, so A can still edit.
+	// unless A is the group creator - A *is* the creator here, so A can still edit.
 	// Non-member payer change → 400.
 	resp, _ = request(t, "PATCH", base+"/v1/expenses/"+busID, map[string]any{
 		"payer_id": "00000000-0000-0000-0000-000000000000",
 	}, cookieA)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	// Revision log should now have one more row (payer_id) — 5 total.
+	// Revision log should now have one more row (payer_id) - 5 total.
 	resp, revs = requestList(t, "GET", base+"/v1/expenses/"+busID+"/revisions", nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Len(t, revs, 5)
@@ -692,12 +692,12 @@ func TestGoldenPath(t *testing.T) {
 	}, cookieA)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	// Creator cannot remove B while B has a non-zero balance — silently
+	// Creator cannot remove B while B has a non-zero balance - silently
 	// writing off another member's debt is too high a blast radius.
 	resp, _ = request(t, "DELETE", base+"/v1/groups/"+rgID+"/members/"+userB["id"].(string), nil, cookieA)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	// But B *can* leave themselves even with a non-zero balance — UI surfaces
+	// But B *can* leave themselves even with a non-zero balance - UI surfaces
 	// a warning, the user owns the consequence.
 	resp, _ = request(t, "DELETE", base+"/v1/groups/"+rgID+"/members/"+userB["id"].(string), nil, cookieB)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)

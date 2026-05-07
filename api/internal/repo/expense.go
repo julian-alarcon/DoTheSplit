@@ -167,7 +167,7 @@ func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 // Update applies description / amount / category / payer / splits changes in one tx.
 // If newSplits is non-nil, existing splits are replaced wholesale (the service layer
 // has already resolved per-user shares via resolveSplits). Otherwise, if amountCents
-// changed, existing splits are rescaled proportionally — preserving each user's
+// changed, existing splits are rescaled proportionally - preserving each user's
 // relative share; rounding remainder goes to the first splits in user_id order.
 // Every non-nil change writes an expense_revisions row; split changes are recorded
 // as a single 'splits' row with JSON before/after.

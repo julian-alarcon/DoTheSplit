@@ -1,7 +1,7 @@
 // Date picker: opens a <dialog> with a custom month-grid calendar. The dialog
 // hosts a <form method="dialog">, so submit buttons close the dialog with
 // `dialog.returnValue` set to the button's `value` ("done" or "cancel").
-// Escape also fires submit with no value — treated as cancel.
+// Escape also fires submit with no value - treated as cancel.
 //
 // Day clicks set a *pending* selection without committing. Only "Done"
 // commits: writes the picked YYYY-MM-DD to the hidden input the parent form
@@ -354,7 +354,7 @@ function setupPicker(root: HTMLElement) {
     }),
   );
 
-  // No backdrop-close listener on purpose — pointer cancellation (WCAG 2.5.7);
+  // No backdrop-close listener on purpose - pointer cancellation (WCAG 2.5.7);
   // Escape closes via the native <dialog> behaviour without committing anything.
 }
 

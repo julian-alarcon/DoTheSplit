@@ -42,7 +42,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
 
   // If a cadence was selected, also create a recurring template anchored at
   // the next occurrence (so the worker materializes the *second* one on its
-  // tick — the first occurrence is the expense we just POSTed above).
+  // tick - the first occurrence is the expense we just POSTed above).
   if (isValidCadence(cadence) && incurredAtISO) {
     const nextRunAt = advanceCadence(incurredAtISO, cadence);
     const recurringBody: Record<string, unknown> = {

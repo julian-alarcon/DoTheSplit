@@ -16,24 +16,19 @@ const showError = Astro.url.searchParams.get("error") === "1";
       </p>
     )}
     <form method="POST" action="/api/register" class="flex flex-col gap-3">
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Display name</span>
-        <input name="display_name" required maxlength="80" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900" />
+      <label class="field">
+        <input name="display_name" required maxlength="80" placeholder=" " class="field-input" />
+        <span class="field-label" data-required>Display name</span>
       </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Email</span>
-        <input type="email" name="email" required class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900" />
+      <label class="field">
+        <input type="email" name="email" required placeholder=" " class="field-input" />
+        <span class="field-label" data-required>Email</span>
       </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Password (min 10 characters)</span>
-        <input type="password" name="password" required minlength="10" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900" />
+      <label class="field">
+        <input type="password" name="password" required minlength="10" placeholder=" " class="field-input" />
+        <span class="field-label" data-required>Password (min 10 characters)</span>
       </label>
-      <button
-        type="submit"
-        class="mt-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300 dark:focus-visible:ring-neutral-500"
-      >
-        Create account
-      </button>
+      <button type="submit" class="btn-primary mt-2 self-end">Create account</button>
     </form>
     <p class="mt-4 text-sm text-neutral-700 dark:text-neutral-300">
       Already have one? <a href="/login" class="rounded-md underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500">Log in</a>.

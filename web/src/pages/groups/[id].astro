@@ -1,8 +1,11 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
+import BackLink from "@/components/BackLink.astro";
 import SplitEditor from "@/components/SplitEditor.astro";
 import DatePicker from "@/components/DatePicker.astro";
+import RecurringIcon from "@/components/icons/RecurringIcon.astro";
+import SettingsIcon from "@/components/icons/SettingsIcon.astro";
 import { apiFor } from "@/lib/api/client";
 
 const { id } = Astro.params as { id: string };
@@ -74,22 +77,32 @@ const todayISO = new Date().toISOString().slice(0, 10);
 ---
 
 <Base title={group.name}>
-  <div class="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <h1 class="truncate text-2xl font-semibold">{group.name}</h1>
-    <div class="flex flex-wrap items-center gap-2">
-      {recurringTemplates.length > 0 && (
-        <a
-          href={`/groups/${id}/recurring`}
-          class="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
-        >
-          Recurring ({recurringTemplates.length})
-        </a>
-      )}
+  <div class="mb-4 flex items-center gap-2">
+    <BackLink href="/groups" label="Groups" />
+  </div>
+  <div class="mb-2 flex items-center justify-between gap-3">
+    <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">{group.name}</h1>
+    <div class="flex shrink-0 items-center gap-2">
+      <a
+        href={`/groups/${id}/recurring`}
+        aria-label={`Recurring expenses (${recurringTemplates.length})`}
+        title="Recurring expenses"
+        class="btn-secondary btn-sm"
+      >
+        <RecurringIcon />
+        <span class="hidden sm:inline">Recurring</span>
+        {recurringTemplates.length > 0 && (
+          <span class="tabular-nums">({recurringTemplates.length})</span>
+        )}
+      </a>
       <a
         href={`/groups/${id}/settings`}
-        class="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+        aria-label="Group settings"
+        title="Group settings"
+        class="btn-secondary btn-sm"
       >
-        Group settings
+        <SettingsIcon />
+        <span class="hidden sm:inline">Group settings</span>
       </a>
     </div>
   </div>
@@ -97,15 +110,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
     {group.members.length} member{group.members.length === 1 ? "" : "s"} · default currency {currency}
   </p>
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <div class="mb-3 flex items-center justify-between gap-3">
       <h2 class="font-medium">Balances</h2>
-      <a
-        href={`/groups/${id}/settle`}
-        class="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
-      >
-        Settle up
-      </a>
+      <a href={`/groups/${id}/settle`} class="btn-secondary btn-sm">Settle up</a>
     </div>
     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
       <ul class="flex flex-col gap-2 text-sm">
@@ -168,54 +176,64 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </div>
   </section>
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Add expense</h2>
     <form method="POST" action={`/api/expenses?id=${id}`} class="flex flex-col gap-4">
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Description</span>
-        <div class="flex items-stretch gap-2">
-          <details class="group relative" data-category-picker>
-            <summary
-              class="flex h-full cursor-pointer list-none items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xl leading-none hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-neutral-900"
-              aria-label="Choose category"
-              title="Choose category"
-              data-category-emoji
-            >
-              {defaultEmoji}
-            </summary>
-            <div class="absolute left-0 top-full z-10 mt-1 w-56 rounded-md border border-neutral-300 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-950">
-              <ul class="flex max-h-64 flex-col gap-0.5 overflow-auto">
-                {categories.map((c) => (
-                  <li>
-                    <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
-                      <input
-                        type="radio"
-                        name="category_id"
-                        value={c.id}
-                        data-category-option
-                        data-emoji={c.emoji}
-                        checked={c.id === defaultCategoryID}
-                        class="accent-neutral-900 dark:accent-neutral-100"
-                      />
-                      <span class="text-lg leading-none">{c.emoji}</span>
-                      <span>{c.label}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </details>
-          <input name="description" required maxlength="200" placeholder="What was it?" class="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950" />
-        </div>
-      </label>
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <label class="flex flex-col gap-1 text-sm">
-          <span>Amount ({currency})</span>
-          <input type="number" name="amount_dollars" step="0.01" min="0.01" required class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950" />
+      <div class="flex items-stretch gap-2">
+        <details class="group relative" data-category-picker>
+          <summary
+            class="field-category-trigger"
+            aria-label="Choose category"
+            title="Choose category"
+            data-category-emoji
+          >
+            {defaultEmoji}
+          </summary>
+          <div class="absolute left-0 top-full z-10 mt-1 w-56 rounded-md border border-neutral-300 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-950">
+            <ul class="flex max-h-64 flex-col gap-0.5 overflow-auto">
+              {categories.map((c) => (
+                <li>
+                  <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
+                    <input
+                      type="radio"
+                      name="category_id"
+                      value={c.id}
+                      data-category-option
+                      data-emoji={c.emoji}
+                      checked={c.id === defaultCategoryID}
+                      class="accent-neutral-900 dark:accent-neutral-100"
+                    />
+                    <span class="text-lg leading-none">{c.emoji}</span>
+                    <span>{c.label}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
+        <label class="field flex-1">
+          <input name="description" required maxlength="200" placeholder=" " class="field-input" />
+          <span class="field-label" data-required>What was it?</span>
         </label>
-        <label class="flex flex-col gap-1 text-sm">
-          <span>Payer</span>
-          <select name="payer_id" required class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950">
+      </div>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="field">
+          <input type="hidden" name="amount_dollars" />
+          <input
+            type="text"
+            inputmode="decimal"
+            data-currency-input
+            data-currency-hidden="amount_dollars"
+            data-currency={currency}
+            required
+            placeholder=" "
+            class="field-input field-input-currency"
+          />
+          <span class="field-label" data-required>Amount ({currency})</span>
+        </label>
+        <label class="field-select-row">
+          <span>Paid by</span>
+          <select name="payer_id" required class="field-select">
             {group.members.map((m) => (
               <option value={m.user_id} selected={m.user_id === Astro.locals.user?.id}>
                 {m.display_name}
@@ -239,12 +257,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           cadenceName="cadence"
           weekStart={Astro.locals.user?.week_start === 0 ? 0 : 1}
         />
-        <button
-          type="submit"
-          class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300 dark:focus-visible:ring-neutral-500"
-        >
-          Add expense
-        </button>
+        <button type="submit" class="btn-primary">Add expense</button>
       </div>
     </form>
   </section>
@@ -306,5 +319,6 @@ const todayISO = new Date().toISOString().slice(0, 10);
     import "@/scripts/category-picker.ts";
     import "@/scripts/split-editor.ts";
     import "@/scripts/date-picker.ts";
+    import "@/scripts/currency-input.ts";
   </script>
 </Base>

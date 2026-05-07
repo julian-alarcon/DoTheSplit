@@ -1,6 +1,7 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
+import BackLink from "@/components/BackLink.astro";
 import ConfirmDialog from "@/components/ConfirmDialog.astro";
 import { apiFor } from "@/lib/api/client";
 
@@ -45,8 +46,8 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
 ---
 
 <Base title={`${group.name} – settings`}>
-  <div class="mb-4 flex items-center gap-2 text-sm">
-    <a href={`/groups/${id}`} class="text-neutral-600 hover:underline dark:text-neutral-400">← Back to {group.name}</a>
+  <div class="mb-4 flex items-center gap-2">
+    <BackLink href={`/groups/${id}`} label={group.name} />
   </div>
 
   <h1 class="mb-2 text-2xl font-semibold">Group settings</h1>
@@ -58,47 +59,40 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
     <p
       role="status"
       aria-live="polite"
-      class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+      class="mb-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
     >
       {errorReason ? errorReason : "Could not update the group. Check your input and try again."}
     </p>
   )}
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Rename &amp; currency</h2>
-    <form method="POST" action={`/api/group-settings?id=${id}`} class="flex flex-col gap-2">
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Name</span>
+    <form method="POST" action={`/api/group-settings?id=${id}`} class="flex flex-col gap-3">
+      <label class="field">
         <input
           name="name"
           required
           minlength="1"
           maxlength="80"
           value={group.name}
-          class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950"
+          placeholder=" "
+          class="field-input"
         />
+        <span class="field-label" data-required>Group name</span>
       </label>
-      <label class="flex flex-col gap-1 text-sm">
+      <label class="field-select-row">
         <span>Default currency</span>
-        <select
-          name="default_currency"
-          class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950"
-        >
+        <select name="default_currency" class="field-select">
           {currencyChoices.map((c) => (
             <option value={c} selected={c === currency}>{c}</option>
           ))}
         </select>
       </label>
-      <button
-        type="submit"
-        class="mt-1 self-start rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
-      >
-        Save
-      </button>
+      <button type="submit" class="btn-primary mt-1 self-end">Save</button>
     </form>
   </section>
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Members</h2>
     <ul class="mb-3 flex flex-col gap-2 text-sm">
       {group.members.map((m) => {
@@ -127,7 +121,7 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
                     <button
                       type="button"
                       data-confirm-open={`confirm-remove-${m.user_id}`}
-                      class="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-red-900 dark:bg-neutral-900 dark:text-red-300 dark:hover:bg-red-950 dark:focus-visible:ring-neutral-500"
+                      class="btn-danger-outline btn-sm"
                     >
                       Remove
                     </button>
@@ -153,23 +147,24 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
     <form
       method="POST"
       action={`/api/group-members?id=${id}`}
-      class="flex gap-2"
+      class="flex items-end gap-2"
     >
-      <input
-        type="email"
-        name="email"
-        placeholder="new.member@example.com"
-        required
-        class="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
-      />
-      <button type="submit" class="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white dark:bg-neutral-100 dark:text-neutral-900">
-        Add
-      </button>
+      <label class="field flex-1">
+        <input
+          type="email"
+          name="email"
+          placeholder=" "
+          required
+          class="field-input"
+        />
+        <span class="field-label" data-required>New member email</span>
+      </label>
+      <button type="submit" class="btn-primary">Add</button>
     </form>
     <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">The invitee must already be registered.</p>
   </section>
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Default split</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       {!isPair
@@ -198,18 +193,14 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
               required
               value={p.percent}
               disabled={!isPair}
-              class="w-20 rounded-md border border-neutral-300 bg-white px-2 py-1 text-right text-sm tabular-nums disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-950"
+              class="field-input-num w-20"
             />
             <span class="text-neutral-600 dark:text-neutral-400">%</span>
           </div>
         ))}
         <p class="text-xs text-neutral-600 dark:text-neutral-400">Must sum to 100.</p>
-        <div class="flex gap-2">
-          <button
-            type="submit"
-            disabled={!isPair}
-            class="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-          >
+        <div class="flex justify-end gap-2">
+          <button type="submit" disabled={!isPair} class="btn-primary btn-sm">
             {hasDefaultSplit ? "Update default" : "Pin default"}
           </button>
         </div>
@@ -218,22 +209,17 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
         <form
           method="POST"
           action={`/api/group-default-split?id=${id}`}
-          class="mt-2"
+          class="mt-2 flex justify-end"
         >
           <input type="hidden" name="action" value="clear" />
-          <button
-            type="submit"
-            class="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
-          >
-            Clear default
-          </button>
+          <button type="submit" class="btn-secondary btn-sm">Clear default</button>
         </form>
       )}
     </fieldset>
   </section>
 
   {!isCreator && (
-    <section class="mb-8 rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
+    <section class="mb-2 rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Leave group</h2>
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
         Removes you from this group. Your past expenses, splits, and settlements stay in the ledger.
@@ -250,21 +236,17 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
       <form
         method="POST"
         action={`/api/group-member-remove?id=${id}`}
+        class="flex justify-end"
       >
         <input type="hidden" name="user_id" value={myID} />
         <input type="hidden" name="leave" value="1" />
-        <button
-          type="submit"
-          class="rounded-md border border-red-600 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-        >
-          Leave group
-        </button>
+        <button type="submit" class="btn-danger">Leave group</button>
       </form>
     </section>
   )}
 
   {isCreator && group.members.length > 1 && (
-    <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-2 font-medium">Transfer ownership</h2>
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
         Hand the group to another member. You stay in the group as a regular member, and the new owner takes over creator-only powers (transfer, delete, remove members).
@@ -272,26 +254,19 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
       <form
         method="POST"
         action={`/api/group-transfer-ownership?id=${id}`}
-        class="flex flex-col gap-2 sm:flex-row sm:items-center"
+        class="flex flex-col gap-2 sm:flex-row sm:items-end"
       >
-        <select
-          name="new_owner_id"
-          required
-          class="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 sm:flex-1"
-        >
-          {group.members
-            .filter((m) => m.user_id !== group.created_by)
-            .map((m) => (
-              <option value={m.user_id}>{m.display_name}</option>
-            ))}
-        </select>
-        <button
-          type="button"
-          data-confirm-open="confirm-transfer-ownership"
-          class="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300 dark:focus-visible:ring-neutral-500"
-        >
-          Transfer
-        </button>
+        <label class="field-select-row sm:flex-1">
+          <span>New owner <span class="text-red-600">*</span></span>
+          <select name="new_owner_id" required class="field-select">
+            {group.members
+              .filter((m) => m.user_id !== group.created_by)
+              .map((m) => (
+                <option value={m.user_id}>{m.display_name}</option>
+              ))}
+          </select>
+        </label>
+        <button type="button" data-confirm-open="confirm-transfer-ownership" class="btn-primary">Transfer</button>
       </form>
       <ConfirmDialog
         id="confirm-transfer-ownership"
@@ -309,14 +284,8 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
         Deleting the group removes all its expenses, settlements and recurring templates. This cannot be undone.
       </p>
-      <form method="POST" action={`/api/group-delete?id=${id}`}>
-        <button
-          type="button"
-          data-confirm-open="confirm-delete-group"
-          class="rounded-md border border-red-600 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
-        >
-          Delete group
-        </button>
+      <form method="POST" action={`/api/group-delete?id=${id}`} class="flex justify-end">
+        <button type="button" data-confirm-open="confirm-delete-group" class="btn-danger">Delete group</button>
       </form>
       <ConfirmDialog
         id="confirm-delete-group"

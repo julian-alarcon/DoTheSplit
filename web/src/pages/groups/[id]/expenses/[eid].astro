@@ -1,6 +1,7 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
+import BackLink from "@/components/BackLink.astro";
 import SplitEditor from "@/components/SplitEditor.astro";
 import DatePicker from "@/components/DatePicker.astro";
 import ConfirmDialog from "@/components/ConfirmDialog.astro";
@@ -43,7 +44,7 @@ const incurredAtISO = new Date(expense.incurred_at).toISOString().slice(0, 10);
 const createdAtDiffers =
   new Date(expense.created_at).toISOString().slice(0, 10) !== incurredAtISO;
 
-// Same content-match heuristic as the group page — flag the expense if a
+// Same content-match heuristic as the group page - flag the expense if a
 // recurring template with matching shape exists.
 const cadenceLabels: Record<string, string> = {
   daily: "daily",
@@ -90,7 +91,7 @@ function renderValue(field: string, value: string): string {
   if (field === "splits") {
     try {
       const parsed = JSON.parse(value) as { user_id: string; share_cents: number }[];
-      if (!Array.isArray(parsed) || parsed.length === 0) return "—";
+      if (!Array.isArray(parsed) || parsed.length === 0) return "-";
       return parsed
         .map((s) => `${nameByUserID.get(s.user_id) ?? s.user_id}: ${formatMoney(s.share_cents)}`)
         .join(", ");
@@ -108,15 +109,15 @@ const fieldLabel: Record<string, string> = {
   description: "Description",
   amount_cents: "Amount",
   category_id: "Category",
-  payer_id: "Payer",
+  payer_id: "Paid by",
   splits: "Splits",
   incurred_at: "Date",
 };
 ---
 
 <Base title={expense.description}>
-  <div class="mb-4 flex items-center gap-2 text-sm">
-    <a href={`/groups/${id}`} class="text-neutral-600 hover:underline dark:text-neutral-400">← Back to {group.name}</a>
+  <div class="mb-4 flex items-center gap-2">
+    <BackLink href={`/groups/${id}`} label={group.name} />
   </div>
 
   <div class="mb-6 flex items-center gap-3">
@@ -152,13 +153,13 @@ const fieldLabel: Record<string, string> = {
     <p
       role="status"
       aria-live="polite"
-      class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+      class="mb-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
     >
       Could not save. Check your input and try again.
     </p>
   )}
 
-  <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Edit</h2>
     {canEdit ? (
       <form
@@ -167,68 +168,69 @@ const fieldLabel: Record<string, string> = {
         class="flex flex-col gap-4"
         data-dirty-form
       >
-        <label class="flex flex-col gap-1 text-sm">
-          <span>Description</span>
-          <div class="flex items-stretch gap-2">
-            <details class="group relative" data-category-picker>
-              <summary
-                class="flex h-full cursor-pointer list-none items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-xl leading-none hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-neutral-900"
-                aria-label="Choose category"
-                title="Choose category"
-                data-category-emoji
-              >
-                {currentCategory?.emoji ?? "📌"}
-              </summary>
-              <div class="absolute left-0 top-full z-10 mt-1 w-56 rounded-md border border-neutral-300 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-950">
-                <ul class="flex max-h-64 flex-col gap-0.5 overflow-auto">
-                  {categories.map((c) => (
-                    <li>
-                      <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
-                        <input
-                          type="radio"
-                          name="category_id"
-                          value={c.id}
-                          data-category-option
-                          data-emoji={c.emoji}
-                          checked={c.id === expense.category_id}
-                          class="accent-neutral-900 dark:accent-neutral-100"
-                        />
-                        <span class="text-lg leading-none">{c.emoji}</span>
-                        <span>{c.label}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </details>
+        <div class="flex items-stretch gap-2">
+          <details class="group relative" data-category-picker>
+            <summary
+              class="field-category-trigger"
+              aria-label="Choose category"
+              title="Choose category"
+              data-category-emoji
+            >
+              {currentCategory?.emoji ?? "📌"}
+            </summary>
+            <div class="absolute left-0 top-full z-10 mt-1 w-56 rounded-md border border-neutral-300 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-950">
+              <ul class="flex max-h-64 flex-col gap-0.5 overflow-auto">
+                {categories.map((c) => (
+                  <li>
+                    <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900">
+                      <input
+                        type="radio"
+                        name="category_id"
+                        value={c.id}
+                        data-category-option
+                        data-emoji={c.emoji}
+                        checked={c.id === expense.category_id}
+                        class="accent-neutral-900 dark:accent-neutral-100"
+                      />
+                      <span class="text-lg leading-none">{c.emoji}</span>
+                      <span>{c.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
+          <label class="field flex-1">
             <input
               name="description"
               required
               maxlength="200"
               value={expense.description}
-              class="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950"
+              placeholder=" "
+              class="field-input"
             />
-          </div>
-        </label>
+            <span class="field-label" data-required>What was it?</span>
+          </label>
+        </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label class="flex flex-col gap-1 text-sm">
-            <span>Amount ({currency})</span>
+          <label class="field">
+            <input type="hidden" name="amount_dollars" value={formatCents(expense.amount_cents)} />
             <input
-              type="number"
-              name="amount_dollars"
-              step="0.01"
-              min="0.01"
+              type="text"
+              inputmode="decimal"
+              data-currency-input
+              data-currency-hidden="amount_dollars"
+              data-currency={currency}
               required
               value={formatCents(expense.amount_cents)}
-              class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950"
+              placeholder=" "
+              class="field-input field-input-currency"
             />
+            <span class="field-label" data-required>Amount ({currency})</span>
           </label>
-          <label class="flex flex-col gap-1 text-sm">
-            <span>Payer</span>
-            <select
-              name="payer_id"
-              class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950"
-            >
+          <label class="field-select-row">
+            <span>Paid by</span>
+            <select name="payer_id" class="field-select">
               {group.members.map((m) => (
                 <option value={m.user_id} selected={m.user_id === expense.payer_id}>
                   {m.display_name}
@@ -251,14 +253,7 @@ const fieldLabel: Record<string, string> = {
             ariaLabel="Pick date"
             weekStart={Astro.locals.user?.week_start === 0 ? 0 : 1}
           />
-          <button
-            type="submit"
-            data-dirty-submit
-            disabled
-            class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-neutral-900 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300 dark:disabled:hover:bg-neutral-100"
-          >
-            Save changes
-          </button>
+          <button type="submit" data-dirty-submit disabled class="btn-primary">Save changes</button>
         </div>
         {createdAtDiffers && (
           <p class="text-xs text-neutral-600 dark:text-neutral-400">
@@ -280,9 +275,10 @@ const fieldLabel: Record<string, string> = {
     import "@/scripts/split-editor.ts";
     import "@/scripts/date-picker.ts";
     import "@/scripts/confirm-dialog.ts";
+    import "@/scripts/currency-input.ts";
   </script>
 
-  <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+  <div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
     <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-3 font-medium">Splits</h2>
       <ul class="flex flex-col gap-2 text-sm">
@@ -357,14 +353,9 @@ const fieldLabel: Record<string, string> = {
       <form
         method="POST"
         action={`/api/expenses/delete?id=${eid}&group=${id}`}
+        class="flex justify-end"
       >
-        <button
-          type="button"
-          data-confirm-open="confirm-delete-expense"
-          class="rounded-md border border-red-600 bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500"
-        >
-          Delete expense
-        </button>
+        <button type="button" data-confirm-open="confirm-delete-expense" class="btn-danger">Delete expense</button>
       </form>
       <ConfirmDialog
         id="confirm-delete-expense"

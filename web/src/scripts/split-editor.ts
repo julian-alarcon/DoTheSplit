@@ -81,7 +81,7 @@ function formatPercent(bps: number): string {
 }
 
 // Equal split of `totalCents` across `n` members, distributing rounding
-// remainder to the first (totalCents mod n) rows — matches the backend.
+// remainder to the first (totalCents mod n) rows - matches the backend.
 function equalShares(totalCents: number, n: number): number[] {
   if (n <= 0 || totalCents < 0) return [];
   const base = Math.floor(totalCents / n);
@@ -134,7 +134,7 @@ function setupEditor(root: HTMLElement) {
   let state: RowState[] = [];
   // True after the user confirms a split via "Done". While false, the parent
   // form posts without `splits_json`, so the backend keeps the existing split
-  // (rescaled proportionally if amount changed) — matching legacy behavior.
+  // (rescaled proportionally if amount changed) - matching legacy behavior.
   let dirty = false;
 
   function readAmountCents(): number {
@@ -145,7 +145,7 @@ function setupEditor(root: HTMLElement) {
   }
 
   // hasUsableDefault: the group has a 2-entry default and both entries refer
-  // to current members. (Belt-and-suspenders — backend already auto-clears
+  // to current members. (Belt-and-suspenders - backend already auto-clears
   // when membership grows past 2, but the UI shouldn't blow up otherwise.)
   function hasUsableDefault(): boolean {
     if (groupDefault.length !== 2 || members.length !== 2) return false;
@@ -175,7 +175,7 @@ function setupEditor(root: HTMLElement) {
       included: byID.has(m.id),
       value: byID.get(m.id) ?? 0,
     }));
-    // Best default when opening an existing split is "exact" — losslessly
+    // Best default when opening an existing split is "exact" - losslessly
     // round-trips stored cents. The user can switch to percent/equal.
     mode = "exact";
   }
@@ -196,7 +196,7 @@ function setupEditor(root: HTMLElement) {
       for (const s of state) s.value = s.included ? shares[i++] ?? 0 : 0;
       return;
     }
-    // percent — basis points, evenly split, remainder to first rows.
+    // percent - basis points, evenly split, remainder to first rows.
     const base = Math.floor(10000 / included.length);
     const rem = 10000 - base * included.length;
     let i = 0;
@@ -273,7 +273,11 @@ function setupEditor(root: HTMLElement) {
       if (!r) continue;
       r.checkbox.checked = s.included;
       r.valueInput.disabled = !s.included || mode === "equal";
-      // Don't overwrite the field the user is currently typing into — that
+      // Equal mode has no per-row value to enter, so hide the input entirely
+      // rather than render a permanently-disabled control (Material/iOS form
+      // pattern: don't show controls that can't be acted on in this state).
+      r.valueInput.style.display = mode === "equal" ? "none" : "";
+      // Don't overwrite the field the user is currently typing into - that
       // resets the caret to the end and corrupts mid-edit selection.
       if (r.valueInput !== focused) {
         if (mode === "equal") {
@@ -286,7 +290,7 @@ function setupEditor(root: HTMLElement) {
         }
       }
       const share = shares.get(s.userID) ?? 0;
-      r.preview.textContent = s.included ? formatCents(share, currency) : "—";
+      r.preview.textContent = s.included ? formatCents(share, currency) : "-";
       r.label.textContent = twoPersonLabel(s.userID);
     }
 
@@ -413,7 +417,7 @@ function setupEditor(root: HTMLElement) {
     });
   });
 
-  // No backdrop-close listener on purpose — pointer cancellation (WCAG 2.5.7),
+  // No backdrop-close listener on purpose - pointer cancellation (WCAG 2.5.7),
   // matching the DatePicker dialog. Escape still closes via native <dialog>.
 
   doneBtn.addEventListener("click", (e) => {
@@ -443,7 +447,7 @@ function setupEditor(root: HTMLElement) {
   // Initial render + auto-commit so create flows have a valid payload ready.
   initFromInitial();
   // Don't prefill if initFromInitial already loaded values (from initialSplits
-  // or from the group's default_split) — that would clobber them.
+  // or from the group's default_split) - that would clobber them.
   if (!hasInitial && !hasUsableDefault()) prefillForMode();
   if (hasInitial) {
     renderSummary();

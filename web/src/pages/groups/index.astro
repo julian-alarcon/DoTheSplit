@@ -8,7 +8,7 @@ const { data: groups = [] } = await api.GET("/v1/groups");
 const myID = Astro.locals.user?.id ?? "";
 
 // For each group, resolve the owner's display name from the embedded members
-// list — saves a round-trip per row. Falls back to "Unknown" if the creator
+// list - saves a round-trip per row. Falls back to "Unknown" if the creator
 // row is somehow missing (shouldn't happen given the FK).
 const ownerByGroup = new Map<string, string>();
 for (const g of groups) {
@@ -18,14 +18,9 @@ for (const g of groups) {
 ---
 
 <Base title="Groups">
-  <div class="mb-4 flex items-center justify-between">
+  <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <h1 class="text-2xl font-semibold">Your groups</h1>
-    <a
-      href="/groups/new"
-      class="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300 dark:focus-visible:ring-neutral-500"
-    >
-      New group
-    </a>
+    <a href="/groups/new" class="btn-primary btn-sm self-end sm:self-auto">New group</a>
   </div>
 
   {groups.length === 0 ? (

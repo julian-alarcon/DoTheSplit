@@ -8,21 +8,19 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
   <div class="mx-auto max-w-md">
     <h1 class="mb-6 text-2xl font-semibold">New group</h1>
     <form method="POST" action="/api/groups" class="flex flex-col gap-3">
-      <label class="flex flex-col gap-1 text-sm">
-        <span>Name</span>
-        <input name="name" required maxlength="80" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900" />
+      <label class="field">
+        <input name="name" required maxlength="80" placeholder=" " class="field-input" />
+        <span class="field-label" data-required>Group name</span>
       </label>
-      <label class="flex flex-col gap-1 text-sm">
+      <label class="field-select-row">
         <span>Default currency</span>
-        <select name="default_currency" class="rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+        <select name="default_currency" class="field-select">
           {currencyChoices.map((c) => (
             <option value={c} selected={c === "EUR"}>{c}</option>
           ))}
         </select>
       </label>
-      <button type="submit" class="mt-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900">
-        Create group
-      </button>
+      <button type="submit" class="btn-primary mt-2 self-end">Create group</button>
     </form>
   </div>
 </Base>

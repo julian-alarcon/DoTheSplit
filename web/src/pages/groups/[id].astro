@@ -87,7 +87,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         href={`/groups/${id}/recurring`}
         aria-label={`Recurring expenses (${recurringTemplates.length})`}
         title="Recurring expenses"
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm h-9"
       >
         <RecurringIcon />
         <span class="hidden sm:inline">Recurring</span>
@@ -99,7 +99,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         href={`/groups/${id}/settings`}
         aria-label="Group settings"
         title="Group settings"
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm h-9"
       >
         <SettingsIcon />
         <span class="hidden sm:inline">Group settings</span>
@@ -180,7 +180,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     <h2 class="mb-3 font-medium">Add expense</h2>
     <form method="POST" action={`/api/expenses?id=${id}`} class="flex flex-col gap-4">
       <div class="flex items-stretch gap-2">
-        <details class="group relative" data-category-picker>
+        <details class="group relative flex" data-category-picker>
           <summary
             class="field-category-trigger"
             aria-label="Choose category"

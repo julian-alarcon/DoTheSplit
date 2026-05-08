@@ -60,7 +60,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
   {templates.length === 0 ? (
     <div class="rounded-md border border-neutral-200 bg-white p-6 text-sm dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-2 font-medium">No recurring expenses yet</h2>
-      <p class="text-neutral-700 dark:text-neutral-300">
+      <p class="text-neutral-600 dark:text-neutral-400">
         Add a regular expense in <a href={`/groups/${id}`} class="underline">{group.name}</a> and
         pick a repeat cadence in the date picker to create one.
       </p>

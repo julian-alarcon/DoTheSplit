@@ -82,14 +82,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
   <div class="mb-4 flex items-center gap-2">
     <BackLink href="/groups" label="Groups" />
   </div>
-  <div class="mb-2 flex items-center justify-between gap-3">
+  <div class="mb-2 flex items-baseline justify-between gap-3">
     <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">{group.name}</h1>
     <div class="flex shrink-0 items-center gap-2">
       <a
         href={`/groups/${id}/recurring`}
         aria-label={`Recurring expenses (${recurringTemplates.length})`}
         title="Recurring expenses"
-        class="btn-secondary btn-sm h-9"
+        class="btn-secondary btn-sm"
       >
         <FaIcon name="arrows-rotate" />
         <span class="hidden sm:inline">Recurring</span>
@@ -101,7 +101,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         href={`/groups/${id}/settings`}
         aria-label="Group settings"
         title="Group settings"
-        class="btn-secondary btn-sm h-9"
+        class="btn-secondary btn-sm"
       >
         <FaIcon name="gear" />
         <span class="hidden sm:inline">Group settings</span>

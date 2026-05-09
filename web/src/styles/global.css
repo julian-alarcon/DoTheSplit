@@ -29,6 +29,24 @@ body {
   @apply bg-neutral-50 text-neutral-900 antialiased;
 }
 
+/* Lock background scroll while any native <dialog> is open so the modal
+   doesn't scroll-chain into the page underneath. `:has()` is broadly
+   supported in modern Chromium/Safari/Firefox; older engines simply fall
+   back to no lock, which is the same behaviour we shipped before.
+   Both <html> and <body> get the rule because iOS Safari only honours
+   overflow:hidden on the root, while desktop browsers prefer body.
+   `overscroll-behavior: contain` on the dialog and any internal scroll
+   container belt-and-braces against rubber-band chaining inside dialogs
+   whose content scrolls (category list, split editor member list). */
+html:has(dialog[open]),
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+dialog[open],
+dialog[open] .overflow-auto {
+  overscroll-behavior: contain;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --field-focus: var(--color-neutral-100);

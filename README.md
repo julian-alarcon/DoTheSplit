@@ -54,16 +54,17 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Bug members (is reset sometimes)
-- Remove category migrations
-- Remove from DB other kind of data
 - Lock scroll on modals?
 - Set static height for custom split
 
+- Bug members (is reset sometimes)
 - I just saw that only the Creator of the group can delete expenses, this should be alloowed by everybody in the group.
 - Also I found a critical error, When Someone make a Settle there is no record in the Expenses of the group.
 
 - Add a new temporal recurring each 30 seconds just for test as this will be deleted
+
+- Remove html prefixes specific for browsers if not needed
+- Remove workarounds already fixed in latest browsers/html/css features
 
 - Themes
   - Use Inter font (in local to avoid calling thirt party entities)

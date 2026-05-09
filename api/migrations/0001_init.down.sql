@@ -1,6 +1,10 @@
-DROP TABLE IF EXISTS splits;
-DROP TABLE IF EXISTS expenses;
-DROP TABLE IF EXISTS group_members;
-DROP TABLE IF EXISTS groups;
-DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS expense_revisions   CASCADE;
+DROP TABLE IF EXISTS recurring_expenses  CASCADE;
+DROP TABLE IF EXISTS settlements         CASCADE;
+DROP TABLE IF EXISTS splits              CASCADE;
+DROP TABLE IF EXISTS expenses            CASCADE;
+DROP TABLE IF EXISTS categories          CASCADE;
+DROP TABLE IF EXISTS group_members       CASCADE;
+DROP TABLE IF EXISTS groups              CASCADE;
+DROP TABLE IF EXISTS sessions            CASCADE;
+DROP TABLE IF EXISTS users               CASCADE;

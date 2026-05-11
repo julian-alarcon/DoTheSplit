@@ -54,11 +54,11 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Lock scroll on modals?
+- I just saw that only the Creator of the group can delete expenses, this should be alloowed by everybody in the group.
+
 - Set static height for custom split
 
-- Bug members (is reset sometimes)
-- I just saw that only the Creator of the group can delete expenses, this should be alloowed by everybody in the group.
+- When creting a group alolow to add members
 - Also I found a critical error, When Someone make a Settle there is no record in the Expenses of the group.
 
 - Add a new temporal recurring each 30 seconds just for test as this will be deleted
@@ -101,6 +101,19 @@ Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format
 internet-exposed deployments, terminate TLS at an upstream reverse proxy (Caddy,
 Traefik, Cloudflare Tunnel) and flip `COOKIE_SECURE=true`.
 
-## License
+## License & compliance
 
-MIT.
+DoTheSplit is released under the [MIT License](LICENSE).
+
+Third-party attribution lives in two places:
+
+- [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — generated list of every direct and transitive Go module and npm package with SPDX license + source link. Includes the Font Awesome CC BY 4.0 attribution.
+- `/credits` route in the running app — human-readable summary linked from every page footer.
+
+CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/web.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
+
+Regenerate locally:
+
+```bash
+make compliance   # licenses + SBOMs
+```

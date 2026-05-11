@@ -23,3 +23,6 @@ node_modules/
 # Generated code (uncomment if you want to keep generated out of VCS)
 # /api/internal/apigen/*.gen.go
 # /web/src/lib/api/schema.d.ts
+
+# SBOM artifacts (regenerated via `make sbom`, published per release)
+/sbom/

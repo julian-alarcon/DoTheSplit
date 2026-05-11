@@ -1,4 +1,4 @@
-.PHONY: help gen gen-go gen-ts migrate-up migrate-down test test-go test-web dev dev-api dev-web lint lint-go lint-web build tidy up
+.PHONY: help gen gen-go gen-ts migrate-up migrate-down test test-go test-web dev dev-api dev-web lint lint-go lint-web build tidy up licenses sbom compliance
 
 SHELL := /bin/bash
 
@@ -57,3 +57,11 @@ build: ## Build Go binaries
 up: ## Rebuild + start the full stack, baking the current git SHA into the web image
 	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) \
 		docker compose up -d --build
+
+licenses: ## Generate THIRD_PARTY_LICENSES.md and web/src/lib/credits.json
+	./scripts/generate-licenses.sh
+
+sbom: ## Generate CycloneDX SBOMs into ./sbom/
+	./scripts/generate-sbom.sh
+
+compliance: licenses sbom ## Run all license + SBOM generation

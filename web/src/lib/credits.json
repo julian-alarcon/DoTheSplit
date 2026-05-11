@@ -1,0 +1,152 @@
+{
+  "project": {
+    "name": "DoTheSplit",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 Julian Alarcon",
+    "url": "https://github.com/julian-alarcon/dothesplit"
+  },
+  "fontAwesome": {
+    "creator": "Font Awesome",
+    "creatorUrl": "https://fontawesome.com",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "licensePageUrl": "https://fontawesome.com/license/free",
+    "modificationStatement": "Icons used unmodified."
+  },
+  "backend": [
+    {
+      "name": "github.com/getkin/kin-openapi",
+      "version": "v0.135.0",
+      "license": "MIT",
+      "url": "https://github.com/getkin/kin-openapi"
+    },
+    {
+      "name": "github.com/gin-gonic/gin",
+      "version": "v1.12.0",
+      "license": "MIT",
+      "url": "https://github.com/gin-gonic/gin"
+    },
+    {
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/google/uuid"
+    },
+    {
+      "name": "github.com/jackc/pgx/v5",
+      "version": "v5.9.2",
+      "license": "MIT",
+      "url": "https://github.com/jackc/pgx"
+    },
+    {
+      "name": "github.com/kelseyhightower/envconfig",
+      "version": "v1.4.0",
+      "license": "MIT",
+      "url": "https://github.com/kelseyhightower/envconfig"
+    },
+    {
+      "name": "github.com/oapi-codegen/runtime",
+      "version": "v1.4.0",
+      "license": "Apache-2.0",
+      "url": "https://github.com/oapi-codegen/runtime"
+    },
+    {
+      "name": "github.com/stretchr/testify",
+      "version": "v1.11.1",
+      "license": "UNKNOWN",
+      "url": "https://github.com/stretchr/testify"
+    },
+    {
+      "name": "github.com/testcontainers/testcontainers-go",
+      "version": "v0.42.0",
+      "license": "UNKNOWN",
+      "url": "https://github.com/testcontainers/testcontainers-go"
+    },
+    {
+      "name": "github.com/testcontainers/testcontainers-go/modules/postgres",
+      "version": "v0.42.0",
+      "license": "UNKNOWN",
+      "url": "https://github.com/testcontainers/testcontainers-go/modules/postgres"
+    },
+    {
+      "name": "github.com/ulule/limiter/v3",
+      "version": "v3.11.2",
+      "license": "MIT",
+      "url": "https://github.com/ulule/limiter"
+    },
+    {
+      "name": "golang.org/x/crypto",
+      "version": "v0.48.0",
+      "license": "BSD-3-Clause",
+      "url": "https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE"
+    }
+  ],
+  "frontend": [
+    {
+      "name": "@astrojs/check",
+      "version": "0.9.9",
+      "license": "MIT",
+      "url": "https://github.com/withastro/astro"
+    },
+    {
+      "name": "@astrojs/node",
+      "version": "10.0.6",
+      "license": "MIT",
+      "url": "https://github.com/withastro/astro"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "version": "4.2.4",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
+    },
+    {
+      "name": "astro",
+      "version": "6.2.2",
+      "license": "MIT",
+      "url": "https://github.com/withastro/astro"
+    },
+    {
+      "name": "openapi-fetch",
+      "version": "0.12.5",
+      "license": "MIT",
+      "url": "https://github.com/openapi-ts/openapi-typescript"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.2.4",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "url": "https://github.com/microsoft/TypeScript"
+    },
+    {
+      "name": "@iconify-json/fa7-solid",
+      "version": "1.2.4",
+      "license": "CC-BY-4.0",
+      "url": "https://www.npmjs.com/package/@iconify-json/fa7-solid"
+    },
+    {
+      "name": "@types/node",
+      "version": "24.12.2",
+      "license": "MIT",
+      "url": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+    },
+    {
+      "name": "astro-icon",
+      "version": "1.1.5",
+      "license": "MIT",
+      "url": "https://github.com/natemoo-re/astro-icon"
+    },
+    {
+      "name": "openapi-typescript",
+      "version": "7.13.0",
+      "license": "MIT",
+      "url": "https://github.com/openapi-ts/openapi-typescript"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const isPublic =
     path === "/login" ||
     path === "/register" ||
+    path === "/credits" ||
     path.startsWith("/api/") ||
     path === "/favicon.ico";
 

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "groupName": "docker base images"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "npm dev dependencies",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "matchPackageNames": [
+        "astro",
+        "@astrojs/node",
+        "@astrojs/check",
+        "@tailwindcss/vite",
+        "tailwindcss",
+        "vite"
+      ],
+      "groupName": "astro + tailwind + vite"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Pin go run github.com/<path>@<version> calls in shell scripts",
+      "managerFilePatterns": ["/^scripts/.+\\.sh$/"],
+      "matchStrings": [
+        "go run (?<depName>[^@\\s]+?)(?:/v\\d+)?(?:/cmd/[^@\\s]+)?@(?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "description": "Pin npx --yes <pkg>@<version> calls in shell scripts",
+      "managerFilePatterns": ["/^scripts/.+\\.sh$/"],
+      "matchStrings": [
+        "npx --yes (?<depName>(?:@[^/\\s]+/)?[^@\\s]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Node version declared in web/Dockerfile ARG",
+      "managerFilePatterns": ["/web/Dockerfile$/"],
+      "matchStrings": [
+        "ARG NODE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "node",
+      "datasourceTemplate": "node-version"
+    }
+  ]
+}

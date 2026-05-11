@@ -20,6 +20,18 @@ const currencyChoices = ["EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY", "SEK",
           ))}
         </select>
       </label>
+      <label class="field">
+        <textarea
+          name="member_emails"
+          rows="4"
+          placeholder=" "
+          class="field-input"
+        ></textarea>
+        <span class="field-label">Add members (optional)</span>
+      </label>
+      <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+        One email per line. Only registered users can be added — others are skipped and you can retry from group settings.
+      </p>
       <button type="submit" class="btn-primary mt-2 self-end">Create group</button>
     </form>
   </div>

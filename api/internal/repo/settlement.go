@@ -2,9 +2,11 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,6 +35,37 @@ func (r *SettlementRepo) Create(ctx context.Context, s *Settlement) error {
 		RETURNING id, created_at
 	`, s.GroupID, s.FromUser, s.ToUser, s.AmountCents, s.Note, s.SettledAt).
 		Scan(&s.ID, &s.CreatedAt)
+}
+
+func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*Settlement, error) {
+	var s Settlement
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at, deleted_at
+		FROM settlements
+		WHERE id = $1
+	`, id).Scan(&s.ID, &s.GroupID, &s.FromUser, &s.ToUser,
+		&s.AmountCents, &s.Note, &s.SettledAt, &s.CreatedAt, &s.DeletedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE settlements SET deleted_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *SettlementRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Settlement, error) {

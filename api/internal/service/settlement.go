@@ -65,6 +65,48 @@ func (s *SettlementService) Create(ctx context.Context, actorID uuid.UUID, in Cr
 	return st, nil
 }
 
+// Get returns a single settlement by id, enforcing group membership.
+func (s *SettlementService) Get(ctx context.Context, actorID, id uuid.UUID) (*repo.Settlement, error) {
+	st, err := s.settlements.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if st.DeletedAt != nil {
+		return nil, repo.ErrNotFound
+	}
+	ok, err := s.groups.IsMember(ctx, st.GroupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotMember
+	}
+	return st, nil
+}
+
+// Delete soft-deletes a settlement. Any group member may delete; the row is
+// preserved with deleted_at so the audit trail survives.
+func (s *SettlementService) Delete(ctx context.Context, actorID, settlementID uuid.UUID) error {
+	st, err := s.settlements.FindByID(ctx, settlementID)
+	if errors.Is(err, repo.ErrNotFound) {
+		return repo.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if st.DeletedAt != nil {
+		return repo.ErrNotFound
+	}
+	ok, err := s.groups.IsMember(ctx, st.GroupID, actorID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotMember
+	}
+	return s.settlements.SoftDelete(ctx, settlementID)
+}
+
 func (s *SettlementService) List(ctx context.Context, actorID, groupID uuid.UUID) ([]repo.Settlement, error) {
 	ok, err := s.groups.IsMember(ctx, groupID, actorID)
 	if err != nil {

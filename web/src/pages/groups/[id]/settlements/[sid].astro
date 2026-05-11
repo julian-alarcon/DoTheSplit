@@ -1,0 +1,153 @@
+---
+import Base from "@/layouts/Base.astro";
+import Avatar from "@/components/Avatar.astro";
+import BackLink from "@/components/BackLink.astro";
+import ConfirmDialog from "@/components/ConfirmDialog.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import { apiFor } from "@/lib/api/client";
+
+const { id, sid } = Astro.params as { id: string; sid: string };
+const api = apiFor(Astro.locals.cookie);
+
+const [groupsRes, settlementRes] = await Promise.all([
+  api.GET("/v1/groups"),
+  api.GET("/v1/settlements/{id}", { params: { path: { id: sid } } }),
+]);
+
+const group = groupsRes.data?.find((g) => g.id === id);
+const settlement = settlementRes.data;
+if (!group || !settlement || settlement.group_id !== id) {
+  return Astro.redirect(`/groups/${id}`);
+}
+
+const currency = group.default_currency;
+const moneyFmt = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency,
+  currencyDisplay: "narrowSymbol",
+});
+const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+const memberByID = new Map(group.members.map((m) => [m.user_id, m]));
+const nameByUserID = new Map(group.members.map((m) => [m.user_id, m.display_name]));
+
+const userID = Astro.locals.user?.id;
+const isMember = group.members.some((m) => m.user_id === userID);
+const canDelete = isMember;
+
+const from = memberByID.get(settlement.from_user_id);
+const to = memberByID.get(settlement.to_user_id);
+const settledAtDiffers =
+  new Date(settlement.created_at).toISOString().slice(0, 10) !==
+  new Date(settlement.settled_at).toISOString().slice(0, 10);
+---
+
+<Base title={`Settlement · ${group.name}`}>
+  <div class="mb-4 flex items-center gap-2">
+    <BackLink href={`/groups/${id}`} label={group.name} />
+  </div>
+
+  <div class="mb-6 flex items-center gap-3">
+    <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+      <FaIcon name="arrow-right" size={18} />
+    </span>
+    <div>
+      <h1 class="text-2xl font-semibold">Settlement</h1>
+      <p class="flex flex-wrap items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
+        <span>{dateFmt.format(new Date(settlement.settled_at))} · {moneyFmt.format(settlement.amount_cents / 100)}</span>
+      </p>
+    </div>
+  </div>
+
+  <div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+    <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <h2 class="mb-3 font-medium">Details</h2>
+      <dl class="flex flex-col divide-y divide-neutral-200 text-sm dark:divide-neutral-800">
+        <div class="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-neutral-600 dark:text-neutral-400">From</dt>
+          <dd class="flex items-center gap-1.5">
+            <Avatar
+              userId={settlement.from_user_id}
+              displayName={from?.display_name ?? "?"}
+              hasAvatar={from?.has_avatar}
+              avatarUpdatedAt={from?.avatar_updated_at}
+              size={20}
+            />
+            <span>{nameByUserID.get(settlement.from_user_id) ?? "?"}</span>
+          </dd>
+        </div>
+        <div class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-neutral-600 dark:text-neutral-400">To</dt>
+          <dd class="flex items-center gap-1.5">
+            <Avatar
+              userId={settlement.to_user_id}
+              displayName={to?.display_name ?? "?"}
+              hasAvatar={to?.has_avatar}
+              avatarUpdatedAt={to?.avatar_updated_at}
+              size={20}
+            />
+            <span>{nameByUserID.get(settlement.to_user_id) ?? "?"}</span>
+          </dd>
+        </div>
+        <div class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-neutral-600 dark:text-neutral-400">Amount</dt>
+          <dd class="font-mono">{moneyFmt.format(settlement.amount_cents / 100)}</dd>
+        </div>
+        <div class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-neutral-600 dark:text-neutral-400">Date</dt>
+          <dd>{dateFmt.format(new Date(settlement.settled_at))}</dd>
+        </div>
+        {settlement.note && (
+          <div class="flex flex-col gap-1 py-2 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
+            <dt class="text-neutral-600 dark:text-neutral-400">Note</dt>
+            <dd class="sm:text-right">{settlement.note}</dd>
+          </div>
+        )}
+      </dl>
+    </section>
+
+    <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <h2 class="mb-3 font-medium">History</h2>
+      <ul class="flex flex-col text-sm">
+        <li class="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
+          <span class="font-medium">Recorded</span>
+          <span class="text-xs text-neutral-600 dark:text-neutral-400">
+            {dateTimeFmt.format(new Date(settlement.created_at))}
+          </span>
+        </li>
+        {settledAtDiffers && (
+          <li class="py-2 text-xs text-neutral-600 dark:text-neutral-400">
+            Backdated to {dateFmt.format(new Date(settlement.settled_at))}.
+          </li>
+        )}
+      </ul>
+    </section>
+  </div>
+
+  {canDelete && (
+    <section class="rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
+      <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+        Soft-deletes this settlement. Balances will revert to the state before this payment was recorded.
+      </p>
+      <form
+        method="POST"
+        action={`/api/settlements/delete?id=${sid}&group=${id}`}
+        class="flex justify-end"
+      >
+        <button type="button" data-confirm-open="confirm-delete-settlement" class="btn-danger">Delete settlement</button>
+      </form>
+      <ConfirmDialog
+        id="confirm-delete-settlement"
+        title="Delete this settlement?"
+        message="It will stop affecting balances. The record is soft-deleted in the database, but no longer visible in the app."
+        confirmLabel="Delete settlement"
+      />
+    </section>
+  )}
+
+  <script>
+    import "@/scripts/confirm-dialog.ts";
+  </script>
+</Base>

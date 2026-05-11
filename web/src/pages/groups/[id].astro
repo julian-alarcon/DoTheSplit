@@ -11,12 +11,13 @@ import { apiFor } from "@/lib/api/client";
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
 
-const [groupsRes, expensesRes, balancesRes, categoriesRes, recurringRes] = await Promise.all([
+const [groupsRes, expensesRes, balancesRes, categoriesRes, recurringRes, settlementsRes] = await Promise.all([
   api.GET("/v1/groups"),
   api.GET("/v1/groups/{id}/expenses", { params: { path: { id } } }),
   api.GET("/v1/groups/{id}/balances", { params: { path: { id } } }),
   api.GET("/v1/categories"),
   api.GET("/v1/groups/{id}/recurring-expenses", { params: { path: { id } } }),
+  api.GET("/v1/groups/{id}/settlements", { params: { path: { id } } }),
 ]);
 
 const group = groupsRes.data?.find((g) => g.id === id);
@@ -28,6 +29,21 @@ const net = balancesRes.data?.net ?? [];
 const simplified = balancesRes.data?.simplified ?? [];
 const recurringTemplates = recurringRes.data ?? [];
 const categories = categoriesRes.data ?? [];
+const settlements = settlementsRes.data ?? [];
+
+// Unified activity feed: expenses and settlements together, newest first.
+// Settlements use settled_at as their effective date (matches the "Settle up"
+// form) and don't get a category icon — they render as a transfer row.
+type ExpenseItem = (typeof expenses)[number];
+type SettlementItem = (typeof settlements)[number];
+type ActivityItem =
+  | { kind: "expense"; at: string; expense: ExpenseItem }
+  | { kind: "settlement"; at: string; settlement: SettlementItem };
+
+const activity: ActivityItem[] = [
+  ...expenses.map((e): ActivityItem => ({ kind: "expense", at: e.incurred_at, expense: e })),
+  ...settlements.map((s): ActivityItem => ({ kind: "settlement", at: s.settled_at, settlement: s })),
+].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 
 // Match expenses to a recurring template by content (no FK linking the two).
 // Same group + description + payer + amount + currency + category + mode is
@@ -291,52 +307,100 @@ const todayISO = new Date().toISOString().slice(0, 10);
   </section>
 
   <section>
-    <h2 class="mb-3 font-medium">Expenses</h2>
-    {expenses.length === 0 ? (
-      <p class="text-sm text-neutral-500">No expenses yet.</p>
+    <h2 class="mb-3 font-medium">Activity</h2>
+    {activity.length === 0 ? (
+      <p class="text-sm text-neutral-500">No expenses or settlements yet.</p>
     ) : (
       <ul class="flex flex-col gap-2">
-        {expenses.map((e) => {
-          const cat = categoryByID.get(e.category_id);
-          const cadence = cadenceByExpense.get(e.id);
+        {activity.map((item) => {
+          if (item.kind === "expense") {
+            const e = item.expense;
+            const cat = categoryByID.get(e.category_id);
+            const cadence = cadenceByExpense.get(e.id);
+            return (
+              <li>
+                <a
+                  href={`/groups/${id}/expenses/${e.id}`}
+                  class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+                >
+                  <div class="flex min-w-0 items-center gap-3">
+                    <span class="shrink-0 inline-flex items-center justify-center" title={cat?.label ?? ""}>
+                      <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+                    </span>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-1.5 font-medium">
+                        <span class="truncate">{e.description}</span>
+                        {cadence && (
+                          <span
+                            class="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                            title={`Repeats ${cadenceLabels[cadence] ?? cadence}`}
+                          >
+                            <FaIcon name="arrows-rotate" size={11} />
+                            {cadenceLabels[cadence] ?? cadence}
+                          </span>
+                        )}
+                      </div>
+                      <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                        <span>{dateFmt.format(new Date(e.incurred_at))} · paid by</span>
+                        <Avatar
+                          userId={e.payer_id}
+                          displayName={nameByUserID.get(e.payer_id) ?? "?"}
+                          hasAvatar={memberByID.get(e.payer_id)?.has_avatar}
+                          avatarUpdatedAt={memberByID.get(e.payer_id)?.avatar_updated_at}
+                          size={16}
+                        />
+                        <span class="truncate">{nameByUserID.get(e.payer_id) ?? "?"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span class="shrink-0 font-mono">
+                    {new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" }).format(e.amount_cents / 100)}
+                  </span>
+                </a>
+              </li>
+            );
+          }
+          const s = item.settlement;
+          const from = memberByID.get(s.from_user_id);
+          const to = memberByID.get(s.to_user_id);
           return (
             <li>
               <a
-                href={`/groups/${id}/expenses/${e.id}`}
-                class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+                href={`/groups/${id}/settlements/${s.id}`}
+                class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
               >
                 <div class="flex min-w-0 items-center gap-3">
-                  <span class="shrink-0 inline-flex items-center justify-center" title={cat?.label ?? ""}>
-                    <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+                  <span class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" title="Settlement">
+                    <FaIcon name="arrow-right" size={14} />
                   </span>
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-1.5 font-medium">
-                      <span class="truncate">{e.description}</span>
-                      {cadence && (
-                        <span
-                          class="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
-                          title={`Repeats ${cadenceLabels[cadence] ?? cadence}`}
-                        >
-                          <FaIcon name="arrows-rotate" size={11} />
-                          {cadenceLabels[cadence] ?? cadence}
-                        </span>
-                      )}
+                      <Avatar
+                        userId={s.from_user_id}
+                        displayName={from?.display_name ?? "?"}
+                        hasAvatar={from?.has_avatar}
+                        avatarUpdatedAt={from?.avatar_updated_at}
+                        size={18}
+                      />
+                      <span class="truncate">{nameByUserID.get(s.from_user_id) ?? "?"}</span>
+                      <span class="text-neutral-600 dark:text-neutral-400">paid</span>
+                      <Avatar
+                        userId={s.to_user_id}
+                        displayName={to?.display_name ?? "?"}
+                        hasAvatar={to?.has_avatar}
+                        avatarUpdatedAt={to?.avatar_updated_at}
+                        size={18}
+                      />
+                      <span class="truncate">{nameByUserID.get(s.to_user_id) ?? "?"}</span>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
-                      <span>{dateFmt.format(new Date(e.incurred_at))} · paid by</span>
-                      <Avatar
-                        userId={e.payer_id}
-                        displayName={nameByUserID.get(e.payer_id) ?? "?"}
-                        hasAvatar={memberByID.get(e.payer_id)?.has_avatar}
-                        avatarUpdatedAt={memberByID.get(e.payer_id)?.avatar_updated_at}
-                        size={16}
-                      />
-                      <span class="truncate">{nameByUserID.get(e.payer_id) ?? "?"}</span>
+                      <span>{dateFmt.format(new Date(s.settled_at))} · settlement</span>
+                      {s.note && <span class="truncate">· {s.note}</span>}
                     </div>
                   </div>
                 </div>
                 <span class="shrink-0 font-mono">
-                  {new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" }).format(e.amount_cents / 100)}
+                  {new Intl.NumberFormat(undefined, { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(s.amount_cents / 100)}
                 </span>
               </a>
             </li>

@@ -402,16 +402,38 @@ func TestGoldenPath(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 	// --- Settlement: B pays A $50 ---
-	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/settlements", map[string]any{
+	resp, settlementBody := request(t, "POST", base+"/v1/groups/"+groupID+"/settlements", map[string]any{
 		"to_user_id":   userA["id"],
 		"amount_cents": 5000,
 	}, cookieB)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	settlementID := settlementBody["id"].(string)
 
 	_, bal = request(t, "GET", base+"/v1/groups/"+groupID+"/balances", nil, cookieA)
 	nets = netMap(bal)
 	require.EqualValues(t, 4000, nets[userA["id"].(string)])
 	require.EqualValues(t, -4000, nets[userB["id"].(string)])
+
+	// --- Settlement delete authz: any group member can delete; non-member cannot ---
+	_, cookieStranger := registerUser(t, base, "stranger-settle@test.dev", "passwordpassword", "StrangerSettle")
+	resp, _ = request(t, "DELETE", base+"/v1/settlements/"+settlementID, nil, cookieStranger)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	// A (the recipient, a regular member) deletes B's settlement; balance reverts.
+	resp, _ = request(t, "DELETE", base+"/v1/settlements/"+settlementID, nil, cookieA)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	resp, _ = request(t, "DELETE", base+"/v1/settlements/"+settlementID, nil, cookieA)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	_, bal = request(t, "GET", base+"/v1/groups/"+groupID+"/balances", nil, cookieA)
+	nets = netMap(bal)
+	require.EqualValues(t, 9000, nets[userA["id"].(string)])
+	require.EqualValues(t, -9000, nets[userB["id"].(string)])
+	// Re-create the settlement so subsequent assertions in this test still hold.
+	resp, settlementBody = request(t, "POST", base+"/v1/groups/"+groupID+"/settlements", map[string]any{
+		"to_user_id":   userA["id"],
+		"amount_cents": 5000,
+	}, cookieB)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	_ = settlementBody
 
 	// --- Categories + expense edits ---
 	resp, catsList := requestList(t, "GET", base+"/v1/categories", nil, cookieA)

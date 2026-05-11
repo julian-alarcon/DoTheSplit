@@ -108,6 +108,48 @@ func (s *Server) CreateSettlement(c *gin.Context) {
 	c.JSON(http.StatusCreated, toAPISettlement(out))
 }
 
+func (s *Server) GetSettlement(c *gin.Context) {
+	u := middleware.User(c)
+	id, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	st, err := s.Settlements.Get(c.Request.Context(), u.ID, id)
+	switch {
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "settlement not found")
+		return
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, toAPISettlement(st))
+}
+
+func (s *Server) DeleteSettlement(c *gin.Context) {
+	u := middleware.User(c)
+	settlementID, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	err := s.Settlements.Delete(c.Request.Context(), u.ID, settlementID)
+	switch {
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "settlement not found")
+		return
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func toAPISettlement(s *repo.Settlement) apigen.Settlement {
 	var note *string
 	if s.Note != "" {

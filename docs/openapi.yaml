@@ -535,6 +535,35 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/settlements/{id}:
+    get:
+      summary: Get a single settlement by id (member-only)
+      operationId: getSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/SettlementId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Soft-delete a settlement (any group member)
+      operationId: deleteSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/SettlementId"
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/groups/{id}/recurring-expenses:
     get:
       summary: List recurring expense templates for a group
@@ -605,6 +634,11 @@ components:
       required: true
       schema: { type: string, format: uuid }
     RecurringId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SettlementId:
       name: id
       in: path
       required: true

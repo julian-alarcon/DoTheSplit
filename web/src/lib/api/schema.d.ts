@@ -276,7 +276,7 @@ export interface paths {
         get: operations["getExpense"];
         put?: never;
         post?: never;
-        /** Soft-delete an expense (payer or group creator only) */
+        /** Soft-delete an expense (any group member) */
         delete: operations["deleteExpense"];
         options?: never;
         head?: never;
@@ -354,6 +354,24 @@ export interface paths {
         /** Record a settlement (one member pays another) */
         post: operations["createSettlement"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/settlements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single settlement by id (member-only) */
+        get: operations["getSettlement"];
+        put?: never;
+        post?: never;
+        /** Soft-delete a settlement (any group member) */
+        delete: operations["deleteSettlement"];
         options?: never;
         head?: never;
         patch?: never;
@@ -822,6 +840,7 @@ export interface components {
         GroupId: string;
         ExpenseId: string;
         RecurringId: string;
+        SettlementId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1502,6 +1521,54 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settlement"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRecurringExpenses: {

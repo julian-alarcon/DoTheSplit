@@ -159,7 +159,7 @@ CREATE TABLE recurring_expenses (
     description     TEXT NOT NULL,
     mode            TEXT NOT NULL CHECK (mode IN ('equal','exact','percent','shares')),
     split_template  JSONB NOT NULL,
-    cadence         TEXT NOT NULL CHECK (cadence IN ('daily','weekly','monthly')),
+    cadence         TEXT NOT NULL CHECK (cadence IN ('daily','weekly','biweekly','monthly','yearly')),
     category_id     UUID NOT NULL REFERENCES categories(id),
     next_run_at     TIMESTAMPTZ NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

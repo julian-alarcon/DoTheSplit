@@ -335,7 +335,7 @@ svg[data-icon-slug="other"] {
 .btn-secondary,
 .btn-danger,
 .btn-danger-outline {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-neutral-500;
+  @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-neutral-500;
 }
 
 .btn-primary {

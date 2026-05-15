@@ -36,7 +36,8 @@ const moneyFmt = new Intl.NumberFormat(undefined, {
 });
 const formatMoney = (cents: number) => moneyFmt.format(cents / 100);
 const formatCents = (cents: number) => (cents / 100).toFixed(2);
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+const tz = Astro.locals.timezone;
+const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: tz });
 const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 // "YYYY-MM-DD" form for <input type="date"> using the UTC slice. The create
@@ -295,7 +296,7 @@ const fieldLabel: Record<string, string> = {
         </div>
         {createdAtDiffers && (
           <p class="text-xs text-neutral-600 dark:text-neutral-400">
-            Recorded on {dateTimeFmt.format(new Date(expense.created_at))}.
+            Recorded on <time datetime={expense.created_at} data-fmt="datetime-short">{dateTimeFmt.format(new Date(expense.created_at))}</time>.
           </p>
         )}
         <p class="text-xs text-neutral-600 dark:text-neutral-400">
@@ -354,7 +355,7 @@ const fieldLabel: Record<string, string> = {
               avatarUpdatedAt={memberByID.get(expense.created_by)?.avatar_updated_at}
               size={16}
             />
-            <span>{nameByUserID.get(expense.created_by) ?? "?"} · {dateTimeFmt.format(new Date(expense.created_at))}</span>
+            <span>{nameByUserID.get(expense.created_by) ?? "?"} · <time datetime={expense.created_at} data-fmt="datetime-short">{dateTimeFmt.format(new Date(expense.created_at))}</time></span>
           </span>
         </li>
         {revisions.map((r) => (
@@ -376,7 +377,7 @@ const fieldLabel: Record<string, string> = {
                 avatarUpdatedAt={memberByID.get(r.edited_by)?.avatar_updated_at}
                 size={16}
               />
-              <span>{nameByUserID.get(r.edited_by) ?? "?"} · {dateTimeFmt.format(new Date(r.edited_at))}</span>
+              <span>{nameByUserID.get(r.edited_by) ?? "?"} · <time datetime={r.edited_at} data-fmt="datetime-short">{dateTimeFmt.format(new Date(r.edited_at))}</time></span>
             </span>
           </li>
         ))}

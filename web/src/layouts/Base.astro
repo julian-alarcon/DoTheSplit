@@ -22,15 +22,38 @@ const user = Astro.locals.user;
 // locally without a git context. Short SHA already (handled by the build args)
 // but fall back to trimming here so we never render a 40-char string.
 const buildCommit = (process.env.BUILD_COMMIT ?? "dev").slice(0, 12);
+// If the user has an explicit stored timezone override, surface it on <html>
+// so the client-side reformatter pins to it. Without an override, the client
+// is free to use its own device-detected zone (which it always knows).
+const tzOverride = user?.timezone ?? null;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-tz-override={tzOverride ?? undefined}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} · DoTheSplit</title>
     <Font cssVariable="--font-inter" preload />
+    <script is:inline>
+      // Set the dts_tz cookie to the device-detected IANA zone on every page
+      // load. SSR reads this cookie next request and renders timestamps in the
+      // user's local time without a flash. Runs before paint to minimize the
+      // window where SSR has to fall back to UTC.
+      (() => {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          if (!tz) return;
+          if (!document.cookie.split("; ").some((c) => c === "dts_tz=" + tz)) {
+            document.cookie =
+              "dts_tz=" + encodeURIComponent(tz) + "; Path=/; Max-Age=31536000; SameSite=Lax";
+          }
+        } catch (_) {
+          // Older browsers without Intl resolvedOptions - leave the cookie as-is.
+        }
+      })();
+    </script>
+    <script src="/src/scripts/local-time.ts"></script>
   </head>
   <body class="flex min-h-screen flex-col">
     <header class="border-b border-neutral-200 bg-white/70 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/70">

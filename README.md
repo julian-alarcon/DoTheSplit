@@ -61,11 +61,33 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 - More currencies
   - Add a label when there is a new month as part of the list of the expenses page
 - Publishing to GitHub on releases and Github docker registry
+
+- Lock screen below to dont scroll when a modal show up.
+
+- Email SMTP server setup
+  - yaml/toml/conf file?
 - Deploy in TrueNAS with custom docker-compose
+- Admin page / Admin users (new role in the DB or is there a different more updated in the recent years approach)
+  - Not add expenses on groups where it is now part of
+  - Check all groups (section below the main all groups view)
+  - Remove/add users
+  - Change passwords of users
+  - Delete groups
+  - Set Notifications (SMTP)
+  - Set a landing process page (first start of app)
+      - Review on security side strategies to avoid this being a attack point
+- User options
+  - Notification settings
+  - Timezone
+    - Tumezone from server or user?
+- Review possible security bypass on my current API/Web setup for a normal user to gain admin rights
+- Is PostGresSQL encrypted at rest?
+
 
 ### Medium term
 
 - **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
+- Filtering by recurrency or category or date
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
 - **Search & filter** expenses by category, member, date range.

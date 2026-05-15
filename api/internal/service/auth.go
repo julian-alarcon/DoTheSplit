@@ -43,6 +43,7 @@ type User struct {
 	AvatarUpdatedAt *time.Time
 	DeletedAt       *time.Time
 	WeekStart       int16
+	Timezone        *string
 }
 
 func (s *AuthService) toUser(u *repo.User) (*User, error) {
@@ -59,6 +60,7 @@ func (s *AuthService) toUser(u *repo.User) (*User, error) {
 		AvatarUpdatedAt: u.AvatarUpdatedAt,
 		DeletedAt:       u.DeletedAt,
 		WeekStart:       u.WeekStart,
+		Timezone:        u.Timezone,
 	}, nil
 }
 

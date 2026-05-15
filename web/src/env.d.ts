@@ -11,9 +11,17 @@ declare namespace App {
       avatar_updated_at?: string | null;
       deleted_at?: string | null;
       week_start: 0 | 1;
+      timezone?: string | null;
     } | null;
     /** Raw cookie header forwarded to the API on server-side fetches. */
     cookie: string;
+    /**
+     * Resolved IANA timezone for this request. Source priority:
+     *   1. user.timezone (stored override)
+     *   2. dts_tz cookie (device-detected on first paint)
+     *   3. "UTC" (server fallback)
+     */
+    timezone: string;
   }
 }
 

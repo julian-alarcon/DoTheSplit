@@ -462,6 +462,8 @@ export interface components {
              * @enum {integer}
              */
             week_start: 0 | 1;
+            /** @description IANA timezone (e.g. "Europe/Madrid"). Null means the client should use the device-detected zone. */
+            timezone?: string | null;
         };
         UpdateMeRequest: {
             display_name?: string;
@@ -470,6 +472,8 @@ export interface components {
              * @enum {integer}
              */
             week_start?: 0 | 1;
+            /** @description IANA timezone (e.g. "Europe/Madrid"). Send an empty string to revert to device detection. */
+            timezone?: string;
         };
         ChangePasswordRequest: {
             old_password: string;

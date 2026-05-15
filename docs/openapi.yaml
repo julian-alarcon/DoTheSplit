@@ -745,6 +745,10 @@ components:
           type: integer
           enum: [0, 1]
           description: First day of the week in calendar UIs. 0 = Sunday, 1 = Monday.
+        timezone:
+          type: string
+          nullable: true
+          description: IANA timezone (e.g. "Europe/Madrid"). Null means the client should use the device-detected zone.
 
     UpdateMeRequest:
       type: object
@@ -756,6 +760,10 @@ components:
           type: integer
           enum: [0, 1]
           description: First day of the week. 0 = Sunday, 1 = Monday.
+        timezone:
+          type: string
+          maxLength: 64
+          description: IANA timezone (e.g. "Europe/Madrid"). Send an empty string to revert to device detection.
 
     ChangePasswordRequest:
       type: object

@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro/middleware";
 import { apiFor } from "@/lib/api/client";
+import { resolveTimezone } from "@/lib/timezone";
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const cookie = ctx.request.headers.get("cookie") ?? "";
@@ -11,6 +12,8 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     const { data } = await api.GET("/v1/me");
     if (data) ctx.locals.user = data;
   }
+
+  ctx.locals.timezone = resolveTimezone(ctx.locals.user?.timezone, cookie);
 
   const path = ctx.url.pathname;
   const isPublic =

@@ -71,6 +71,7 @@ func toAPIUser(u *service.User) apigen.User {
 		AvatarUpdatedAt: u.AvatarUpdatedAt,
 		DeletedAt:       u.DeletedAt,
 		WeekStart:       apigen.UserWeekStart(u.WeekStart),
+		Timezone:        u.Timezone,
 	}
 	return out
 }

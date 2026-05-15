@@ -10,6 +10,7 @@ CREATE TABLE users (
     avatar            BYTEA,
     avatar_updated_at TIMESTAMPTZ,
     week_start        SMALLINT NOT NULL DEFAULT 1,
+    timezone          TEXT,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX users_email_hash_active_key

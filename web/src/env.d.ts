@@ -18,6 +18,11 @@ declare namespace App {
     /** Raw cookie header forwarded to the API on server-side fetches. */
     cookie: string;
     /**
+     * True after first-run setup is complete. While false, every page
+     * redirects to /setup. Probed via /v1/setup/status on every render.
+     */
+    setupLocked: boolean;
+    /**
      * Resolved IANA timezone for this request. Source priority:
      *   1. user.timezone (stored override)
      *   2. dts_tz cookie (device-detected on first paint)

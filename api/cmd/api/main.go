@@ -56,7 +56,8 @@ func main() {
 	activityRepo := repo.NewActivityRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
-	auth := service.NewAuthService(pool, users, sessions, auditRepo, email, cfg.PasswordPepper,
+	setupRepo := repo.NewSetupRepo(pool)
+	auth := service.NewAuthService(pool, users, sessions, auditRepo, setupRepo, email, cfg.PasswordPepper,
 		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
 	meSvc := service.NewMeService(users, sessions, email, cfg.PasswordPepper)
 	categorySvc := service.NewCategoryService(categories)
@@ -68,6 +69,23 @@ func main() {
 	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
 	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
+	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
+
+	// First-run setup: rotate the install token on every boot until consumed.
+	// The cleartext is logged once as a warning so the operator can grab it
+	// from `docker compose logs api`. Once setup is completed the banner is
+	// suppressed and the token cleartext is gone — only its SHA-256 lives in
+	// app_setup, and even that is unreachable from any post-setup code path.
+	if ct, _, completed, err := setupSvc.EnsureToken(ctx); err != nil {
+		logger.Error("setup ensure token", slog.String("err", err.Error()))
+		os.Exit(1)
+	} else if !completed {
+		logger.Warn("first-run setup required",
+			slog.String("url", cfg.WebOrigin+"/setup"),
+			slog.String("token", ct),
+			slog.String("note", "Visit the URL and paste the token. This banner stops once setup is consumed."),
+		)
+	}
 
 	srv := &handlers.Server{
 		Cfg: cfg, Pool: pool,
@@ -82,6 +100,7 @@ func main() {
 		Activity:    activitySvc,
 		Admin:       adminSvc,
 		Smtp:        smtpSvc,
+		Setup:       setupSvc,
 		Users:       users,
 		Audit:       auditRepo,
 	}

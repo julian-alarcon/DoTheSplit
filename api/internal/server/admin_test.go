@@ -52,37 +52,39 @@ func TestAdminBootstrapFirstUser(t *testing.T) {
 	}
 }
 
-// TestAdminBootstrapRace fires N parallel registrations against an empty DB.
-// The advisory-lock guard must produce *exactly one* admin.
+// TestAdminBootstrapRace fires N parallel /v1/setup/admin calls with the
+// same valid token. The SELECT … FOR UPDATE on app_setup plus the advisory
+// lock inside RegisterTx must serialize them so exactly one admin is
+// created; the rest see 410 setup_completed (or 401 if the row's already
+// gone via the same path) or 409 email_taken.
 func TestAdminBootstrapRace(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
 
 	const N = 8
 	var wg sync.WaitGroup
-	emails := make([]string, N)
-	results := make([]bool, N)
-	for i := 0; i < N; i++ {
-		emails[i] = randEmail()
-	}
+	statuses := make([]int, N)
 	wg.Add(N)
 	for i := 0; i < N; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			body, _ := registerUserMaybe(t, base, emails[idx], "passwordpassword", "U")
-			if v, ok := body["is_admin"].(bool); ok && v {
-				results[idx] = true
-			}
+			resp, _ := request(t, "POST", base+"/v1/setup/admin", map[string]any{
+				"token":        ts.setupToken,
+				"email":        randEmail(),
+				"password":     "passwordpassword",
+				"display_name": "U",
+			}, nil)
+			statuses[idx] = resp.StatusCode
 		}(i)
 	}
 	wg.Wait()
-	admins := 0
-	for _, r := range results {
-		if r {
-			admins++
+	created := 0
+	for _, s := range statuses {
+		if s == http.StatusCreated {
+			created++
 		}
 	}
-	require.Equal(t, 1, admins, "exactly one admin should be created across concurrent first registrations")
+	require.Equal(t, 1, created, "exactly one admin should be created across concurrent install ceremonies; got statuses %v", statuses)
 }
 
 // TestAdminAuthzNegative asserts that a regular user cannot reach any admin

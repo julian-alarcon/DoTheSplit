@@ -54,32 +54,19 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Themes: contrast
-
-- Add a label when there is a new month as part of the list of the Activity section
-- Publishing to GitHub on releases and Github docker registry
-
-- Lock screen below to dont scroll when a modal show up.
-
 - Email SMTP server setup
   - yaml/toml/conf file?
+
+- Flags for currencies
+- Review possible security bypass on my current API/Web setup for a normal user to gain admin rights
+- Publishing to GitHub on releases and Github docker registry
 - Deploy in TrueNAS with custom docker-compose
-- Admin page / Admin users (new role in the DB or is there a different more updated in the recent years approach)
-  - Not add expenses on groups where it is now part of
-  - Check all groups (section below the main all groups view)
-  - Remove/add users
-  - Change passwords of users
-  - Delete groups
-  - Set Notifications (SMTP)
-  - Set a landing process page (first start of app)
-      - Review on security side strategies to avoid this being a attack point
+
 - User options
   - Notification settings
-  - Timezone
-    - Tumezone from server or user?
-- Review possible security bypass on my current API/Web setup for a normal user to gain admin rights
-- Is PostGresSQL encrypted at rest?
 
+- Button in footer Switch dark/light and record it in local opr in user or in both?c
+- Themes: contrast
 
 ### Medium term
 

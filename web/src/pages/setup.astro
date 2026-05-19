@@ -1,0 +1,104 @@
+---
+import Base from "@/layouts/Base.astro";
+
+// Anyone landing here while setup is unlocked is welcome. If setup is
+// already done, the install ceremony is closed — bounce them to /login so
+// the page can never be used to leak install-state through stale forms.
+if (Astro.locals.setupLocked) return Astro.redirect("/login");
+
+const err = Astro.url.searchParams.get("error");
+
+const errorMessages: Record<string, string> = {
+  invalid: "The setup token does not match. Check the latest API container log and try again.",
+  bad_request: "Check that all fields are filled in and the password is at least 10 characters.",
+  email_taken: "That email is already registered.",
+  completed: "Setup has already been completed; visit /login.",
+  rate_limited: "Too many attempts. Wait a minute and try again.",
+};
+const errorMessage = err ? (errorMessages[err] ?? "Could not complete setup.") : null;
+---
+
+<Base title="First-run setup">
+  <div class="mx-auto max-w-md">
+    <h1 class="mb-2 text-2xl font-semibold">Welcome to DoTheSplit</h1>
+    <p class="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+      This is the one-time install ceremony. The first account created here
+      is the instance admin. The setup token was printed to the API container
+      log on every boot until now — grab it via <code class="rounded bg-neutral-100 px-1 py-0.5 dark:bg-neutral-800">docker compose logs api</code>.
+    </p>
+
+    {errorMessage && (
+      <p
+        role="status"
+        aria-live="polite"
+        class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+      >
+        {errorMessage}
+      </p>
+    )}
+
+    <form
+      method="POST"
+      action="/api/setup"
+      class="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <label class="field">
+        <input
+          type="text"
+          name="token"
+          required
+          autocomplete="off"
+          spellcheck="false"
+          placeholder=" "
+          class="field-input"
+        />
+        <span class="field-label" data-required>Setup token</span>
+      </label>
+      <p class="field-error">Required</p>
+
+      <label class="field">
+        <input
+          type="text"
+          name="display_name"
+          required
+          minlength="1"
+          maxlength="80"
+          placeholder=" "
+          class="field-input"
+        />
+        <span class="field-label" data-required>Display name</span>
+      </label>
+      <p class="field-error">Required</p>
+
+      <label class="field">
+        <input
+          type="email"
+          name="email"
+          required
+          autocomplete="email"
+          placeholder=" "
+          class="field-input"
+        />
+        <span class="field-label" data-required>Email</span>
+      </label>
+      <p class="field-error">Enter a valid email address</p>
+
+      <label class="field">
+        <input
+          type="password"
+          name="password"
+          required
+          minlength="10"
+          autocomplete="new-password"
+          placeholder=" "
+          class="field-input"
+        />
+        <span class="field-label" data-required>Password</span>
+      </label>
+      <p class="field-error">Password must be at least 10 characters</p>
+      <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">Minimum 10 characters.</p>
+
+      <button type="submit" class="btn-primary mt-2 self-end">Create admin</button>
+    </form>
+  </div>
+</Base>

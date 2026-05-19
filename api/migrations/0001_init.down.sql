@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS app_setup           CASCADE;
 DROP TABLE IF EXISTS admin_audit         CASCADE;
 DROP TABLE IF EXISTS smtp_config         CASCADE;
 DROP TABLE IF EXISTS expense_revisions   CASCADE;

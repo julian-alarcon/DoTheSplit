@@ -19,6 +19,9 @@ func (s *Server) Register(c *gin.Context) {
 	u, token, err := s.Auth.Register(c.Request.Context(), string(req.Email), req.Password, req.DisplayName)
 	if err != nil {
 		switch {
+		case errors.Is(err, service.ErrSetupRequired):
+			writeErr(c, http.StatusForbidden, "setup_required",
+				"instance is in first-run setup mode; visit /setup")
 		case errors.Is(err, service.ErrEmailTaken):
 			writeErr(c, http.StatusConflict, "email_taken", "email already registered")
 		default:

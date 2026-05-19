@@ -218,3 +218,15 @@ CREATE TABLE admin_audit (
 );
 CREATE INDEX idx_admin_audit_actor_created  ON admin_audit (actor_user_id, created_at DESC);
 CREATE INDEX idx_admin_audit_action_created ON admin_audit (action, created_at DESC);
+
+-- App-wide install state. Single-row enforcement same as smtp_config. The
+-- token_hash is SHA-256 of a freshly-generated random secret; cleartext is
+-- never persisted. completed_at is null while first-run setup is pending and
+-- becomes non-null when /v1/setup/admin succeeds.
+CREATE TABLE app_setup (
+    id                  BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
+    token_hash          BYTEA NOT NULL,
+    token_generated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at        TIMESTAMPTZ,
+    completed_by        UUID REFERENCES users(id) ON DELETE SET NULL
+);

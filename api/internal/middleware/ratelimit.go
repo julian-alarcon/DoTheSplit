@@ -13,12 +13,25 @@ import (
 
 // LoginRateLimiter returns a middleware limiting auth endpoints to 10 req/min/IP.
 func LoginRateLimiter() gin.HandlerFunc {
-	rate, _ := limiter.NewRateFromFormatted("10-M")
-	lim := limiter.New(memory.NewStore(), rate)
+	return ipRateLimiter("auth", "10-M")
+}
 
+// SetupRateLimiter returns a middleware limiting /v1/setup/admin to 5
+// req/min/IP. Tighter than the auth limiter because every successful POST
+// is a one-shot install ceremony that mints the very first admin; brute
+// force has 256 bits of entropy to work through, so 5 attempts/min is
+// generous for a legitimate operator and effectively rate-limit-locked
+// for an attacker.
+func SetupRateLimiter() gin.HandlerFunc {
+	return ipRateLimiter("setup", "5-M")
+}
+
+func ipRateLimiter(prefix, rateSpec string) gin.HandlerFunc {
+	rate, _ := limiter.NewRateFromFormatted(rateSpec)
+	lim := limiter.New(memory.NewStore(), rate)
 	return func(c *gin.Context) {
 		ip := clientIP(c.Request)
-		ctx, err := lim.Get(c.Request.Context(), "auth:"+ip)
+		ctx, err := lim.Get(c.Request.Context(), prefix+":"+ip)
 		if err != nil {
 			c.Next()
 			return

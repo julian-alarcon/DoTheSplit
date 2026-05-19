@@ -29,6 +29,13 @@ func New(s *handlers.Server) http.Handler {
 	// run both mounts in parallel until clients migrate.
 	v1 := r.Group("/v1")
 
+	// Setup ceremony. Public: /v1/setup/status returns one bool (consumed
+	// by the web middleware on every render); /v1/setup/admin is the only
+	// path that mints the first admin and is rate-limited tighter than
+	// /auth/register because every successful POST is a one-shot.
+	v1.GET("/setup/status", s.GetSetupStatus)
+	v1.POST("/setup/admin", mw.SetupRateLimiter(), s.CompleteSetup)
+
 	// Auth (rate-limited register + login; logout is public so a stale
 	// cookie can clear itself without hitting the limiter).
 	authG := v1.Group("")

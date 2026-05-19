@@ -38,6 +38,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns whether first-run setup has been completed. */
+        get: operations["getSetupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/setup/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete first-run setup by creating the admin account.
+         * @description Validates the setup token (logged to API stdout on every boot while
+         *     the install ceremony is pending) and creates the very first user
+         *     with role=admin. Idempotent: subsequent calls after success return
+         *     410 Gone regardless of token.
+         */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/register": {
         parameters: {
             query?: never;
@@ -656,6 +696,17 @@ export interface components {
             password: string;
             display_name: string;
         };
+        SetupStatus: {
+            /** @description True after the install ceremony has been completed; false while it is still pending. */
+            locked: boolean;
+        };
+        SetupCompleteRequest: {
+            token: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            display_name: string;
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -1177,6 +1228,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Instance is in first-run setup mode; visit /setup. */
+        SetupRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: {
         GroupId: string;
@@ -1227,6 +1287,72 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Admin created; session cookie set. */
+            201: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid setup token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            /** @description Setup already completed; the install ceremony is closed. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     register: {
         parameters: {
             query?: never;
@@ -1251,6 +1377,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["SetupRequired"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
         };

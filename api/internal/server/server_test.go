@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,10 +52,16 @@ func readMigrations(t *testing.T) string {
 }
 
 type testStack struct {
-	srv  *httptest.Server
-	pool *pgxpool.Pool
-	ctr  testcontainers.Container
+	srv        *httptest.Server
+	pool       *pgxpool.Pool
+	ctr        testcontainers.Container
+	setupToken string // cleartext install token captured from EnsureToken
 }
+
+// setupTokens maps test-server URL → install-token cleartext, so the
+// registerUser helper can transparently consume it for the very first
+// registration without changing the helper's signature (used by ~34 sites).
+var setupTokens sync.Map
 
 func setup(t *testing.T) *testStack {
 	t.Helper()
@@ -105,14 +112,24 @@ func setup(t *testing.T) *testStack {
 	activityRepo := repo.NewActivityRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
+	setupRepo := repo.NewSetupRepo(pool)
 
 	sessionRepo := repo.NewSessionRepo(pool)
 	ttl := time.Duration(cfg.SessionTTLDay) * 24 * time.Hour
 	groupSvc := service.NewGroupService(groups, users, balances, email)
+	authSvc := service.NewAuthService(pool, users, sessionRepo, auditRepo, setupRepo, email, cfg.PasswordPepper, ttl)
+	setupSvc := service.NewSetupService(pool, setupRepo, authSvc, auditRepo)
+	// Mirror the production startup hook so the test instance starts in
+	// the same state cmd/api/main.go produces. Capture the cleartext token
+	// for tests that exercise the install ceremony directly.
+	setupTok, _, _, err := setupSvc.EnsureToken(context.Background())
+	if err != nil {
+		t.Fatalf("setup ensure token: %v", err)
+	}
 	h := server.New(&handlers.Server{
 		Cfg:         cfg,
 		Pool:        pool,
-		Auth:        service.NewAuthService(pool, users, sessionRepo, auditRepo, email, cfg.PasswordPepper, ttl),
+		Auth:        authSvc,
 		MeSvc:       service.NewMeService(users, sessionRepo, email, cfg.PasswordPepper),
 		Groups:      groupSvc,
 		Categories:  categorySvc,
@@ -123,12 +140,14 @@ func setup(t *testing.T) *testStack {
 		Activity:    service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
 		Admin:       service.NewAdminService(pool, users, groups, sessionRepo, auditRepo, email, cfg.PasswordPepper),
 		Smtp:        service.NewSmtpService(smtpRepo, email),
+		Setup:       setupSvc,
 		Users:       users,
 		Audit:       auditRepo,
 	})
 	srv := httptest.NewServer(h)
+	setupTokens.Store(srv.URL, setupTok)
 
-	ts := &testStack{srv: srv, pool: pool, ctr: pgc}
+	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok}
 	t.Cleanup(func() {
 		srv.Close()
 		pool.Close()
@@ -219,15 +238,24 @@ func sessionCookie(resp *http.Response) *http.Cookie {
 
 func registerUser(t *testing.T, base, email, pw, name string) (map[string]any, *http.Cookie) {
 	t.Helper()
-	resp, body := request(t, "POST", base+"/v1/auth/register", map[string]any{
+	body := map[string]any{
 		"email":        email,
 		"password":     pw,
 		"display_name": name,
-	}, nil)
-	require.Equal(t, http.StatusCreated, resp.StatusCode, body)
+	}
+	resp, out := request(t, "POST", base+"/v1/auth/register", body, nil)
+	if resp.StatusCode == http.StatusForbidden {
+		// Instance is in first-run setup mode — route this caller through
+		// the install ceremony instead. Subsequent calls hit /register.
+		tokAny, _ := setupTokens.Load(base)
+		tok, _ := tokAny.(string)
+		body["token"] = tok
+		resp, out = request(t, "POST", base+"/v1/setup/admin", body, nil)
+	}
+	require.Equal(t, http.StatusCreated, resp.StatusCode, out)
 	c := sessionCookie(resp)
 	require.NotNil(t, c)
-	return body, c
+	return out, c
 }
 
 // TestGoldenPath exercises the full MVP flow end-to-end against a real Postgres:

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
@@ -22,16 +23,27 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email already registered")
+	// ErrSetupRequired is returned by Register when the instance is still in
+	// first-run setup mode. Handlers map it to 403 with code='setup_required'.
+	ErrSetupRequired = errors.New("setup required")
 )
 
+// SetupLocker is the minimal interface AuthService needs from the setup
+// repo. Defined here (and not in the setup file) to keep the dep graph
+// acyclic: AuthService → SetupLocker, and SetupService → AuthService.
+type SetupLocker interface {
+	Locked(ctx context.Context) (bool, error)
+}
+
 type AuthService struct {
-	users    *repo.UserRepo
-	sessions *repo.SessionRepo
-	audit    *repo.AuditRepo
-	pool     *pgxpool.Pool
-	email    *crypto.EmailCipher
-	pepper   []byte
-	sessTTL  time.Duration
+	users     *repo.UserRepo
+	sessions  *repo.SessionRepo
+	audit     *repo.AuditRepo
+	setupLock SetupLocker
+	pool      *pgxpool.Pool
+	email     *crypto.EmailCipher
+	pepper    []byte
+	sessTTL   time.Duration
 
 	// stepUpFails counts recent failed step-up password verifications keyed
 	// by user ID, so handlers performing destructive admin actions can short-
@@ -59,15 +71,16 @@ const (
 // to HTTP 423 Locked.
 var ErrStepUpRateLimited = errors.New("step-up rate limited")
 
-func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, email *crypto.EmailCipher, pepper []byte, sessTTL time.Duration) *AuthService {
+func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, setupLock SetupLocker, email *crypto.EmailCipher, pepper []byte, sessTTL time.Duration) *AuthService {
 	return &AuthService{
-		users:    users,
-		sessions: sessions,
-		audit:    audit,
-		pool:     pool,
-		email:    email,
-		pepper:   pepper,
-		sessTTL:  sessTTL,
+		users:     users,
+		sessions:  sessions,
+		audit:     audit,
+		setupLock: setupLock,
+		pool:      pool,
+		email:     email,
+		pepper:    pepper,
+		sessTTL:   sessTTL,
 	}
 }
 
@@ -106,37 +119,77 @@ func (s *AuthService) toUser(u *repo.User) (*User, error) {
 	}, nil
 }
 
-// Register creates a user and opens a session. Returns the user and the plaintext
-// session token (to be set as a cookie by the handler).
-//
-// First-user bootstrap: if there are zero non-deleted users at the moment of
-// registration, the new account is created with role='admin'. The "first user
-// wins" check uses a session-level pg_advisory_xact_lock so two concurrent
-// registrations cannot both observe `count = 0` and both promote.
+// Register creates a user via /v1/auth/register and opens a session. While
+// first-run setup is pending it returns ErrSetupRequired so the only path
+// that can mint the very first user is /v1/setup/admin (which calls
+// RegisterTx directly inside its own atomic ceremony).
 func (s *AuthService) Register(ctx context.Context, email, password, displayName string) (*User, string, error) {
+	if s.setupLock != nil {
+		locked, err := s.setupLock.Locked(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		if !locked {
+			return nil, "", ErrSetupRequired
+		}
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback(ctx)
+
+	out, _, err := s.RegisterTx(ctx, tx, email, password, displayName)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, "", err
+	}
+
+	token, err := s.issueSession(ctx, out.ID)
+	if err != nil {
+		return nil, "", err
+	}
+	return out, token, nil
+}
+
+// RegisterTx is the bootstrap-aware user-creation core, callable inside a
+// caller-owned transaction. /v1/setup/admin uses this so the install
+// ceremony can commit the user creation atomically with the
+// app_setup.completed_at update.
+//
+// Bootstrap rules: the first non-deleted user becomes role='admin' and
+// gets a 'bootstrap_admin' audit row. Concurrent first registrations are
+// serialized on pg_advisory_xact_lock('admin_bootstrap'), so only one
+// caller observes count==0. Returns the service-level User projection AND
+// the underlying repo.User row (the latter is what SetupService needs to
+// stamp `completed_by`).
+func (s *AuthService) RegisterTx(ctx context.Context, tx pgx.Tx, email, password, displayName string) (*User, *repo.User, error) {
 	email = strings.TrimSpace(email)
 	displayName = strings.TrimSpace(displayName)
 	if email == "" || password == "" || displayName == "" {
-		return nil, "", errors.New("email, password, and display_name are required")
+		return nil, nil, errors.New("email, password, and display_name are required")
 	}
 	if len(password) < 10 {
-		return nil, "", errors.New("password must be at least 10 characters")
+		return nil, nil, errors.New("password must be at least 10 characters")
 	}
 
 	emailHash := s.email.HashEmail(email)
 	if _, err := s.users.FindByEmailHash(ctx, emailHash); err == nil {
-		return nil, "", ErrEmailTaken
+		return nil, nil, ErrEmailTaken
 	} else if !errors.Is(err, repo.ErrNotFound) {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	emailEnc, err := s.email.Encrypt(email)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	pwdHash, err := crypto.HashPassword(password, s.pepper)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 
 	u := &repo.User{
@@ -146,22 +199,12 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 		PasswordHash:   pwdHash,
 	}
 
-	// Bootstrap-admin path: serialize concurrent first registrations on a
-	// dedicated advisory key, count active users inside the same tx, and
-	// promote only if the count is zero. The advisory lock is released on
-	// commit/rollback automatically because it's transaction-scoped.
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	defer tx.Rollback(ctx)
-
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('admin_bootstrap'))`); err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	var n int
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&n); err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	role := "user"
 	if n == 0 {
@@ -169,7 +212,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 	}
 	u.Role = role
 	if err := s.users.CreateWithRole(ctx, tx, u, role, false); err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	if role == "admin" {
 		meta, _ := json.Marshal(map[string]any{"reason": "first_user"})
@@ -179,22 +222,15 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 			Success:     true,
 			Metadata:    meta,
 		}); err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, "", err
-	}
 
-	token, err := s.issueSession(ctx, u.ID)
-	if err != nil {
-		return nil, "", err
-	}
 	out, err := s.toUser(u)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	return out, token, nil
+	return out, u, nil
 }
 
 // Login verifies credentials and issues a session. Returns (user, token).

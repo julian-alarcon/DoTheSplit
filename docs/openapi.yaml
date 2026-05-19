@@ -56,6 +56,8 @@ tags:
     description: Liveness and readiness probes (unversioned).
   - name: admin
     description: Instance-wide administration. Requires role=admin; destructive verbs require a step-up password in the request body.
+  - name: setup
+    description: First-run install ceremony. Active only while no admin exists.
 
 security:
   - cookieAuth: []
@@ -82,6 +84,58 @@ paths:
           description: OK
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /v1/setup/status:
+    get:
+      summary: Returns whether first-run setup has been completed.
+      operationId: getSetupStatus
+      tags: [setup]
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupStatus" }
+
+  /v1/setup/admin:
+    post:
+      summary: Complete first-run setup by creating the admin account.
+      description: |
+        Validates the setup token (logged to API stdout on every boot while
+        the install ceremony is pending) and creates the very first user
+        with role=admin. Idempotent: subsequent calls after success return
+        410 Gone regardless of token.
+      operationId: completeSetup
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupCompleteRequest" }
+      responses:
+        "201":
+          description: Admin created; session cookie set.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: Invalid setup token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410":
+          description: Setup already completed; the install ceremony is closed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/auth/register:
     post:
       summary: Register a new user
@@ -103,6 +157,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/SetupRequired" }
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
@@ -987,6 +1042,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    SetupRequired:
+      description: Instance is in first-run setup mode; visit /setup.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
     Error:
@@ -1078,6 +1138,25 @@ components:
         email: alice@example.com
         password: correct-horse-battery-staple
         display_name: Alice
+
+    SetupStatus:
+      type: object
+      additionalProperties: false
+      required: [locked]
+      properties:
+        locked:
+          type: boolean
+          description: True after the install ceremony has been completed; false while it is still pending.
+
+    SetupCompleteRequest:
+      type: object
+      additionalProperties: false
+      required: [token, email, password, display_name]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 256 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 10, maxLength: 256 }
+        display_name: { type: string, minLength: 1, maxLength: 80 }
 
     LoginRequest:
       type: object

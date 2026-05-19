@@ -32,6 +32,7 @@ type Server struct {
 	Activity    *service.ActivityService
 	Admin       *service.AdminService
 	Smtp        *service.SmtpService
+	Setup       *service.SetupService
 	Users       *repo.UserRepo
 	Audit       *repo.AuditRepo
 }

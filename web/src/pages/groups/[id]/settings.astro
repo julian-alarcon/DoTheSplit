@@ -2,6 +2,7 @@
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
 import ConfirmDialog from "@/components/ConfirmDialog.astro";
+import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currencies";
 
@@ -142,7 +143,8 @@ const others = otherCurrencies();
                       data-confirm-open={`confirm-remove-${m.user_id}`}
                       class="btn-danger-outline btn-sm"
                     >
-                      Remove
+                      <FaIcon name="trash" />
+                      <span>Remove</span>
                     </button>
                   </form>
                   <ConfirmDialog
@@ -150,6 +152,7 @@ const others = otherCurrencies();
                     title={`Remove ${m.display_name}?`}
                     message="Their past expenses, splits and settlements stay in the group ledger. They can be re-added later."
                     confirmLabel="Remove member"
+                    confirmIcon="trash"
                   />
                 </>
               )}
@@ -262,8 +265,22 @@ const others = otherCurrencies();
       >
         <input type="hidden" name="user_id" value={myID} />
         <input type="hidden" name="leave" value="1" />
-        <button type="submit" class="btn-danger">Leave group</button>
+        <button type="button" data-confirm-open="confirm-leave-group" class="btn-danger">
+          <FaIcon name="right-from-bracket" />
+          <span>Leave group</span>
+        </button>
       </form>
+      <ConfirmDialog
+        id="confirm-leave-group"
+        title="Leave this group?"
+        message={
+          myNetCents !== 0
+            ? "You have a non-zero balance in this group. Leaving without settling up keeps the ledger entry pointing at you. Continue?"
+            : "You'll be removed from the member list. Your past expenses, splits and settlements stay in the ledger."
+        }
+        confirmLabel="Leave group"
+        confirmIcon="right-from-bracket"
+      />
     </section>
   )}
 
@@ -307,13 +324,17 @@ const others = otherCurrencies();
         Deleting the group removes all its expenses, settlements and recurring templates. This cannot be undone.
       </p>
       <form method="POST" action={`/api/group-delete?id=${id}`} class="flex justify-end">
-        <button type="button" data-confirm-open="confirm-delete-group" class="btn-danger">Delete group</button>
+        <button type="button" data-confirm-open="confirm-delete-group" class="btn-danger">
+          <FaIcon name="trash" />
+          <span>Delete group</span>
+        </button>
       </form>
       <ConfirmDialog
         id="confirm-delete-group"
         title="Delete this group?"
         message="All expenses, settlements and recurring templates in this group are removed permanently. This cannot be undone."
         confirmLabel="Delete group"
+        confirmIcon="trash"
       />
     </section>
   )}

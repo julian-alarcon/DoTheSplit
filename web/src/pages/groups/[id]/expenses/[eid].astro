@@ -396,13 +396,17 @@ const fieldLabel: Record<string, string> = {
         action={`/api/expenses/delete?id=${eid}&group=${id}`}
         class="flex justify-end"
       >
-        <button type="button" data-confirm-open="confirm-delete-expense" class="btn-danger">Delete expense</button>
+        <button type="button" data-confirm-open="confirm-delete-expense" class="btn-danger">
+          <FaIcon name="trash" />
+          <span>Delete expense</span>
+        </button>
       </form>
       <ConfirmDialog
         id="confirm-delete-expense"
         title="Delete this expense?"
         message="It will stop affecting balances, but the edit history is kept. This cannot be undone from the UI."
         confirmLabel="Delete expense"
+        confirmIcon="trash"
       />
     </section>
   )}

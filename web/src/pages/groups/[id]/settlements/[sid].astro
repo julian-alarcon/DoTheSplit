@@ -132,13 +132,17 @@ const settledAtDiffers =
         action={`/api/settlements/delete?id=${sid}&group=${id}`}
         class="flex justify-end"
       >
-        <button type="button" data-confirm-open="confirm-delete-settlement" class="btn-danger">Delete settlement</button>
+        <button type="button" data-confirm-open="confirm-delete-settlement" class="btn-danger">
+          <FaIcon name="trash" />
+          <span>Delete settlement</span>
+        </button>
       </form>
       <ConfirmDialog
         id="confirm-delete-settlement"
         title="Delete this settlement?"
         message="It will stop affecting balances. The record is soft-deleted in the database, but no longer visible in the app."
         confirmLabel="Delete settlement"
+        confirmIcon="trash"
       />
     </section>
   )}

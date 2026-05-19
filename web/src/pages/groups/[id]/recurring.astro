@@ -113,7 +113,8 @@ const showError = Astro.url.searchParams.get("error") === "1";
                     data-confirm-open={`confirm-stop-${t.id}`}
                     class="btn-danger-outline btn-sm"
                   >
-                    Stop
+                    <FaIcon name="circle-stop" />
+                    <span>Stop recurring</span>
                   </button>
                 </form>
                 <ConfirmDialog
@@ -121,6 +122,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
                   title="Stop this recurring template?"
                   message="Past expenses already created from this template stay in place. Only future runs are cancelled."
                   confirmLabel="Stop template"
+                  confirmIcon="circle-stop"
                 />
               </div>
             </div>

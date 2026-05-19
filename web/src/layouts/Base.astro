@@ -61,19 +61,31 @@ const tzOverride = user?.timezone ?? null;
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <a href={user ? "/groups" : "/"} class="text-lg font-semibold">DoTheSplit</a>
         {user ? (
-          <a
-            href="/account"
-            class="flex items-center gap-2 rounded-md text-sm text-neutral-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:text-neutral-300 dark:focus-visible:ring-neutral-500"
-          >
-            <Avatar
-              userId={user.id}
-              displayName={user.display_name}
-              hasAvatar={user.has_avatar}
-              avatarUpdatedAt={user.avatar_updated_at}
-              size={24}
-            />
-            <span>{user.display_name}</span>
-          </a>
+          <div class="flex items-center gap-3">
+            {user.is_admin && (
+              <a
+                href="/admin"
+                class="inline-flex items-center gap-1 rounded-md border border-amber-400/60 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-500/60 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                aria-label="Admin"
+              >
+                <FaIcon name="shield-halved" />
+                <span>Admin</span>
+              </a>
+            )}
+            <a
+              href="/account"
+              class="flex items-center gap-2 rounded-md text-sm text-neutral-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:text-neutral-300 dark:focus-visible:ring-neutral-500"
+            >
+              <Avatar
+                userId={user.id}
+                displayName={user.display_name}
+                hasAvatar={user.has_avatar}
+                avatarUpdatedAt={user.avatar_updated_at}
+                size={24}
+              />
+              <span>{user.display_name}</span>
+            </a>
+          </div>
         ) : (
           <nav class="flex gap-4 text-sm">
             <a href="/login" class="hover:underline">Log in</a>

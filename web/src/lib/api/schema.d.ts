@@ -429,6 +429,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all users (admin) */
+        get: operations["adminListUsers"];
+        put?: never;
+        /** Create a user on behalf (admin) */
+        post: operations["adminCreateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single user (admin) */
+        get: operations["adminGetUser"];
+        put?: never;
+        post?: never;
+        /** Soft-delete a user (admin, step-up) */
+        delete: operations["adminDeleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset a user's password (admin, step-up) */
+        post: operations["adminResetUserPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Promote or demote a user (admin, step-up) */
+        patch: operations["adminSetUserRole"];
+        trace?: never;
+    };
+    "/v1/admin/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all groups across the instance (admin) */
+        get: operations["adminListGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft-delete any group (admin, step-up) */
+        delete: operations["adminDeleteGroup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/smtp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get SMTP configuration (admin) */
+        get: operations["adminGetSmtpConfig"];
+        /** Update SMTP configuration (admin) */
+        put: operations["adminUpdateSmtpConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/smtp/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test the current SMTP configuration (admin) */
+        post: operations["adminTestSmtpConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List admin audit entries (admin) */
+        get: operations["adminListAuditLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -464,6 +620,10 @@ export interface components {
             week_start: 0 | 1;
             /** @description IANA timezone (e.g. "Europe/Madrid"). Null means the client should use the device-detected zone. */
             timezone?: string | null;
+            /** @description True when the user has the admin role. Read-only; promotion only happens via the bootstrap path or an admin endpoint. */
+            readonly is_admin?: boolean;
+            /** @description True when an admin reset the user's password. The frontend must redirect them to a password-change page; the API rejects all non-password endpoints until cleared. */
+            readonly must_change_password?: boolean;
         };
         UpdateMeRequest: {
             display_name?: string;
@@ -805,6 +965,150 @@ export interface components {
             next_run_at: string;
             /** Format: date-time */
             created_at: string;
+        };
+        StepUpRequest: {
+            /** @description The admin's own password, re-entered for the destructive action. */
+            password: string;
+        };
+        AdminUser: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: email
+             * @description Decrypted email. Null for soft-deleted users (their encrypted email is scrambled at delete time).
+             */
+            email: string | null;
+            display_name: string;
+            /** @enum {string} */
+            role: "user" | "admin";
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Set when the account is soft-deleted.
+             */
+            deleted_at?: string;
+            has_avatar: boolean;
+            /** @enum {integer} */
+            week_start: 0 | 1;
+            must_change_password: boolean;
+        };
+        AdminUserListResponse: {
+            items: components["schemas"]["AdminUser"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        /**
+         * @example {
+         *       "email": "alice@example.org",
+         *       "display_name": "Alice",
+         *       "password": "TempPass1234!",
+         *       "role": "user"
+         *     }
+         */
+        AdminUserCreateRequest: {
+            /** Format: email */
+            email: string;
+            display_name: string;
+            /** @description Initial password. The created user is forced to change it on first login. */
+            password: string;
+            /**
+             * @default user
+             * @enum {string}
+             */
+            role: "user" | "admin";
+        };
+        AdminPasswordResetRequest: {
+            /** @description New password assigned by the admin. The target user must change it on next login. */
+            new_password: string;
+            /** @description The admin's own password (step-up). */
+            password: string;
+        };
+        AdminSetUserRoleRequest: {
+            /** @enum {string} */
+            role: "user" | "admin";
+            /** @description The admin's own password (step-up). */
+            password: string;
+        };
+        AdminGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            default_currency: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            member_count: number;
+            expense_count: number;
+        };
+        AdminGroupListResponse: {
+            items: components["schemas"]["AdminGroup"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        /** @enum {string} */
+        SmtpTlsMode: "none" | "starttls" | "tls";
+        SmtpConfig: {
+            host: string;
+            port: number;
+            username?: string | null;
+            /** Format: email */
+            from_address: string;
+            tls_mode: components["schemas"]["SmtpTlsMode"];
+            /** @description True when an encrypted password is stored. The cleartext is never returned. */
+            password_set: boolean;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: uuid */
+            updated_by?: string | null;
+        };
+        SmtpConfigUpdateRequest: {
+            host: string;
+            port: number;
+            username?: string | null;
+            /** Format: email */
+            from_address: string;
+            tls_mode: components["schemas"]["SmtpTlsMode"];
+            /** @description SMTP password. Pass null to leave the existing one untouched; pass empty string to clear it; pass a non-empty value to set a new one. */
+            smtp_password?: string | null;
+            /**
+             * @description Required when tls_mode='none' and a username/password is provided.
+             * @default false
+             */
+            allow_plaintext_credentials: boolean;
+        };
+        SmtpTestResponse: {
+            success: boolean;
+            /** @description Short, non-sensitive error code on failure (e.g. "dial_timeout", "auth_failed", "tls_handshake_failed"). */
+            error?: string;
+        };
+        AdminAuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actor_user_id: string;
+            /** Format: uuid */
+            target_user_id?: string | null;
+            /** Format: uuid */
+            target_group_id?: string | null;
+            action: string;
+            ip?: string | null;
+            user_agent?: string | null;
+            success: boolean;
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminAuditListResponse: {
+            items: components["schemas"]["AdminAuditEntry"][];
+            total: number;
+            limit: number;
+            offset: number;
         };
     };
     responses: {
@@ -1710,6 +2014,361 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    adminListUsers: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                include_deleted?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    adminCreateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    adminGetUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adminDeleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Step-up rate-limited; retry after the cooldown. */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    adminResetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminPasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Password reset; target's sessions revoked; must_change_password=true. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Step-up rate-limited. */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    adminSetUserRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSetUserRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Step-up rate-limited. */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    adminListGroups: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminGroupListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    adminDeleteGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Step-up rate-limited. */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    adminGetSmtpConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmtpConfig"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adminUpdateSmtpConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmtpConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmtpConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    adminTestSmtpConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result of the connection test. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmtpTestResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adminListAuditLog: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                action?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
 }

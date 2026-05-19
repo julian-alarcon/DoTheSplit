@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS admin_audit         CASCADE;
+DROP TABLE IF EXISTS smtp_config         CASCADE;
 DROP TABLE IF EXISTS expense_revisions   CASCADE;
 DROP TABLE IF EXISTS recurring_expenses  CASCADE;
 DROP TABLE IF EXISTS settlements         CASCADE;

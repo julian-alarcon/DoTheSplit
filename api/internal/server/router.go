@@ -40,6 +40,7 @@ func New(s *handlers.Server) http.Handler {
 	// Authenticated endpoints.
 	auth := v1.Group("")
 	auth.Use(mw.RequireSession())
+	auth.Use(mw.EnforcePasswordChange())
 	auth.GET("/me", s.Me)
 	auth.PATCH("/me", s.UpdateMe)
 	auth.DELETE("/me", s.DeleteMe)
@@ -76,6 +77,24 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/groups/:id/recurring-expenses", s.ListRecurringExpenses)
 	auth.POST("/groups/:id/recurring-expenses", s.CreateRecurringExpense)
 	auth.DELETE("/recurring-expenses/:id", s.DeleteRecurringExpense)
+
+	// Admin endpoints. RequireAdmin re-loads the user from DB on every
+	// request so role revocation is immediate; it also stamps no-store +
+	// X-Frame-Options on the response.
+	admin := auth.Group("/admin")
+	admin.Use(mw.RequireAdmin(s.Users))
+	admin.GET("/users", s.AdminListUsers)
+	admin.POST("/users", s.AdminCreateUser)
+	admin.GET("/users/:id", s.AdminGetUser)
+	admin.DELETE("/users/:id", s.AdminDeleteUser)
+	admin.POST("/users/:id/password", s.AdminResetUserPassword)
+	admin.PATCH("/users/:id/role", s.AdminSetUserRole)
+	admin.GET("/groups", s.AdminListGroups)
+	admin.DELETE("/groups/:id", s.AdminDeleteGroup)
+	admin.GET("/smtp", s.AdminGetSmtp)
+	admin.PUT("/smtp", s.AdminUpdateSmtp)
+	admin.POST("/smtp/test", s.AdminTestSmtp)
+	admin.GET("/audit", s.AdminListAudit)
 
 	return r
 }

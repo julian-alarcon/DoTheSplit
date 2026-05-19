@@ -1,0 +1,221 @@
+---
+import Base from "@/layouts/Base.astro";
+import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import PasswordPromptDialog from "@/components/PasswordPromptDialog.astro";
+import AdminResetPasswordDialog from "@/components/AdminResetPasswordDialog.astro";
+import { apiFor } from "@/lib/api/client";
+
+const me = Astro.locals.user;
+if (!me || !me.is_admin) return Astro.redirect("/groups");
+
+const { id } = Astro.params as { id: string };
+const cookie = Astro.locals.cookie ?? "";
+const api = apiFor(cookie);
+
+const { data: target, response } = await api.GET("/v1/admin/users/{id}", {
+  params: { path: { id } },
+});
+
+if (!target) {
+  return new Response("Not found", { status: response?.status ?? 404 });
+}
+
+const isSelf = target.id === me.id;
+const isDeleted = !!target.deleted_at;
+// User can be acted on if they are not the admin themselves and not soft-deleted.
+const actionable = !isSelf && !isDeleted;
+
+// Banner messages from query-string after a forwarder redirect.
+const sp = Astro.url.searchParams;
+const okRole = sp.get("role");
+const okReset = sp.get("reset");
+const errRole = sp.get("role_error");
+const errReset = sp.get("reset_error");
+const errDelete = sp.get("delete_error");
+
+const roleErrorMessages: Record<string, string> = {
+  step_up: "Step-up password did not match.",
+  locked: "Too many failed step-up attempts; wait a minute.",
+  last_admin: "Cannot demote the last admin.",
+  self: "Admins cannot change their own role here. Ask another admin.",
+  conflict: "Role change refused.",
+};
+const resetErrorMessages: Record<string, string> = {
+  step_up: "Step-up password did not match.",
+  locked: "Too many failed step-up attempts; wait a minute.",
+};
+const deleteErrorMessages: Record<string, string> = {
+  step_up: "Step-up password did not match.",
+  locked: "Too many failed step-up attempts; wait a minute.",
+  last_admin: "Cannot delete the last admin.",
+};
+
+function fmtDate(s: string | null | undefined) {
+  return s ? new Date(s).toISOString().slice(0, 10) : "";
+}
+
+const targetRole = target.role;
+const newRole = targetRole === "admin" ? "user" : "admin";
+const promoteLabel = targetRole === "admin" ? "Demote to user" : "Promote to admin";
+const promoteDialogTitle =
+  targetRole === "admin" ? "Demote this user?" : "Promote this user to admin?";
+const promoteDialogMessage =
+  targetRole === "admin"
+    ? "They will lose access to the admin surface. Their existing sessions stay valid; the change takes effect on their next request."
+    : "They will gain full admin powers (manage users and groups, configure SMTP, view the audit log). Re-enter your password to confirm.";
+---
+
+<Base title={`Admin · ${target.display_name}`} back={{ href: "/admin/users", label: "Users" }}>
+  <header class="mb-6 flex items-center gap-4">
+    <Avatar
+      userId={target.id}
+      displayName={target.display_name}
+      hasAvatar={target.has_avatar}
+      size={48}
+    />
+    <div class="min-w-0">
+      <h1 class="truncate text-2xl font-semibold">{target.display_name}</h1>
+      <p class="truncate text-sm text-neutral-600 dark:text-neutral-400">
+        {target.email ?? <span class="italic text-neutral-400">(email scrubbed)</span>}
+      </p>
+    </div>
+  </header>
+
+  {okRole && (
+    <p class="mb-4 rounded bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
+      Role updated.
+    </p>
+  )}
+  {okReset && (
+    <p class="mb-4 rounded bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
+      Password reset; the user is forced to change it on next login.
+    </p>
+  )}
+  {errRole && (
+    <p class="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+      {roleErrorMessages[errRole] ?? "Could not change role."}
+    </p>
+  )}
+  {errReset && (
+    <p class="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+      {resetErrorMessages[errReset] ?? "Password reset failed."}
+    </p>
+  )}
+  {errDelete && (
+    <p class="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+      {deleteErrorMessages[errDelete] ?? "Delete failed."}
+    </p>
+  )}
+
+  <div class="flex flex-col gap-4">
+    <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <h2 class="mb-3 font-medium">Profile</h2>
+      <dl class="grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
+        <dt class="text-neutral-500">Role</dt>
+        <dd>
+          <span class="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{targetRole}</span>
+        </dd>
+        <dt class="text-neutral-500">Created</dt>
+        <dd>{fmtDate(target.created_at)}</dd>
+        {isDeleted && (
+          <>
+            <dt class="text-neutral-500">Deleted</dt>
+            <dd class="text-red-600 dark:text-red-400">{fmtDate(target.deleted_at)}</dd>
+          </>
+        )}
+        <dt class="text-neutral-500">Must change password</dt>
+        <dd>
+          {target.must_change_password ? (
+            <span class="text-amber-700 dark:text-amber-300">yes — set after their next login</span>
+          ) : (
+            <span class="text-neutral-500">no</span>
+          )}
+        </dd>
+      </dl>
+      {isSelf && (
+        <p class="mt-3 text-xs text-neutral-500">
+          This is your own account. Role and delete actions are disabled here; use the regular account page or another admin.
+        </p>
+      )}
+    </section>
+
+    {actionable && (
+      <>
+        <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <h2 class="mb-2 font-medium">Role</h2>
+          <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+            {targetRole === "admin"
+              ? "Demoting removes access to the admin surface. The last remaining admin cannot be demoted."
+              : "Promoting gives this user full admin powers across the instance."}
+          </p>
+          <form method="POST" action="/api/admin/user-role" class="flex justify-end">
+            <input type="hidden" name="id" value={target.id} />
+            <input type="hidden" name="role" value={newRole} />
+            <button
+              type="button"
+              data-password-open="dlg-set-role"
+              class={targetRole === "admin" ? "btn-secondary" : "btn-primary"}
+            >
+              {promoteLabel}
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <h2 class="mb-2 font-medium">Reset password</h2>
+          <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+            Sets a new password and revokes every active session. The user is forced to change it again on next login.
+          </p>
+          <form method="POST" action="/api/admin/user-reset-password" class="flex justify-end">
+            <input type="hidden" name="id" value={target.id} />
+            <button type="button" data-reset-open="dlg-reset-password" class="btn-secondary">
+              Reset password
+            </button>
+          </form>
+        </section>
+
+        <section class="rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
+          <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
+          <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+            Soft-deletes the account. Email and password are scrubbed and the display name becomes a tombstone so historical ledger entries stay traceable.
+          </p>
+          <form method="POST" action="/api/admin/user-delete" class="flex justify-end">
+            <input type="hidden" name="id" value={target.id} />
+            <button type="button" data-password-open="dlg-delete-user" class="btn-danger">
+              <FaIcon name="trash" />
+              <span>Delete user</span>
+            </button>
+          </form>
+        </section>
+      </>
+    )}
+  </div>
+
+  <PasswordPromptDialog
+    id="dlg-set-role"
+    title={promoteDialogTitle}
+    message={promoteDialogMessage}
+    confirmLabel={promoteLabel}
+    confirmVariant={targetRole === "admin" ? "primary" : "primary"}
+  />
+  <AdminResetPasswordDialog
+    id="dlg-reset-password"
+    title="Reset this user's password"
+    message="Pick a new password. Their existing sessions are revoked and they will be forced to change it again on next login."
+    confirmLabel="Reset password"
+  />
+  <PasswordPromptDialog
+    id="dlg-delete-user"
+    title="Delete this user?"
+    message="The account is soft-deleted: their email/password are scrubbed and their display name becomes a tombstone. Existing ledger entries stay traceable."
+    confirmLabel="Delete user"
+    confirmVariant="danger"
+    confirmIcon="trash"
+  />
+
+  <script>
+    import "@/scripts/password-prompt.ts";
+    import "@/scripts/admin-reset-password.ts";
+  </script>
+</Base>

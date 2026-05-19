@@ -116,7 +116,9 @@ func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPas
 	if err != nil {
 		return err
 	}
-	if err := s.users.UpdatePasswordHash(ctx, userID, newHash); err != nil {
+	// Atomic: rotate the hash and clear the must_change_password flag in a
+	// single UPDATE so a user reset by an admin cannot get stuck mid-flow.
+	if err := s.users.UpdatePasswordHashWithFlag(ctx, userID, newHash, false); err != nil {
 		return err
 	}
 	// Nuke all other sessions for this user; caller will issue a fresh one.

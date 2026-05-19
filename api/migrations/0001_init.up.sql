@@ -1,21 +1,26 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE users (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email_hash        BYTEA NOT NULL,
-    email_encrypted   BYTEA NOT NULL,
-    display_name      TEXT  NOT NULL,
-    password_hash     TEXT  NOT NULL,
-    deleted_at        TIMESTAMPTZ,
-    avatar            BYTEA,
-    avatar_updated_at TIMESTAMPTZ,
-    week_start        SMALLINT NOT NULL DEFAULT 1,
-    timezone          TEXT,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_hash            BYTEA NOT NULL,
+    email_encrypted       BYTEA NOT NULL,
+    display_name          TEXT  NOT NULL,
+    password_hash         TEXT  NOT NULL,
+    deleted_at            TIMESTAMPTZ,
+    avatar                BYTEA,
+    avatar_updated_at     TIMESTAMPTZ,
+    week_start            SMALLINT NOT NULL DEFAULT 1,
+    timezone              TEXT,
+    role                  TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
+    must_change_password  BOOLEAN NOT NULL DEFAULT false,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX users_email_hash_active_key
     ON users (email_hash)
     WHERE deleted_at IS NULL;
+CREATE INDEX idx_users_role_admin_active
+    ON users (role)
+    WHERE role = 'admin' AND deleted_at IS NULL;
 
 CREATE TABLE sessions (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -181,3 +186,35 @@ CREATE TABLE expense_revisions (
 );
 CREATE INDEX idx_expense_revisions_expense_edited
     ON expense_revisions (expense_id, edited_at ASC);
+
+-- SMTP configuration is a single, mutable, instance-wide row. The
+-- `id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id)` enforces "exactly one row".
+CREATE TABLE smtp_config (
+    id                  BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
+    host                TEXT NOT NULL,
+    port                INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+    username            TEXT,
+    password_encrypted  BYTEA,
+    from_address        TEXT NOT NULL,
+    tls_mode            TEXT NOT NULL CHECK (tls_mode IN ('none','starttls','tls')),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by          UUID REFERENCES users(id)
+);
+
+-- Append-only log of admin actions. Target FKs are SET NULL on delete so
+-- removing a user/group does not block historical rows. Metadata is JSONB;
+-- never log plaintext emails or passwords.
+CREATE TABLE admin_audit (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_user_id   UUID NOT NULL REFERENCES users(id),
+    target_user_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    target_group_id UUID REFERENCES groups(id) ON DELETE SET NULL,
+    action          TEXT NOT NULL,
+    ip              TEXT,
+    user_agent      TEXT,
+    success         BOOLEAN NOT NULL,
+    metadata        JSONB,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_admin_audit_actor_created  ON admin_audit (actor_user_id, created_at DESC);
+CREATE INDEX idx_admin_audit_action_created ON admin_audit (action, created_at DESC);

@@ -13,6 +13,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
@@ -29,6 +30,10 @@ type Server struct {
 	Settlements *service.SettlementService
 	Recurring   *service.RecurringService
 	Activity    *service.ActivityService
+	Admin       *service.AdminService
+	Smtp        *service.SmtpService
+	Users       *repo.UserRepo
+	Audit       *repo.AuditRepo
 }
 
 func writeErr(c *gin.Context, status int, code, message string) {

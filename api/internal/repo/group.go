@@ -204,6 +204,49 @@ func (r *GroupRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// AdminGroupRow extends Group with cross-instance counts used by the admin
+// listing.
+type AdminGroupRow struct {
+	Group
+	MemberCount  int
+	ExpenseCount int
+}
+
+// ListAll returns a paginated view of all groups in the instance with member
+// and (non-deleted) expense counts. Admin-only.
+func (r *GroupRepo) ListAll(ctx context.Context, limit, offset int) ([]AdminGroupRow, int, error) {
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM groups`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split,
+		       (SELECT count(*) FROM group_members  m WHERE m.group_id = g.id),
+		       (SELECT count(*) FROM expenses       e WHERE e.group_id = g.id AND e.deleted_at IS NULL)
+		FROM groups g
+		ORDER BY g.created_at DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var out []AdminGroupRow
+	for rows.Next() {
+		var row AdminGroupRow
+		var rawSplit []byte
+		if err := rows.Scan(&row.ID, &row.Name, &row.DefaultCurrency, &row.CreatedBy, &row.CreatedAt, &rawSplit,
+			&row.MemberCount, &row.ExpenseCount); err != nil {
+			return nil, 0, err
+		}
+		if row.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, row)
+	}
+	return out, total, rows.Err()
+}
+
 // ListMembers returns members + their display names for a group.
 func (r *GroupRepo) ListMembers(ctx context.Context, groupID uuid.UUID) ([]GroupMember, error) {
 	rows, err := r.pool.Query(ctx, `

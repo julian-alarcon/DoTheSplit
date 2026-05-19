@@ -31,5 +31,33 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (ctx.locals.user && (path === "/login" || path === "/register")) {
     return ctx.redirect("/groups");
   }
+
+  // Force-password-change: an admin reset this user's password. Only the
+  // dedicated change-password page and the SSR API forwarders (one of which
+  // is the password-change endpoint) are reachable until they pick a new one.
+  const forcePath = "/account/force-password-change";
+  if (
+    ctx.locals.user?.must_change_password &&
+    path !== forcePath &&
+    !path.startsWith("/api/") &&
+    path !== "/credits" &&
+    path !== "/favicon.ico"
+  ) {
+    return ctx.redirect(forcePath);
+  }
+
+  // Admin guard: any /admin/* page requires the role flag on the resolved
+  // user. Non-admins land on /groups instead of seeing a 403 leak.
+  if (path.startsWith("/admin") && !ctx.locals.user?.is_admin) {
+    return ctx.redirect("/groups");
+  }
+
+  // Admin SSR responses must not be cached by intermediaries.
+  if (path.startsWith("/admin")) {
+    const res = await next();
+    res.headers.set("Cache-Control", "no-store");
+    res.headers.set("X-Frame-Options", "DENY");
+    return res;
+  }
   return next();
 });

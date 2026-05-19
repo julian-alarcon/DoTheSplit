@@ -103,6 +103,8 @@ func setup(t *testing.T) *testStack {
 	categories := repo.NewCategoryRepo(pool)
 	categorySvc := service.NewCategoryService(categories)
 	activityRepo := repo.NewActivityRepo(pool)
+	auditRepo := repo.NewAuditRepo(pool)
+	smtpRepo := repo.NewSmtpRepo(pool)
 
 	sessionRepo := repo.NewSessionRepo(pool)
 	ttl := time.Duration(cfg.SessionTTLDay) * 24 * time.Hour
@@ -110,7 +112,7 @@ func setup(t *testing.T) *testStack {
 	h := server.New(&handlers.Server{
 		Cfg:         cfg,
 		Pool:        pool,
-		Auth:        service.NewAuthService(users, sessionRepo, email, cfg.PasswordPepper, ttl),
+		Auth:        service.NewAuthService(pool, users, sessionRepo, auditRepo, email, cfg.PasswordPepper, ttl),
 		MeSvc:       service.NewMeService(users, sessionRepo, email, cfg.PasswordPepper),
 		Groups:      groupSvc,
 		Categories:  categorySvc,
@@ -119,6 +121,10 @@ func setup(t *testing.T) *testStack {
 		Settlements: service.NewSettlementService(settlements, groups),
 		Recurring:   service.NewRecurringService(recurring, expenses, groups, categorySvc),
 		Activity:    service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
+		Admin:       service.NewAdminService(pool, users, groups, sessionRepo, auditRepo, email, cfg.PasswordPepper),
+		Smtp:        service.NewSmtpService(smtpRepo, email),
+		Users:       users,
+		Audit:       auditRepo,
 	})
 	srv := httptest.NewServer(h)
 

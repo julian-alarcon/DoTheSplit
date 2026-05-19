@@ -1,0 +1,109 @@
+---
+import Base from "@/layouts/Base.astro";
+import { apiFor } from "@/lib/api/client";
+
+const user = Astro.locals.user;
+if (!user || !user.is_admin) return Astro.redirect("/groups");
+
+const cookie = Astro.locals.cookie ?? "";
+const api = apiFor(cookie);
+
+const { data, response } = await api.GET("/v1/admin/smtp");
+const cfg = data ?? null;
+const notConfigured = response.status === 404;
+
+const saved = Astro.url.searchParams.get("saved");
+const err = Astro.url.searchParams.get("error");
+const test = Astro.url.searchParams.get("test");
+
+const testMessages: Record<string, { ok: boolean; msg: string }> = {
+  ok: { ok: true, msg: "SMTP test connection succeeded." },
+  dial_timeout: { ok: false, msg: "Could not connect (dial timeout)." },
+  tls_handshake_failed: { ok: false, msg: "TLS handshake failed." },
+  starttls_failed: { ok: false, msg: "STARTTLS upgrade failed." },
+  smtp_handshake_failed: { ok: false, msg: "SMTP handshake failed." },
+  auth_failed: { ok: false, msg: "Authentication failed." },
+  password_decrypt_failed: { ok: false, msg: "Stored password could not be decrypted." },
+  noop_failed: { ok: false, msg: "NOOP command failed." },
+  not_configured: { ok: false, msg: "SMTP is not configured yet." },
+  error: { ok: false, msg: "SMTP test errored." },
+};
+---
+
+<Base title="Admin · SMTP" back={{ href: "/admin", label: "Admin" }}>
+  <h1 class="text-2xl font-semibold mb-1">SMTP configuration</h1>
+  <p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+    Outbound email settings. The password is encrypted at rest with the same key used for emails. The cleartext is never returned by the API.
+  </p>
+
+  {saved && <p class="rounded bg-green-50 px-3 py-2 text-sm text-green-800 mb-4 dark:bg-green-950 dark:text-green-200">Saved.</p>}
+  {err && <p class="rounded bg-red-50 px-3 py-2 text-sm text-red-800 mb-4 dark:bg-red-950 dark:text-red-200">Could not save SMTP configuration.</p>}
+  {test && testMessages[test] && (
+    <p class:list={["rounded px-3 py-2 text-sm mb-4", testMessages[test].ok ? "bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200" : "bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"]}>
+      {testMessages[test].msg}
+    </p>
+  )}
+
+  {notConfigured && <p class="rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-700 mb-4 dark:bg-neutral-800 dark:text-neutral-300">SMTP is not configured yet.</p>}
+
+  <form method="POST" action="/api/admin/smtp" class="grid gap-3">
+    <label class="field">
+      <input name="host" required value={cfg?.host ?? ""} class="field-input" placeholder=" " />
+      <span class="field-label" data-required>Host (e.g. smtp.example.com)</span>
+    </label>
+    <p class="field-error">Required</p>
+
+    <label class="field">
+      <input name="port" type="number" min="1" max="65535" required value={cfg?.port ?? 587} class="field-input" placeholder=" " />
+      <span class="field-label" data-required>Port</span>
+    </label>
+    <p class="field-error">Required (1–65535)</p>
+
+    <label class="field-select-row">
+      <span class="text-sm">TLS mode</span>
+      <select name="tls_mode" class="field-select">
+        <option value="starttls" selected={cfg?.tls_mode === "starttls" || !cfg}>STARTTLS</option>
+        <option value="tls" selected={cfg?.tls_mode === "tls"}>Implicit TLS</option>
+        <option value="none" selected={cfg?.tls_mode === "none"}>None (plaintext)</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <input name="username" value={cfg?.username ?? ""} class="field-input" placeholder=" " />
+      <span class="field-label">Username (optional)</span>
+    </label>
+
+    <label class="field">
+      <input name="from_address" type="email" required value={cfg?.from_address ?? ""} class="field-input" placeholder=" " />
+      <span class="field-label" data-required>From address</span>
+    </label>
+    <p class="field-error">Required</p>
+
+    <fieldset class="rounded border border-neutral-200 p-3 dark:border-neutral-800">
+      <legend class="px-1 text-xs text-neutral-600 dark:text-neutral-400">SMTP password</legend>
+      <p class="text-xs text-neutral-600 dark:text-neutral-400 mb-2">
+        {cfg?.password_set ? "A password is currently stored. Leave blank to keep it." : "No password is currently stored."}
+      </p>
+      <label class="field">
+        <input name="smtp_password" type="password" autocomplete="new-password" class="field-input" placeholder=" " />
+        <span class="field-label">New SMTP password (optional)</span>
+      </label>
+      <label class="mt-2 flex items-center gap-2 text-sm">
+        <input name="clear_password" type="checkbox" />
+        Clear the stored SMTP password
+      </label>
+    </fieldset>
+
+    <label class="flex items-center gap-2 text-sm">
+      <input name="allow_plaintext_credentials" type="checkbox" />
+      I understand sending credentials over plaintext is risky (only used when TLS mode is "None")
+    </label>
+
+    <div class="flex flex-wrap justify-end gap-2">
+      <button type="submit" form="smtp-test-form" class="btn-secondary">Test connection</button>
+      <button type="submit" class="btn-primary">Save</button>
+    </div>
+  </form>
+
+  <form id="smtp-test-form" method="POST" action="/api/admin/smtp-test" class="hidden"></form>
+</Base>

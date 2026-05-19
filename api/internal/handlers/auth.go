@@ -62,16 +62,20 @@ func (s *Server) Me(c *gin.Context) {
 }
 
 func toAPIUser(u *service.User) apigen.User {
+	isAdmin := u.IsAdmin
+	mustChange := u.MustChangePassword
 	out := apigen.User{
-		Id:              u.ID,
-		Email:           openapi_types.Email(u.Email),
-		DisplayName:     u.DisplayName,
-		CreatedAt:       u.CreatedAt,
-		HasAvatar:       u.HasAvatar,
-		AvatarUpdatedAt: u.AvatarUpdatedAt,
-		DeletedAt:       u.DeletedAt,
-		WeekStart:       apigen.UserWeekStart(u.WeekStart),
-		Timezone:        u.Timezone,
+		Id:                 u.ID,
+		Email:              openapi_types.Email(u.Email),
+		DisplayName:        u.DisplayName,
+		CreatedAt:          u.CreatedAt,
+		HasAvatar:          u.HasAvatar,
+		AvatarUpdatedAt:    u.AvatarUpdatedAt,
+		DeletedAt:          u.DeletedAt,
+		WeekStart:          apigen.UserWeekStart(u.WeekStart),
+		Timezone:           u.Timezone,
+		IsAdmin:            &isAdmin,
+		MustChangePassword: &mustChange,
 	}
 	return out
 }

@@ -54,6 +54,8 @@ tags:
     description: Merged, paginated feed of expenses and settlements for a group, newest first.
   - name: health
     description: Liveness and readiness probes (unversioned).
+  - name: admin
+    description: Instance-wide administration. Requires role=admin; destructive verbs require a step-up password in the request body.
 
 security:
   - cookieAuth: []
@@ -642,6 +644,277 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/admin/users:
+    get:
+      summary: List all users (admin)
+      operationId: adminListUsers
+      tags: [admin]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: include_deleted
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      summary: Create a user on behalf (admin)
+      operationId: adminCreateUser
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUserCreateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/admin/users/{id}:
+    get:
+      summary: Get a single user (admin)
+      operationId: adminGetUser
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Soft-delete a user (admin, step-up)
+      operationId: adminDeleteUser
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpRequest" }
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "423":
+          description: Step-up rate-limited; retry after the cooldown.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/admin/users/{id}/password:
+    post:
+      summary: Reset a user's password (admin, step-up)
+      operationId: adminResetUserPassword
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPasswordResetRequest" }
+      responses:
+        "204":
+          description: Password reset; target's sessions revoked; must_change_password=true.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "423":
+          description: Step-up rate-limited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/admin/users/{id}/role:
+    patch:
+      summary: Promote or demote a user (admin, step-up)
+      operationId: adminSetUserRole
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSetUserRoleRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "423":
+          description: Step-up rate-limited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/admin/groups:
+    get:
+      summary: List all groups across the instance (admin)
+      operationId: adminListGroups
+      tags: [admin]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/admin/groups/{id}:
+    delete:
+      summary: Soft-delete any group (admin, step-up)
+      operationId: adminDeleteGroup
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpRequest" }
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "423":
+          description: Step-up rate-limited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/admin/smtp:
+    get:
+      summary: Get SMTP configuration (admin)
+      operationId: adminGetSmtpConfig
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SmtpConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      summary: Update SMTP configuration (admin)
+      operationId: adminUpdateSmtpConfig
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SmtpConfigUpdateRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SmtpConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/admin/smtp/test:
+    post:
+      summary: Test the current SMTP configuration (admin)
+      operationId: adminTestSmtpConfig
+      tags: [admin]
+      responses:
+        "200":
+          description: Result of the connection test.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SmtpTestResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/admin/audit:
+    get:
+      summary: List admin audit entries (admin)
+      operationId: adminListAuditLog
+      tags: [admin]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: action
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAuditListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -750,6 +1023,14 @@ components:
           type: string
           nullable: true
           description: IANA timezone (e.g. "Europe/Madrid"). Null means the client should use the device-detected zone.
+        is_admin:
+          type: boolean
+          readOnly: true
+          description: True when the user has the admin role. Read-only; promotion only happens via the bootstrap path or an admin endpoint.
+        must_change_password:
+          type: boolean
+          readOnly: true
+          description: True when an admin reset the user's password. The frontend must redirect them to a password-change page; the API rejects all non-password endpoints until cleared.
 
     UpdateMeRequest:
       type: object
@@ -1156,3 +1437,211 @@ components:
         cadence: { $ref: "#/components/schemas/Cadence" }
         next_run_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
+
+    StepUpRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+          description: The admin's own password, re-entered for the destructive action.
+
+    AdminUser:
+      type: object
+      required: [id, email, display_name, role, created_at, has_avatar, week_start, must_change_password]
+      properties:
+        id: { type: string, format: uuid }
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: Decrypted email. Null for soft-deleted users (their encrypted email is scrambled at delete time).
+        display_name: { type: string }
+        role:
+          type: string
+          enum: [user, admin]
+        created_at: { type: string, format: date-time }
+        deleted_at:
+          type: string
+          format: date-time
+          description: Set when the account is soft-deleted.
+        has_avatar: { type: boolean }
+        week_start: { type: integer, enum: [0, 1] }
+        must_change_password: { type: boolean }
+
+    AdminUserListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUser" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+
+    AdminUserCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [email, display_name, password]
+      properties:
+        email: { type: string, format: email }
+        display_name: { type: string, minLength: 1, maxLength: 80 }
+        password:
+          type: string
+          minLength: 10
+          description: Initial password. The created user is forced to change it on first login.
+        role:
+          type: string
+          enum: [user, admin]
+          default: user
+      example:
+        email: "alice@example.org"
+        display_name: "Alice"
+        password: "TempPass1234!"
+        role: "user"
+
+    AdminPasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [new_password, password]
+      properties:
+        new_password:
+          type: string
+          minLength: 10
+          description: New password assigned by the admin. The target user must change it on next login.
+        password:
+          type: string
+          minLength: 1
+          description: The admin's own password (step-up).
+
+    AdminSetUserRoleRequest:
+      type: object
+      additionalProperties: false
+      required: [role, password]
+      properties:
+        role:
+          type: string
+          enum: [user, admin]
+        password:
+          type: string
+          minLength: 1
+          description: The admin's own password (step-up).
+
+    AdminGroup:
+      type: object
+      required: [id, name, default_currency, created_by, created_at, member_count, expense_count]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        default_currency: { type: string, minLength: 3, maxLength: 3 }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        member_count: { type: integer, minimum: 0 }
+        expense_count: { type: integer, minimum: 0 }
+
+    AdminGroupListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminGroup" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+
+    SmtpTlsMode:
+      type: string
+      enum: [none, starttls, tls]
+
+    SmtpConfig:
+      type: object
+      required: [host, port, from_address, tls_mode, password_set]
+      properties:
+        host: { type: string }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        username:
+          type: string
+          nullable: true
+        from_address: { type: string, format: email }
+        tls_mode: { $ref: "#/components/schemas/SmtpTlsMode" }
+        password_set:
+          type: boolean
+          description: True when an encrypted password is stored. The cleartext is never returned.
+        updated_at: { type: string, format: date-time }
+        updated_by:
+          type: string
+          format: uuid
+          nullable: true
+
+    SmtpConfigUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [host, port, from_address, tls_mode]
+      properties:
+        host: { type: string, minLength: 1 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        username:
+          type: string
+          nullable: true
+        from_address: { type: string, format: email }
+        tls_mode: { $ref: "#/components/schemas/SmtpTlsMode" }
+        smtp_password:
+          type: string
+          nullable: true
+          description: SMTP password. Pass null to leave the existing one untouched; pass empty string to clear it; pass a non-empty value to set a new one.
+        allow_plaintext_credentials:
+          type: boolean
+          default: false
+          description: Required when tls_mode='none' and a username/password is provided.
+
+    SmtpTestResponse:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        error:
+          type: string
+          description: Short, non-sensitive error code on failure (e.g. "dial_timeout", "auth_failed", "tls_handshake_failed").
+
+    AdminAuditEntry:
+      type: object
+      required: [id, actor_user_id, action, success, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor_user_id: { type: string, format: uuid }
+        target_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        target_group_id:
+          type: string
+          format: uuid
+          nullable: true
+        action: { type: string }
+        ip:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        success: { type: boolean }
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        created_at: { type: string, format: date-time }
+
+    AdminAuditListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAuditEntry" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }

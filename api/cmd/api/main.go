@@ -54,7 +54,9 @@ func main() {
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
 	activityRepo := repo.NewActivityRepo(pool)
-	auth := service.NewAuthService(users, sessions, email, cfg.PasswordPepper,
+	auditRepo := repo.NewAuditRepo(pool)
+	smtpRepo := repo.NewSmtpRepo(pool)
+	auth := service.NewAuthService(pool, users, sessions, auditRepo, email, cfg.PasswordPepper,
 		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
 	meSvc := service.NewMeService(users, sessions, email, cfg.PasswordPepper)
 	categorySvc := service.NewCategoryService(categories)
@@ -64,6 +66,8 @@ func main() {
 	settlementSvc := service.NewSettlementService(settlements, groups)
 	recurringSvc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
+	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, email, cfg.PasswordPepper)
+	smtpSvc := service.NewSmtpService(smtpRepo, email)
 
 	srv := &handlers.Server{
 		Cfg: cfg, Pool: pool,
@@ -76,6 +80,10 @@ func main() {
 		Settlements: settlementSvc,
 		Recurring:   recurringSvc,
 		Activity:    activitySvc,
+		Admin:       adminSvc,
+		Smtp:        smtpSvc,
+		Users:       users,
+		Audit:       auditRepo,
 	}
 	h := server.New(srv)
 

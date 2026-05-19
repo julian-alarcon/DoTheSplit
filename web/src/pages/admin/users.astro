@@ -1,0 +1,139 @@
+---
+import Base from "@/layouts/Base.astro";
+import Avatar from "@/components/Avatar.astro";
+import { apiFor } from "@/lib/api/client";
+
+const user = Astro.locals.user;
+if (!user || !user.is_admin) return Astro.redirect("/groups");
+
+const cookie = Astro.locals.cookie ?? "";
+const api = apiFor(cookie);
+
+const offset = parseInt(Astro.url.searchParams.get("offset") ?? "0", 10) || 0;
+const limit = 50;
+const includeDeleted = Astro.url.searchParams.get("include_deleted") === "1";
+
+const { data, error } = await api.GET("/v1/admin/users", {
+  params: { query: { limit, offset, include_deleted: includeDeleted } },
+});
+
+const items = data?.items ?? [];
+const total = data?.total ?? 0;
+
+const created = Astro.url.searchParams.get("created");
+const deleted = Astro.url.searchParams.get("deleted");
+const createErr = Astro.url.searchParams.get("create_error");
+
+function fmtDate(s: string) {
+  return new Date(s).toISOString().slice(0, 10);
+}
+---
+
+<Base title="Admin · Users" back={{ href: "/admin", label: "Admin" }}>
+  <h1 class="text-2xl font-semibold mb-4">Users</h1>
+
+  {error && <p class="rounded bg-red-50 px-3 py-2 text-sm text-red-800 mb-4 dark:bg-red-950 dark:text-red-200">Could not load users.</p>}
+  {created && <p class="rounded bg-green-50 px-3 py-2 text-sm text-green-800 mb-4 dark:bg-green-950 dark:text-green-200">User created.</p>}
+  {deleted && <p class="rounded bg-green-50 px-3 py-2 text-sm text-green-800 mb-4 dark:bg-green-950 dark:text-green-200">User soft-deleted.</p>}
+  {createErr && <p class="rounded bg-red-50 px-3 py-2 text-sm text-red-800 mb-4 dark:bg-red-950 dark:text-red-200">Could not create user (email may already be registered).</p>}
+
+  <section class="mb-6 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+    <h2 class="text-lg font-medium mb-3">Add user</h2>
+    <form method="POST" action="/api/admin/users" class="grid gap-3">
+      <label class="field">
+        <input name="email" type="email" required class="field-input" placeholder=" " />
+        <span class="field-label" data-required>Email</span>
+      </label>
+      <p class="field-error">A valid email is required</p>
+
+      <label class="field">
+        <input name="display_name" required maxlength="80" class="field-input" placeholder=" " />
+        <span class="field-label" data-required>Display name</span>
+      </label>
+      <p class="field-error">Required</p>
+
+      <label class="field">
+        <input name="password" type="password" required minlength="10" class="field-input" placeholder=" " />
+        <span class="field-label" data-required>Initial password</span>
+      </label>
+      <p class="field-error">Password must be at least 10 characters</p>
+      <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">Minimum 10 characters. The user is forced to change it on first login.</p>
+
+      <label class="field-select-row">
+        <span class="text-sm">Role</span>
+        <select name="role" class="field-select">
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+      </label>
+
+      <div class="flex justify-end">
+        <button type="submit" class="btn-primary">Create user</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-medium">All users ({total})</h2>
+      <form method="GET" class="flex items-center">
+        <label class="toggle">
+          <input
+            type="checkbox"
+            name="include_deleted"
+            value="1"
+            class="toggle-input"
+            checked={includeDeleted}
+            data-auto-submit
+          />
+          <span class="toggle-track" aria-hidden="true"></span>
+          <span>Show deleted</span>
+        </label>
+      </form>
+    </div>
+    <ul class="grid gap-2">
+      {items.map((u) => {
+        const isSelf = u.id === user.id;
+        return (
+          <li>
+            <a
+              href={`/admin/users/${u.id}`}
+              class="flex items-center gap-3 rounded border border-neutral-200 p-3 transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:hover:bg-neutral-900 dark:focus-visible:ring-neutral-500"
+            >
+              <Avatar
+                userId={u.id}
+                displayName={u.display_name}
+                hasAvatar={u.has_avatar}
+                size={32}
+              />
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-2">
+                  <span class="font-medium truncate">{u.display_name}</span>
+                  {isSelf && <span class="text-xs text-neutral-500">(you)</span>}
+                </div>
+                <div class="text-xs text-neutral-600 dark:text-neutral-400 truncate">
+                  {u.email ?? <span class="italic text-neutral-400">(email scrubbed)</span>}
+                </div>
+                <div class="text-xs text-neutral-500 mt-1">
+                  <span class="rounded px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800">{u.role}</span>
+                  <span class="ml-2">created {fmtDate(u.created_at)}</span>
+                  {u.deleted_at && <span class="ml-2 text-red-600 dark:text-red-400">deleted {fmtDate(u.deleted_at)}</span>}
+                  {u.must_change_password && <span class="ml-2 text-amber-700 dark:text-amber-300">must change password</span>}
+                </div>
+              </div>
+              <span class="ml-auto text-neutral-400" aria-hidden="true">›</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+    <nav class="mt-4 flex gap-2 text-sm">
+      {offset > 0 && <a class="hover:underline" href={`/admin/users?offset=${Math.max(0, offset - limit)}${includeDeleted ? "&include_deleted=1" : ""}`}>← Previous</a>}
+      {offset + limit < total && <a class="hover:underline" href={`/admin/users?offset=${offset + limit}${includeDeleted ? "&include_deleted=1" : ""}`}>Next →</a>}
+    </nav>
+  </section>
+
+  <script>
+    import "@/scripts/auto-submit.ts";
+  </script>
+</Base>

@@ -17,13 +17,13 @@ export default defineConfig({
       cssVariable: "--font-inter",
       fallbacks: ["system-ui", "sans-serif"],
       options: {
+        // Only the weights we actually use: 400 Regular and 600 SemiBold.
+        // `font-medium` (500) is synthesized by the browser from 400 — no
+        // separate file needed. Italics and 700-Bold were preloaded but
+        // never actually rendered, costing ~345 KB on every page load.
         variants: [
           { weight: 400, style: "normal", src: ["./src/assets/fonts/inter/Inter-Regular.woff2"] },
-          { weight: 400, style: "italic", src: ["./src/assets/fonts/inter/Inter-Italic.woff2"] },
           { weight: 600, style: "normal", src: ["./src/assets/fonts/inter/Inter-SemiBold.woff2"] },
-          { weight: 600, style: "italic", src: ["./src/assets/fonts/inter/Inter-SemiBoldItalic.woff2"] },
-          { weight: 700, style: "normal", src: ["./src/assets/fonts/inter/Inter-Bold.woff2"] },
-          { weight: 700, style: "italic", src: ["./src/assets/fonts/inter/Inter-BoldItalic.woff2"] },
         ],
       },
     },

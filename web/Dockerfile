@@ -6,7 +6,8 @@ ARG ALPINE_VERSION=3.22
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS deps
 WORKDIR /app
 COPY web/package.json web/package-lock.json* ./
-RUN npm install --ignore-scripts
+# `--ignore-scripts` blocks postinstall hooks from transitive deps.
+RUN npm ci --ignore-scripts
 
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS build
 WORKDIR /app
@@ -24,8 +25,9 @@ ENV NODE_ENV=production
 # git context is available (e.g. building from a tarball or outside CI).
 ARG BUILD_COMMIT=dev
 ENV BUILD_COMMIT=${BUILD_COMMIT}
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
+USER node
 EXPOSE 3000
 CMD ["node", "./dist/server/entry.mjs"]

@@ -29,7 +29,7 @@ try {
 const ok = Astro.url.searchParams.get("ok");
 ---
 
-<Base title="Notifications">
+<Base title="Notifications" back={{ href: "/account", label: "Account" }}>
   <div class="mx-auto flex max-w-xl flex-col gap-3">
     <h1 class="text-2xl font-semibold">Notifications</h1>
     <p class="text-sm text-neutral-600 dark:text-neutral-400">
@@ -95,11 +95,5 @@ const ok = Astro.url.searchParams.get("ok");
         <button type="submit" class="btn-primary">Save preferences</button>
       </div>
     </form>
-
-    <p class="mt-2 text-sm">
-      <a href="/account" class="rounded-md underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500">
-        Back to account settings
-      </a>
-    </p>
   </div>
 </Base>

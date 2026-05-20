@@ -119,18 +119,70 @@ This stack ships HTTP-only by default for LAN use on TrueNAS. For anything inter
 ```bash
 # One-time, on the host
 cp .env.example .env
-echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"   >> .env
-echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"  >> .env
-echo "PASSWORD_PEPPER=$(openssl rand -base64 32)" >> .env
+echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"    >> .env
+echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"   >> .env
+echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"  >> .env
+echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
+# Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
 
 # For HTTPS deployments
-echo "COOKIE_SECURE=true"                         >> .env
-echo "WEB_ORIGIN=https://split.yourdomain.tld"    >> .env
+echo "COOKIE_SECURE=true"                          >> .env
+echo "WEB_ORIGIN=https://split.yourdomain.tld"     >> .env
 
 docker compose up -d --build
 ```
 
 When `COOKIE_SECURE=true` the session cookie is renamed to `__Host-dts_session` (browsers reject the `__Host-` prefix without `Secure`). When `false`, it's the plain `dts_session`. The backend picks the right name automatically.
+
+### What the three keys do
+
+The three `EMAIL_ENC_KEY` / `EMAIL_HMAC_KEY` / `PASSWORD_PEPPER` values are not config knobs — they're the cryptographic material the database is built around. Generate them once on first install and back them up; if you lose them the data is unrecoverable, and if they leak an attacker can decrypt every email and crack every password offline.
+
+All three are 32 raw bytes, base64-encoded for transport. `openssl rand -base64 32` produces exactly that.
+
+#### `EMAIL_ENC_KEY` — emails at rest
+
+Code: [api/internal/crypto/email.go](../api/internal/crypto/email.go).
+
+Every email address goes into the `users.email_encrypted` column as `key_id ‖ nonce ‖ AES-GCM(EMAIL_ENC_KEY, plaintext)`:
+
+- **`key_id`** is a one-byte tag (currently `0x01`) that lets you rotate to a new key later without losing access to rows encrypted under the old one.
+- **`nonce`** is 12 random bytes generated per row — required for AES-GCM, and the reason two users with the same email get two different ciphertexts.
+- **AES-GCM** is authenticated encryption: the auth tag is appended after the ciphertext, so any tampering with the row (or with `key_id` / `nonce`) makes decryption fail rather than producing garbage plaintext.
+
+The plaintext is only kept in memory for the duration of a request (e.g. when rendering an email template, when an admin views the user detail page, or when the SMTP outbox dispatcher mails it). Logs explicitly redact email fields ([api/internal/middleware/logging.go](../api/internal/middleware/logging.go)).
+
+#### `EMAIL_HMAC_KEY` — login lookups without storing the address
+
+You can't query "user with email X" against an AES-GCM column — every row has a different nonce, so ciphertexts don't match even when plaintexts do. We store a *separate* deterministic fingerprint in `users.email_hash`:
+
+```
+email_hash = HMAC-SHA256(EMAIL_HMAC_KEY, normalize(email))
+```
+
+`normalize` lower-cases and trims (see `EmailCipher.HashEmail`). The HMAC is keyed, so an attacker who steals the database without the key can't brute-force the (small, finite) email space against `users.email_hash` — they have to break HMAC-SHA256 first.
+
+Login, register-conflict-detection, password-reset and "is this email already on file" all hash the input email and look it up by `email_hash`. The encrypted column is decrypted only after that lookup succeeds.
+
+Splitting the two keys is deliberate: it means a leak of `EMAIL_HMAC_KEY` lets an attacker test whether *specific* emails are registered (still bad), but they still can't read any email plaintext without `EMAIL_ENC_KEY`. And vice-versa.
+
+#### `PASSWORD_PEPPER` — server-side secret added to password hashes
+
+Code: [api/internal/crypto/password.go](../api/internal/crypto/password.go).
+
+Passwords are hashed with Argon2id (memory-hard, GPU-resistant), but Argon2id alone protects against an attacker with the database *and* nothing else. If they also walk away with the binary they can run dictionary attacks at full speed against the salted hashes. The pepper closes that gap:
+
+```
+hash = Argon2id(password ‖ PASSWORD_PEPPER, salt, params)
+```
+
+The pepper is stored only in the env var — never in the database. So an attacker who exfiltrates `users.password_hash` and the salts but not the pepper can't even start cracking; they're missing 32 bytes of unguessable entropy that get mixed into every hash. The pepper is used at register, login, and `/me/password` change.
+
+Salt + pepper + Argon2id is a three-part defense (per-user randomness, server-secret randomness, slow KDF). Take any one away and the others get weaker.
+
+#### Rotation, when you'd actually do it
+
+Today there's no rotation tool — that's a deliberate v1 cut. If a key leaks, the recovery is "mint a new key, dump and re-encrypt every affected row, then deploy with the new key." The `key_id` byte in the email ciphertext exists so a future rotation tool can read the old key for old rows and the new key for new rows during the cutover. None of that exists yet — if you suspect a key has leaked, the safe path today is to take the instance down, restore from a clean snapshot, rotate the key, and have users reset passwords.
 
 ### Updating a running deployment
 

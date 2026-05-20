@@ -148,7 +148,8 @@ svg[data-icon-slug="other"] {
   }
 }
 .field:focus-within .field-label,
-.field .field-input:not(:placeholder-shown) ~ .field-label {
+.field .field-input:not(:placeholder-shown) ~ .field-label,
+.field[data-has-stored] .field-label {
   transform: translateY(-1.15rem) scale(0.8);
   color: var(--field-focus);
 }
@@ -180,9 +181,15 @@ svg[data-icon-slug="other"] {
 }
 
 /* Hide the placeholder visually - we use placeholder=" " purely as a
-   :placeholder-shown signal so the label can detect "empty". */
-.field-input::placeholder {
+   :placeholder-shown signal so the label can detect "empty". When the
+   field is opting in via [data-has-stored] (e.g. SMTP password reveal),
+   the placeholder is meaningful (••••••••) and rendered at the normal
+   muted color. */
+.field:not([data-has-stored]) .field-input::placeholder {
   color: transparent;
+}
+.field[data-has-stored] .field-input::placeholder {
+  color: var(--color-neutral-500);
 }
 
 /* Strip browser-native number spinners on every numeric field-input. */
@@ -373,7 +380,11 @@ svg[data-icon-slug="other"] {
 }
 
 .toggle-track {
-  @apply relative inline-block h-5 w-9 rounded-full border border-neutral-300 bg-neutral-200 transition-colors dark:border-neutral-700 dark:bg-neutral-800;
+  /* shrink-0 keeps the track at its declared 36×20 box even when the
+     adjacent label wraps onto multiple lines in a narrow viewport — flex
+     children can otherwise be compressed to fit, which produces the
+     uneven track widths visible on mobile. */
+  @apply relative inline-block h-5 w-9 shrink-0 rounded-full border border-neutral-300 bg-neutral-200 transition-colors dark:border-neutral-700 dark:bg-neutral-800;
 }
 
 .toggle-track::after {

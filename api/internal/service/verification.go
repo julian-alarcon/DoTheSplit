@@ -178,6 +178,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) erro
 	if err := s.mailer.Enqueue(ctx, tx, email, "verify_register", TemplateVars{
 		DisplayName: u.DisplayName,
 		Code:        code,
+		NewEmail:    email,
 	}); err != nil {
 		return nil
 	}
@@ -336,6 +337,186 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 		return nil, "", err
 	}
 	token, err := s.issueSession(ctx, userID)
+	if err != nil {
+		return nil, "", err
+	}
+	return out, token, nil
+}
+
+// EnqueuePasswordResetTx is the shared password-reset email path: invalidate
+// any prior reset token for the user, mint a fresh 6-digit code, write the
+// token row, and enqueue an outbox email. Participates in the caller's
+// transaction so admin flows can commit the user-mutation and the reset
+// token atomically.
+//
+// Returns ErrSmtpUnconfigured (sentinel below) if SMTP isn't set up yet, so
+// the admin handler can surface a clear "configure SMTP first" error before
+// it commits the user mutation. The public forgot-password path swallows
+// that error itself for enumeration safety.
+func (s *AuthService) EnqueuePasswordResetTx(ctx context.Context, tx repo.Querier, u *repo.User, plaintextEmail string) error {
+	if s.mailer == nil {
+		return ErrSmtpUnconfigured
+	}
+	smtpReady, err := s.mailer.IsConfigured(ctx)
+	if err != nil {
+		return err
+	}
+	if !smtpReady {
+		return ErrSmtpUnconfigured
+	}
+	if err := s.verification.InvalidateAll(ctx, tx, u.ID, repo.PurposePasswordReset); err != nil {
+		return err
+	}
+	code, err := generateNumericCode(6)
+	if err != nil {
+		return err
+	}
+	if err := s.verification.Insert(ctx, tx, &repo.VerificationToken{
+		UserID:    u.ID,
+		Purpose:   repo.PurposePasswordReset,
+		CodeHash:  hashCode(code),
+		ExpiresAt: time.Now().Add(15 * time.Minute),
+	}); err != nil {
+		return err
+	}
+	return s.mailer.Enqueue(ctx, tx, plaintextEmail, "password_reset", TemplateVars{
+		DisplayName: u.DisplayName,
+		Code:        code,
+		NewEmail:    plaintextEmail,
+	})
+}
+
+// ScrambledPasswordHash builds a deterministically-unguessable Argon2id hash
+// to drop into users.password_hash when an admin provisions or resets a
+// user. The plaintext can never be recovered (we throw the bytes away the
+// moment HashPassword returns), so the only way to log in is via the
+// password-reset email this same flow enqueues.
+func (s *AuthService) ScrambledPasswordHash() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return crypto.HashPassword(string(raw), s.pepper)
+}
+
+// ErrSmtpUnconfigured is returned by EnqueuePasswordResetTx when the
+// instance hasn't been wired to an SMTP server yet. Admin handlers map this
+// to a clear 503 so the operator knows SMTP must be set first.
+var ErrSmtpUnconfigured = errors.New("smtp not configured")
+
+// RequestPasswordReset begins the forgot-password flow. Always returns nil
+// to avoid account enumeration: the same shape is observable whether the
+// email is registered or not. Caller (handler) always responds 204.
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
+	emailHash := s.email.HashEmail(email)
+	u, err := s.users.FindByEmailHash(ctx, emailHash)
+	if errors.Is(err, repo.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+	if u.DeletedAt != nil {
+		return nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil
+	}
+	defer tx.Rollback(ctx)
+
+	if err := s.EnqueuePasswordResetTx(ctx, tx, u, email); err != nil {
+		// Including ErrSmtpUnconfigured: silently no-op so unconfigured
+		// instances can't be probed by timing/response shape.
+		return nil
+	}
+	_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
+		ActorUserID:  u.ID,
+		TargetUserID: &u.ID,
+		Action:       "password_reset_requested",
+		Success:      true,
+	})
+	_ = tx.Commit(ctx)
+	return nil
+}
+
+// ConfirmPasswordReset rotates the password if the supplied code matches an
+// active password_reset token, then revokes every session for the user and
+// issues a fresh one for the current browser. The new-password length check
+// matches Register/ChangePassword (>= 10 chars).
+func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, newPassword string) (*User, string, error) {
+	if len(newPassword) < 10 {
+		return nil, "", errors.New("password must be at least 10 characters")
+	}
+	emailHash := s.email.HashEmail(email)
+	u, err := s.users.FindByEmailHash(ctx, emailHash)
+	if errors.Is(err, repo.ErrNotFound) {
+		return nil, "", ErrInvalidCode
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if u.DeletedAt != nil {
+		return nil, "", ErrInvalidCode
+	}
+
+	tok, err := s.verification.FindActive(ctx, u.ID, repo.PurposePasswordReset)
+	if errors.Is(err, repo.ErrNotFound) {
+		return nil, "", ErrCodeExpired
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if tok.Attempts >= verifyMaxAttempts {
+		return nil, "", ErrVerifyRateLimited
+	}
+	if !constantTimeEqual(tok.CodeHash, hashCode(strings.TrimSpace(code))) {
+		_ = s.verification.IncrementAttempts(ctx, tok.ID)
+		return nil, "", ErrInvalidCode
+	}
+
+	newHash, err := crypto.HashPassword(newPassword, s.pepper)
+	if err != nil {
+		return nil, "", err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := s.verification.Consume(ctx, tx, tok.ID); err != nil {
+		return nil, "", err
+	}
+	if err := s.users.UpdatePasswordHash(ctx, u.ID, newHash); err != nil {
+		return nil, "", err
+	}
+	_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
+		ActorUserID:  u.ID,
+		TargetUserID: &u.ID,
+		Action:       "password_reset_completed",
+		Success:      true,
+	})
+	if err := tx.Commit(ctx); err != nil {
+		return nil, "", err
+	}
+
+	// Revoke every existing session — anyone holding an old cookie loses
+	// access immediately.
+	if err := s.sessions.DeleteAllForUser(ctx, u.ID); err != nil {
+		return nil, "", err
+	}
+	u2, err := s.users.FindByID(ctx, u.ID)
+	if err != nil {
+		return nil, "", err
+	}
+	out, err := s.toUser(u2)
+	if err != nil {
+		return nil, "", err
+	}
+	token, err := s.issueSession(ctx, u.ID)
 	if err != nil {
 		return nil, "", err
 	}

@@ -30,9 +30,9 @@ authenticated visitors are redirected to `/groups`, the rest to `/login`.
 A separate `is_admin` flag on `users`, granted to the bootstrap admin and any
 user another admin promotes. The `/admin` area exposes:
 
-- **Users**: list, search, toggle admin, reset password (forces a change on
-  next login via `must_change_password`), soft-delete, optional
-  `?include_deleted=1` toggle.
+- **Users**: list, search, toggle admin, reset password (scrambles the
+  password hash and emails the user a 6-digit code so they pick a new one),
+  soft-delete, optional `?include_deleted=1` toggle.
 - **Groups**: oversight view of every group with member count and creator.
 - **SMTP**: configure outbound mail; the password column is encrypted at rest
   with AES-GCM using `EMAIL_ENC_KEY`.

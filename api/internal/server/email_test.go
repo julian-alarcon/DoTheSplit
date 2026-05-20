@@ -47,6 +47,25 @@ func pinVerificationCode(t *testing.T, ts *testStack, known string) {
 	require.Equal(t, int64(1), tag.RowsAffected(), "expected exactly one pending register token")
 }
 
+// pinPasswordResetCode is the password_reset analogue of
+// pinVerificationCode: rewrites the most recent active password_reset
+// token's code_hash so the test can submit a known code.
+func pinPasswordResetCode(t *testing.T, ts *testStack, known string) {
+	t.Helper()
+	sum := sha256.Sum256([]byte(known))
+	tag, err := ts.pool.Exec(context.Background(), `
+		UPDATE email_verification_tokens
+		SET code_hash = $1, attempts = 0
+		WHERE id = (
+			SELECT id FROM email_verification_tokens
+			WHERE consumed_at IS NULL AND purpose = 'password_reset'
+			ORDER BY created_at DESC LIMIT 1
+		)
+	`, sum[:])
+	require.NoError(t, err)
+	require.Equal(t, int64(1), tag.RowsAffected(), "expected exactly one pending password_reset token")
+}
+
 // TestEmailVerificationFlow covers the SMTP-configured registration path.
 func TestEmailVerificationFlow(t *testing.T) {
 	ts := setup(t)
@@ -188,3 +207,130 @@ func TestRegisterAutoVerifiesWithoutSMTP(t *testing.T) {
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
+
+// TestPasswordResetHappyPath covers the full forgot-password flow:
+// register a user (auto-verified, no SMTP yet) → configure SMTP →
+// request reset → pin known code → confirm with new password → log in
+// with the new password.
+func TestPasswordResetHappyPath(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	registerUser(t, base, "alice@test.dev", "passwordpassword", "Alice")
+	configureSMTP(t, ts)
+
+	resp, _ := request(t, "POST", base+"/v1/auth/password-reset/request", map[string]any{
+		"email": "alice@test.dev",
+	}, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	knownCode := "654321"
+	pinPasswordResetCode(t, ts, knownCode)
+
+	resp, _ = request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
+		"email":        "alice@test.dev",
+		"code":         knownCode,
+		"new_password": "newpasswordnewpassword",
+	}, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NotNil(t, sessionCookie(resp), "confirm must set a session cookie on success")
+
+	// Old password no longer works.
+	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+		"email":    "alice@test.dev",
+		"password": "passwordpassword",
+	}, nil)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	// New password works.
+	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+		"email":    "alice@test.dev",
+		"password": "newpasswordnewpassword",
+	}, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+// TestPasswordResetWrongCode confirms 5 wrong attempts each return 400 and
+// the 6th flips to 429 (token attempts >= verifyMaxAttempts).
+func TestPasswordResetWrongCode(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	registerUser(t, base, "bob@test.dev", "passwordpassword", "Bob")
+	configureSMTP(t, ts)
+
+	resp, _ := request(t, "POST", base+"/v1/auth/password-reset/request", map[string]any{
+		"email": "bob@test.dev",
+	}, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	for i := 0; i < 5; i++ {
+		resp, _ := request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
+			"email":        "bob@test.dev",
+			"code":         "000000",
+			"new_password": "newpasswordnewpassword",
+		}, nil)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	}
+	// 6th attempt should be rate-limited.
+	resp, _ = request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
+		"email":        "bob@test.dev",
+		"code":         "000000",
+		"new_password": "newpasswordnewpassword",
+	}, nil)
+	require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+}
+
+// TestPasswordResetExpired forces the token's expires_at into the past and
+// expects 410 Gone on confirm.
+func TestPasswordResetExpired(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	registerUser(t, base, "carol@test.dev", "passwordpassword", "Carol")
+	configureSMTP(t, ts)
+
+	resp, _ := request(t, "POST", base+"/v1/auth/password-reset/request", map[string]any{
+		"email": "carol@test.dev",
+	}, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	knownCode := "999999"
+	pinPasswordResetCode(t, ts, knownCode)
+	// Force-expire the token.
+	_, err := ts.pool.Exec(context.Background(),
+		`UPDATE email_verification_tokens SET expires_at = now() - interval '1 minute' WHERE consumed_at IS NULL AND purpose = 'password_reset'`)
+	require.NoError(t, err)
+
+	resp, _ = request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
+		"email":        "carol@test.dev",
+		"code":         knownCode,
+		"new_password": "newpasswordnewpassword",
+	}, nil)
+	require.Equal(t, http.StatusGone, resp.StatusCode)
+}
+
+// TestPasswordResetEnumerationSafe asserts that requesting reset for an
+// unknown email still returns 204 and never creates a token row.
+func TestPasswordResetEnumerationSafe(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	configureSMTP(t, ts)
+
+	resp, _ := request(t, "POST", base+"/v1/auth/password-reset/request", map[string]any{
+		"email": "ghost@test.dev",
+	}, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	var n int
+	err := ts.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM email_verification_tokens WHERE purpose = 'password_reset'`).Scan(&n)
+	require.NoError(t, err)
+	require.Equal(t, 0, n, "no password_reset token should be created for an unknown email")
+}
+

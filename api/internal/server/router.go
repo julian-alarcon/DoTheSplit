@@ -44,12 +44,13 @@ func New(s *handlers.Server) http.Handler {
 	authG.POST("/auth/login", s.Login)
 	authG.POST("/auth/verify", s.VerifyEmail)
 	authG.POST("/auth/verify/resend", s.ResendVerification)
+	authG.POST("/auth/password-reset/request", s.RequestPasswordReset)
+	authG.POST("/auth/password-reset/confirm", s.ConfirmPasswordReset)
 	v1.POST("/auth/logout", s.Logout)
 
 	// Authenticated endpoints.
 	auth := v1.Group("")
 	auth.Use(mw.RequireSession())
-	auth.Use(mw.EnforcePasswordChange())
 	auth.GET("/me", s.Me)
 	auth.PATCH("/me", s.UpdateMe)
 	auth.DELETE("/me", s.DeleteMe)

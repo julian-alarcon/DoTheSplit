@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
@@ -115,16 +116,18 @@ func TestAdminAuthzNegative(t *testing.T) {
 }
 
 // TestAdminCreateAndListUsers checks the basic admin create + list flow.
+// CreateUser requires SMTP because the new user receives an email with a
+// 6-digit code to set their own password — admin never types one.
 func TestAdminCreateAndListUsers(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
 
 	_, adminCookie := registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	configureSMTP(t, ts)
 
 	resp, _ := request(t, "POST", base+"/v1/admin/users", map[string]any{
 		"email":        "alice@test.dev",
 		"display_name": "Alice",
-		"password":     "passwordpassword",
 		"role":         "user",
 	}, adminCookie)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -135,21 +138,40 @@ func TestAdminCreateAndListUsers(t *testing.T) {
 	require.GreaterOrEqual(t, len(items), 2)
 }
 
-// TestAdminResetPasswordForcesChange verifies the must_change_password flow
-// end-to-end: admin resets, target's session is gone, new login works,
-// non-password endpoints are blocked, and POST /v1/me/password clears the gate.
-func TestAdminResetPasswordForcesChange(t *testing.T) {
+// TestAdminCreateUserRequiresSmtp asserts the create-user endpoint refuses
+// when SMTP isn't configured: there's no other way for the new user to
+// learn their password.
+func TestAdminCreateUserRequiresSmtp(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	_, adminCookie := registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+
+	resp, body := request(t, "POST", base+"/v1/admin/users", map[string]any{
+		"email":        "alice@test.dev",
+		"display_name": "Alice",
+		"role":         "user",
+	}, adminCookie)
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	require.Equal(t, "smtp_unconfigured", body["code"])
+}
+
+// TestAdminResetSendsEmail verifies the new admin-reset flow: the target's
+// existing sessions are gone, the old password no longer works, but the
+// admin's reset enqueues a password_reset token + outbox row so the user
+// can pick a new password through /reset.
+func TestAdminResetSendsEmail(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
 
 	_, adminCookie := registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
 	target, targetCookie := registerUser(t, base, "tgt@test.dev", "passwordpassword", "Target")
 	targetID := target["id"].(string)
+	configureSMTP(t, ts)
 
-	// Admin resets the target's password.
+	// Admin triggers reset (step-up only).
 	resp, _ := request(t, "POST", base+"/v1/admin/users/"+targetID+"/password", map[string]any{
-		"new_password": "freshfreshfresh",
-		"password":     "passwordpassword",
+		"password": "passwordpassword",
 	}, adminCookie)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
@@ -157,34 +179,33 @@ func TestAdminResetPasswordForcesChange(t *testing.T) {
 	resp, _ = request(t, "GET", base+"/v1/me", nil, targetCookie)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	// Login with the new password.
-	resp, body := request(t, "POST", base+"/v1/auth/login", map[string]any{
-		"email": "tgt@test.dev", "password": "freshfreshfresh",
+	// The old password no longer logs the target in.
+	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+		"email": "tgt@test.dev", "password": "passwordpassword",
+	}, nil)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	// A password_reset token row exists for the target.
+	var n int
+	err := ts.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM email_verification_tokens WHERE user_id = $1 AND purpose = 'password_reset' AND consumed_at IS NULL`,
+		targetID).Scan(&n)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+
+	// Pin the code and complete the reset → target logs in fresh.
+	knownCode := "424242"
+	pinPasswordResetCode(t, ts, knownCode)
+	resp, _ = request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
+		"email":        "tgt@test.dev",
+		"code":         knownCode,
+		"new_password": "freshfreshfresh",
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Equal(t, true, body["must_change_password"])
-	freshCookie := sessionCookie(resp)
-	require.NotNil(t, freshCookie)
 
-	// Most endpoints are blocked until the password changes.
-	resp, _ = request(t, "GET", base+"/v1/groups", nil, freshCookie)
-	require.Equal(t, http.StatusForbidden, resp.StatusCode)
-
-	// /v1/me is allowed so the change-password page can render.
-	resp, _ = request(t, "GET", base+"/v1/me", nil, freshCookie)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	// Change password clears the gate.
-	resp, _ = request(t, "POST", base+"/v1/me/password", map[string]any{
-		"old_password": "freshfreshfresh",
-		"new_password": "settledsettled",
-	}, freshCookie)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-	rotated := sessionCookie(resp)
-	require.NotNil(t, rotated)
-
-	// Now /v1/groups works again.
-	resp, _ = request(t, "GET", base+"/v1/groups", nil, rotated)
+	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+		"email": "tgt@test.dev", "password": "freshfreshfresh",
+	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 

@@ -31,9 +31,9 @@ var (
 	// 403 with code='email_unverified' so the frontend can route to /verify.
 	ErrEmailUnverified = errors.New("email not verified")
 	// ErrInvalidCode and friends serve the verify/confirm flows.
-	ErrInvalidCode        = errors.New("invalid code")
-	ErrCodeExpired        = errors.New("code expired or already used")
-	ErrVerifyRateLimited  = errors.New("verification rate limited")
+	ErrInvalidCode       = errors.New("invalid code")
+	ErrCodeExpired       = errors.New("code expired or already used")
+	ErrVerifyRateLimited = errors.New("verification rate limited")
 )
 
 // SetupLocker is the minimal interface AuthService needs from the setup
@@ -98,18 +98,17 @@ func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.Ses
 
 // User is a service-layer projection of a user with the decrypted email.
 type User struct {
-	ID                 uuid.UUID
-	Email              string
-	DisplayName        string
-	CreatedAt          time.Time
-	HasAvatar          bool
-	AvatarUpdatedAt    *time.Time
-	DeletedAt          *time.Time
-	WeekStart          int16
-	Timezone           *string
-	IsAdmin            bool
-	MustChangePassword bool
-	EmailVerifiedAt    *time.Time
+	ID              uuid.UUID
+	Email           string
+	DisplayName     string
+	CreatedAt       time.Time
+	HasAvatar       bool
+	AvatarUpdatedAt *time.Time
+	DeletedAt       *time.Time
+	WeekStart       int16
+	Timezone        *string
+	IsAdmin         bool
+	EmailVerifiedAt *time.Time
 }
 
 func (s *AuthService) toUser(u *repo.User) (*User, error) {
@@ -118,18 +117,17 @@ func (s *AuthService) toUser(u *repo.User) (*User, error) {
 		return nil, fmt.Errorf("decrypt email: %w", err)
 	}
 	return &User{
-		ID:                 u.ID,
-		Email:              email,
-		DisplayName:        u.DisplayName,
-		CreatedAt:          u.CreatedAt,
-		HasAvatar:          u.AvatarUpdatedAt != nil,
-		AvatarUpdatedAt:    u.AvatarUpdatedAt,
-		DeletedAt:          u.DeletedAt,
-		WeekStart:          u.WeekStart,
-		Timezone:           u.Timezone,
-		IsAdmin:            u.Role == "admin",
-		MustChangePassword: u.MustChangePassword,
-		EmailVerifiedAt:    u.EmailVerifiedAt,
+		ID:              u.ID,
+		Email:           email,
+		DisplayName:     u.DisplayName,
+		CreatedAt:       u.CreatedAt,
+		HasAvatar:       u.AvatarUpdatedAt != nil,
+		AvatarUpdatedAt: u.AvatarUpdatedAt,
+		DeletedAt:       u.DeletedAt,
+		WeekStart:       u.WeekStart,
+		Timezone:        u.Timezone,
+		IsAdmin:         u.Role == "admin",
+		EmailVerifiedAt: u.EmailVerifiedAt,
 	}, nil
 }
 
@@ -189,11 +187,11 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 		}
 		meta, _ := json.Marshal(map[string]any{"reason": "smtp_unconfigured"})
 		_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
-			ActorUserID: out.ID,
+			ActorUserID:  out.ID,
 			TargetUserID: &out.ID,
-			Action:      "auto_verified_no_smtp",
-			Success:     true,
-			Metadata:    meta,
+			Action:       "auto_verified_no_smtp",
+			Success:      true,
+			Metadata:     meta,
 		})
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
@@ -224,6 +222,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 	if err := s.mailer.Enqueue(ctx, tx, email, "verify_register", TemplateVars{
 		DisplayName: displayName,
 		Code:        code,
+		NewEmail:    email,
 	}); err != nil {
 		return nil, err
 	}
@@ -291,7 +290,7 @@ func (s *AuthService) RegisterTx(ctx context.Context, tx pgx.Tx, email, password
 		role = "admin"
 	}
 	u.Role = role
-	if err := s.users.CreateWithRole(ctx, tx, u, role, false); err != nil {
+	if err := s.users.CreateWithRole(ctx, tx, u, role); err != nil {
 		return nil, nil, err
 	}
 	if role == "admin" {
@@ -431,24 +430,6 @@ func (s *AuthService) VerifyPassword(ctx context.Context, userID uuid.UUID, pass
 	}
 	s.clearStepUpFailures(userID)
 	return nil
-}
-
-// AdminChangeUserPassword rotates the target user's password hash, sets the
-// must_change_password flag in the same UPDATE, and revokes all of the
-// target's sessions. The target's *next* login will succeed; everything they
-// do until they POST /v1/me/password is gated by EnforcePasswordChange.
-func (s *AuthService) AdminChangeUserPassword(ctx context.Context, targetID uuid.UUID, newPassword string) error {
-	if len(newPassword) < 10 {
-		return errors.New("password must be at least 10 characters")
-	}
-	hash, err := crypto.HashPassword(newPassword, s.pepper)
-	if err != nil {
-		return err
-	}
-	if err := s.users.UpdatePasswordHashWithFlag(ctx, targetID, hash, true); err != nil {
-		return err
-	}
-	return s.sessions.DeleteAllForUser(ctx, targetID)
 }
 
 func (s *AuthService) lockedOut(userID uuid.UUID) bool {

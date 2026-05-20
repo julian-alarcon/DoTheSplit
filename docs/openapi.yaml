@@ -216,6 +216,56 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /v1/auth/password-reset/request:
+    post:
+      summary: Begin a password reset (sends a 6-digit code by email)
+      description: |
+        Always responds 204 to avoid account enumeration: the same response
+        shape is returned whether the email is registered or not. When the
+        email matches an active user a code is enqueued; otherwise nothing
+        happens. Rate-limited per IP.
+      operationId: requestPasswordReset
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetRequest" }
+      responses:
+        "204":
+          description: Accepted. A code may have been emailed.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/auth/password-reset/confirm:
+    post:
+      summary: Complete a password reset using the 6-digit code
+      operationId: confirmPasswordReset
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetConfirm" }
+      responses:
+        "200":
+          description: Password rotated; session cookie set.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "410":
+          description: Verification code expired or already used.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /v1/auth/login:
     post:
       summary: Log in
@@ -942,7 +992,12 @@ paths:
 
   /v1/admin/users/{id}/password:
     post:
-      summary: Reset a user's password (admin, step-up)
+      summary: Send the user a password-reset email (admin, step-up)
+      description: |
+        Scrambles the target user's password hash, revokes every active
+        session for them, and emails them a 6-digit code so they can set a
+        new password through the standard /reset flow. The admin never types
+        a temporary password.
       operationId: adminResetUserPassword
       tags: [admin]
       parameters:
@@ -954,10 +1009,10 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AdminPasswordResetRequest" }
+            schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
-          description: Password reset; target's sessions revoked; must_change_password=true.
+          description: Password reset email queued; target's sessions revoked.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1282,10 +1337,6 @@ components:
           type: boolean
           readOnly: true
           description: True when the user has the admin role. Read-only; promotion only happens via the bootstrap path or an admin endpoint.
-        must_change_password:
-          type: boolean
-          readOnly: true
-          description: True when an admin reset the user's password. The frontend must redirect them to a password-change page; the API rejects all non-password endpoints until cleared.
         email_verified_at:
           type: string
           format: date-time
@@ -1363,6 +1414,33 @@ components:
       example:
         email: alice@example.com
         code: "482193"
+
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+      example:
+        email: alice@example.com
+
+    PasswordResetConfirm:
+      type: object
+      additionalProperties: false
+      required: [email, code, new_password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: "^[0-9]{6}$"
+          description: 6-digit numeric code received by email.
+        new_password: { type: string, minLength: 10, maxLength: 256 }
+      example:
+        email: alice@example.com
+        code: "482193"
+        new_password: correct-horse-battery-staple
 
     ResendVerificationRequest:
       type: object
@@ -1809,7 +1887,7 @@ components:
 
     AdminUser:
       type: object
-      required: [id, email, display_name, role, created_at, has_avatar, week_start, must_change_password]
+      required: [id, email, display_name, role, created_at, has_avatar, week_start]
       properties:
         id: { type: string, format: uuid }
         email:
@@ -1828,7 +1906,6 @@ components:
           description: Set when the account is soft-deleted.
         has_avatar: { type: boolean }
         week_start: { type: integer, enum: [0, 1] }
-        must_change_password: { type: boolean }
 
     AdminUserListResponse:
       type: object
@@ -1844,14 +1921,10 @@ components:
     AdminUserCreateRequest:
       type: object
       additionalProperties: false
-      required: [email, display_name, password]
+      required: [email, display_name]
       properties:
         email: { type: string, format: email }
         display_name: { type: string, minLength: 1, maxLength: 80 }
-        password:
-          type: string
-          minLength: 10
-          description: Initial password. The created user is forced to change it on first login.
         role:
           type: string
           enum: [user, admin]
@@ -1859,22 +1932,7 @@ components:
       example:
         email: "alice@example.org"
         display_name: "Alice"
-        password: "TempPass1234!"
         role: "user"
-
-    AdminPasswordResetRequest:
-      type: object
-      additionalProperties: false
-      required: [new_password, password]
-      properties:
-        new_password:
-          type: string
-          minLength: 10
-          description: New password assigned by the admin. The target user must change it on next login.
-        password:
-          type: string
-          minLength: 1
-          description: The admin's own password (step-up).
 
     AdminSetUserRoleRequest:
       type: object

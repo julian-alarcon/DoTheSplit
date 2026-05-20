@@ -72,6 +72,39 @@ func (s *Server) ResendVerification(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (s *Server) RequestPasswordReset(c *gin.Context) {
+	var req apigen.PasswordResetRequest
+	if !bindStrictJSON(c, &req) {
+		return
+	}
+	// Always 204 to avoid account enumeration.
+	_ = s.Auth.RequestPasswordReset(c.Request.Context(), string(req.Email))
+	c.Status(http.StatusNoContent)
+}
+
+func (s *Server) ConfirmPasswordReset(c *gin.Context) {
+	var req apigen.PasswordResetConfirm
+	if !bindStrictJSON(c, &req) {
+		return
+	}
+	u, token, err := s.Auth.ConfirmPasswordReset(c.Request.Context(), string(req.Email), req.Code, req.NewPassword)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidCode):
+			writeErr(c, http.StatusBadRequest, "invalid_code", "verification code is incorrect")
+		case errors.Is(err, service.ErrCodeExpired):
+			writeErr(c, http.StatusGone, "code_expired", "verification code has expired or is no longer valid")
+		case errors.Is(err, service.ErrVerifyRateLimited):
+			writeErr(c, http.StatusTooManyRequests, "too_many_attempts", "too many incorrect attempts; request a new code")
+		default:
+			writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		}
+		return
+	}
+	s.setSessionCookie(c, token)
+	c.JSON(http.StatusOK, toAPIUser(u))
+}
+
 func (s *Server) Login(c *gin.Context) {
 	var req apigen.LoginRequest
 	if !bindStrictJSON(c, &req) {
@@ -110,20 +143,18 @@ func (s *Server) Me(c *gin.Context) {
 
 func toAPIUser(u *service.User) apigen.User {
 	isAdmin := u.IsAdmin
-	mustChange := u.MustChangePassword
 	out := apigen.User{
-		Id:                 u.ID,
-		Email:              openapi_types.Email(u.Email),
-		DisplayName:        u.DisplayName,
-		CreatedAt:          u.CreatedAt,
-		HasAvatar:          u.HasAvatar,
-		AvatarUpdatedAt:    u.AvatarUpdatedAt,
-		DeletedAt:          u.DeletedAt,
-		WeekStart:          apigen.UserWeekStart(u.WeekStart),
-		Timezone:           u.Timezone,
-		IsAdmin:            &isAdmin,
-		MustChangePassword: &mustChange,
-		EmailVerifiedAt:    u.EmailVerifiedAt,
+		Id:              u.ID,
+		Email:           openapi_types.Email(u.Email),
+		DisplayName:     u.DisplayName,
+		CreatedAt:       u.CreatedAt,
+		HasAvatar:       u.HasAvatar,
+		AvatarUpdatedAt: u.AvatarUpdatedAt,
+		DeletedAt:       u.DeletedAt,
+		WeekStart:       apigen.UserWeekStart(u.WeekStart),
+		Timezone:        u.Timezone,
+		IsAdmin:         &isAdmin,
+		EmailVerifiedAt: u.EmailVerifiedAt,
 	}
 	return out
 }

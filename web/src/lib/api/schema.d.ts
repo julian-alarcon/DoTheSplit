@@ -141,6 +141,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin a password reset (sends a 6-digit code by email)
+         * @description Always responds 204 to avoid account enumeration: the same response
+         *     shape is returned whether the email is registered or not. When the
+         *     email matches an active user a code is enqueued; otherwise nothing
+         *     happens. Rate-limited per IP.
+         */
+        post: operations["requestPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a password reset using the 6-digit code */
+        post: operations["confirmPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/login": {
         parameters: {
             query?: never;
@@ -624,7 +664,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset a user's password (admin, step-up) */
+        /**
+         * Send the user a password-reset email (admin, step-up)
+         * @description Scrambles the target user's password hash, revokes every active
+         *     session for them, and emails them a 6-digit code so they can set a
+         *     new password through the standard /reset flow. The admin never types
+         *     a temporary password.
+         */
         post: operations["adminResetUserPassword"];
         delete?: never;
         options?: never;
@@ -818,8 +864,6 @@ export interface components {
             timezone?: string | null;
             /** @description True when the user has the admin role. Read-only; promotion only happens via the bootstrap path or an admin endpoint. */
             readonly is_admin?: boolean;
-            /** @description True when an admin reset the user's password. The frontend must redirect them to a password-change page; the API rejects all non-password endpoints until cleared. */
-            readonly must_change_password?: boolean;
             /**
              * Format: date-time
              * @description When the email address was confirmed. Null until the user verifies, or set automatically at registration when SMTP is unconfigured.
@@ -873,6 +917,29 @@ export interface components {
             email: string;
             /** @description 6-digit numeric code received by email. */
             code: string;
+        };
+        /**
+         * @example {
+         *       "email": "alice@example.com"
+         *     }
+         */
+        PasswordResetRequest: {
+            /** Format: email */
+            email: string;
+        };
+        /**
+         * @example {
+         *       "email": "alice@example.com",
+         *       "code": "482193",
+         *       "new_password": "correct-horse-battery-staple"
+         *     }
+         */
+        PasswordResetConfirm: {
+            /** Format: email */
+            email: string;
+            /** @description 6-digit numeric code received by email. */
+            code: string;
+            new_password: string;
         };
         /**
          * @example {
@@ -1263,7 +1330,6 @@ export interface components {
             has_avatar: boolean;
             /** @enum {integer} */
             week_start: 0 | 1;
-            must_change_password: boolean;
         };
         AdminUserListResponse: {
             items: components["schemas"]["AdminUser"][];
@@ -1275,7 +1341,6 @@ export interface components {
          * @example {
          *       "email": "alice@example.org",
          *       "display_name": "Alice",
-         *       "password": "TempPass1234!",
          *       "role": "user"
          *     }
          */
@@ -1283,19 +1348,11 @@ export interface components {
             /** Format: email */
             email: string;
             display_name: string;
-            /** @description Initial password. The created user is forced to change it on first login. */
-            password: string;
             /**
              * @default user
              * @enum {string}
              */
             role: "user" | "admin";
-        };
-        AdminPasswordResetRequest: {
-            /** @description New password assigned by the admin. The target user must change it on next login. */
-            new_password: string;
-            /** @description The admin's own password (step-up). */
-            password: string;
         };
         AdminSetUserRoleRequest: {
             /** @enum {string} */
@@ -1664,6 +1721,66 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    requestPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted. A code may have been emailed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    confirmPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
+        responses: {
+            /** @description Password rotated; session cookie set. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Verification code expired or already used. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             429: components["responses"]["TooManyRequests"];
         };
     };
@@ -2684,11 +2801,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AdminPasswordResetRequest"];
+                "application/json": components["schemas"]["StepUpRequest"];
             };
         };
         responses: {
-            /** @description Password reset; target's sessions revoked; must_change_password=true. */
+            /** @description Password reset email queued; target's sessions revoked. */
             204: {
                 headers: {
                     [name: string]: unknown;

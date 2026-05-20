@@ -59,7 +59,7 @@ func main() {
 	setupRepo := repo.NewSetupRepo(pool)
 	verificationRepo := repo.NewVerificationRepo(pool)
 	outboxRepo := repo.NewEmailOutboxRepo(pool)
-	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, logger)
+	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, logger)
 	auth := service.NewAuthService(pool, users, sessions, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper,
 		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
@@ -72,7 +72,7 @@ func main() {
 	settlementSvc := service.NewSettlementService(settlements, groups)
 	recurringSvc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
-	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, email, cfg.PasswordPepper)
+	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, auth, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
 	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
 

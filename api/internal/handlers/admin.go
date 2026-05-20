@@ -77,11 +77,14 @@ func (s *Server) AdminCreateUser(c *gin.Context) {
 		role = string(*req.Role)
 	}
 	out, err := s.Admin.CreateUser(c.Request.Context(), actor.ID,
-		string(req.Email), req.DisplayName, req.Password, role, c.ClientIP(), c.Request.UserAgent())
+		string(req.Email), req.DisplayName, role, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrEmailTaken):
 			writeErr(c, http.StatusConflict, "email_taken", "email already registered")
+		case errors.Is(err, service.ErrSmtpUnconfigured):
+			writeErr(c, http.StatusServiceUnavailable, "smtp_unconfigured",
+				"configure SMTP before inviting users — they receive a welcome email to set their password")
 		default:
 			writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
 		}
@@ -127,17 +130,20 @@ func (s *Server) AdminResetUserPassword(c *gin.Context) {
 		writeErr(c, http.StatusBadRequest, "bad_request", "invalid id")
 		return
 	}
-	var req apigen.AdminPasswordResetRequest
+	var req apigen.StepUpRequest
 	if !bindStrictJSON(c, &req) {
 		return
 	}
 	if !s.stepUp(c, actor.ID, req.Password, "admin_reset_password", &id, nil) {
 		return
 	}
-	if err := s.Admin.ResetUserPassword(c.Request.Context(), actor.ID, id, req.NewPassword, c.ClientIP(), c.Request.UserAgent()); err != nil {
+	if err := s.Admin.ResetUserPassword(c.Request.Context(), actor.ID, id, c.ClientIP(), c.Request.UserAgent()); err != nil {
 		switch {
 		case errors.Is(err, repo.ErrNotFound):
 			writeErr(c, http.StatusNotFound, "not_found", "user not found")
+		case errors.Is(err, service.ErrSmtpUnconfigured):
+			writeErr(c, http.StatusServiceUnavailable, "smtp_unconfigured",
+				"configure SMTP before sending reset emails")
 		default:
 			writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
 		}
@@ -406,14 +412,13 @@ func (s *Server) AdminListAudit(c *gin.Context) {
 
 func toAPIAdminUser(u service.AdminUserView) apigen.AdminUser {
 	out := apigen.AdminUser{
-		Id:                 u.ID,
-		DisplayName:        u.DisplayName,
-		Role:               apigen.AdminUserRole(u.Role),
-		CreatedAt:          u.CreatedAt,
-		DeletedAt:          u.DeletedAt,
-		HasAvatar:          u.HasAvatar,
-		WeekStart:          apigen.AdminUserWeekStart(u.WeekStart),
-		MustChangePassword: u.MustChangePassword,
+		Id:          u.ID,
+		DisplayName: u.DisplayName,
+		Role:        apigen.AdminUserRole(u.Role),
+		CreatedAt:   u.CreatedAt,
+		DeletedAt:   u.DeletedAt,
+		HasAvatar:   u.HasAvatar,
+		WeekStart:   apigen.AdminUserWeekStart(u.WeekStart),
 	}
 	// Email is nullable on the wire because soft-deleted users have a
 	// scrambled email_encrypted that can't be decrypted.

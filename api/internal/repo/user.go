@@ -12,20 +12,19 @@ import (
 )
 
 type User struct {
-	ID                 uuid.UUID
-	EmailHash          []byte
-	EmailEncrypted     []byte
-	DisplayName        string
-	PasswordHash       string
-	CreatedAt          time.Time
-	DeletedAt          *time.Time
-	Avatar             []byte
-	AvatarUpdatedAt    *time.Time
-	WeekStart          int16
-	Timezone           *string
-	Role               string
-	MustChangePassword bool
-	EmailVerifiedAt    *time.Time
+	ID              uuid.UUID
+	EmailHash       []byte
+	EmailEncrypted  []byte
+	DisplayName     string
+	PasswordHash    string
+	CreatedAt       time.Time
+	DeletedAt       *time.Time
+	Avatar          []byte
+	AvatarUpdatedAt *time.Time
+	WeekStart       int16
+	Timezone        *string
+	Role            string
+	EmailVerifiedAt *time.Time
 	// NotificationPrefs is the raw JSONB blob; service layer parses it into
 	// a typed projection so callers don't deal with map[string]any here.
 	NotificationPrefs []byte
@@ -37,12 +36,12 @@ type UserRepo struct {
 
 func NewUserRepo(p *pgxpool.Pool) *UserRepo { return &UserRepo{pool: p} }
 
-const userCols = `id, email_hash, email_encrypted, display_name, password_hash, created_at, deleted_at, avatar_updated_at, week_start, timezone, role, must_change_password, email_verified_at, notification_prefs`
+const userCols = `id, email_hash, email_encrypted, display_name, password_hash, created_at, deleted_at, avatar_updated_at, week_start, timezone, role, email_verified_at, notification_prefs`
 
 func scanUser(row pgx.Row, u *User) error {
 	return row.Scan(&u.ID, &u.EmailHash, &u.EmailEncrypted, &u.DisplayName,
 		&u.PasswordHash, &u.CreatedAt, &u.DeletedAt, &u.AvatarUpdatedAt, &u.WeekStart, &u.Timezone,
-		&u.Role, &u.MustChangePassword, &u.EmailVerifiedAt, &u.NotificationPrefs)
+		&u.Role, &u.EmailVerifiedAt, &u.NotificationPrefs)
 }
 
 func (r *UserRepo) Create(ctx context.Context, u *User) error {
@@ -192,23 +191,6 @@ func (r *UserRepo) GetAvatar(ctx context.Context, id uuid.UUID) ([]byte, error) 
 	return png, nil
 }
 
-// UpdatePasswordHashWithFlag rotates the encoded Argon2id hash and sets
-// must_change_password atomically in a single UPDATE so a half-applied state
-// (new hash, stale flag) cannot leave the user trapped.
-func (r *UserRepo) UpdatePasswordHashWithFlag(ctx context.Context, id uuid.UUID, hash string, mustChange bool) error {
-	ct, err := r.pool.Exec(ctx, `
-		UPDATE users SET password_hash = $2, must_change_password = $3
-		WHERE id = $1 AND deleted_at IS NULL
-	`, id, hash, mustChange)
-	if err != nil {
-		return err
-	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // CountActive returns the number of non-deleted users. Used by the bootstrap
 // path inside a transaction with an advisory lock to detect "first user".
 func (r *UserRepo) CountActive(ctx context.Context, q Querier) (int, error) {
@@ -234,20 +216,6 @@ func (r *UserRepo) CountActiveAdmins(ctx context.Context) (int, error) {
 func (r *UserRepo) SetRole(ctx context.Context, id uuid.UUID, role string) error {
 	ct, err := r.pool.Exec(ctx,
 		`UPDATE users SET role = $2 WHERE id = $1 AND deleted_at IS NULL`, id, role)
-	if err != nil {
-		return err
-	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// SetMustChangePassword toggles the force-change flag. Used by admin reset
-// flows that don't change the hash directly (rare).
-func (r *UserRepo) SetMustChangePassword(ctx context.Context, id uuid.UUID, v bool) error {
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE users SET must_change_password = $2 WHERE id = $1 AND deleted_at IS NULL`, id, v)
 	if err != nil {
 		return err
 	}
@@ -295,15 +263,15 @@ func (r *UserRepo) ListPaginated(ctx context.Context, limit, offset int, include
 // bootstrap-admin path. The caller is responsible for hashing the password.
 // If tx is non-nil the insert participates in it; otherwise a new pool query
 // is used.
-func (r *UserRepo) CreateWithRole(ctx context.Context, q Querier, u *User, role string, mustChange bool) error {
+func (r *UserRepo) CreateWithRole(ctx context.Context, q Querier, u *User, role string) error {
 	if q == nil {
 		q = poolQuerier{r.pool}
 	}
 	return q.QueryRow(ctx, `
-		INSERT INTO users (email_hash, email_encrypted, display_name, password_hash, role, must_change_password)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (email_hash, email_encrypted, display_name, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at
-	`, u.EmailHash, u.EmailEncrypted, u.DisplayName, u.PasswordHash, role, mustChange).
+	`, u.EmailHash, u.EmailEncrypted, u.DisplayName, u.PasswordHash, role).
 		Scan(&u.ID, &u.CreatedAt)
 }
 

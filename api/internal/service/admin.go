@@ -29,17 +29,19 @@ type AdminService struct {
 	groups   *repo.GroupRepo
 	sessions *repo.SessionRepo
 	audit    *repo.AuditRepo
+	auth     *AuthService
 	email    *crypto.EmailCipher
 	pepper   []byte
 }
 
-func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.GroupRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, email *crypto.EmailCipher, pepper []byte) *AdminService {
+func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.GroupRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, auth *AuthService, email *crypto.EmailCipher, pepper []byte) *AdminService {
 	return &AdminService{
 		pool:     pool,
 		users:    users,
 		groups:   groups,
 		sessions: sessions,
 		audit:    audit,
+		auth:     auth,
 		email:    email,
 		pepper:   pepper,
 	}
@@ -48,15 +50,14 @@ func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.Grou
 // AdminUserView decorates the service-layer User with the role + an
 // admin-visible deleted_at marker.
 type AdminUserView struct {
-	ID                 uuid.UUID
-	Email              string
-	DisplayName        string
-	Role               string
-	CreatedAt          time.Time
-	DeletedAt          *time.Time
-	HasAvatar          bool
-	WeekStart          int16
-	MustChangePassword bool
+	ID          uuid.UUID
+	Email       string
+	DisplayName string
+	Role        string
+	CreatedAt   time.Time
+	DeletedAt   *time.Time
+	HasAvatar   bool
+	WeekStart   int16
 }
 
 func (s *AdminService) toAdminView(u *repo.User) (*AdminUserView, error) {
@@ -75,15 +76,14 @@ func (s *AdminService) toAdminView(u *repo.User) (*AdminUserView, error) {
 		email = decrypted
 	}
 	return &AdminUserView{
-		ID:                 u.ID,
-		Email:              email,
-		DisplayName:        u.DisplayName,
-		Role:               u.Role,
-		CreatedAt:          u.CreatedAt,
-		DeletedAt:          u.DeletedAt,
-		HasAvatar:          u.AvatarUpdatedAt != nil,
-		WeekStart:          u.WeekStart,
-		MustChangePassword: u.MustChangePassword,
+		ID:          u.ID,
+		Email:       email,
+		DisplayName: u.DisplayName,
+		Role:        u.Role,
+		CreatedAt:   u.CreatedAt,
+		DeletedAt:   u.DeletedAt,
+		HasAvatar:   u.AvatarUpdatedAt != nil,
+		WeekStart:   u.WeekStart,
 	}, nil
 }
 
@@ -178,16 +178,17 @@ func (s *AdminService) ListUsers(ctx context.Context, limit, offset int, include
 	return out, total, nil
 }
 
-// CreateUser provisions a new account on behalf of an admin. The created
-// user is forced to change their password on first login.
-func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email, displayName, password, role string, ip, ua string) (*AdminUserView, error) {
+// CreateUser provisions a new account on behalf of an admin. The user's
+// email is auto-verified (the admin vouched for it) and their password is
+// scrambled — the only way to log in is via the welcome+reset email this
+// flow enqueues, which sends a 6-digit code through the standard /reset
+// flow. SMTP must be configured; otherwise the call returns
+// ErrSmtpUnconfigured and nothing is written.
+func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email, displayName, role string, ip, ua string) (*AdminUserView, error) {
 	email = strings.TrimSpace(email)
 	displayName = strings.TrimSpace(displayName)
-	if email == "" || displayName == "" || password == "" {
-		return nil, errors.New("email, display_name, password required")
-	}
-	if len(password) < 10 {
-		return nil, errors.New("password must be at least 10 characters")
+	if email == "" || displayName == "" {
+		return nil, errors.New("email and display_name required")
 	}
 	switch role {
 	case "", "user":
@@ -208,7 +209,7 @@ func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email,
 	if err != nil {
 		return nil, err
 	}
-	pwdHash, err := crypto.HashPassword(password, s.pepper)
+	pwdHash, err := s.auth.ScrambledPasswordHash()
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +226,16 @@ func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email,
 	}
 	defer tx.Rollback(ctx)
 
-	if err := s.users.CreateWithRole(ctx, tx, u, role, true); err != nil {
+	if err := s.users.CreateWithRole(ctx, tx, u, role); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, u.ID); err != nil {
+		return nil, err
+	}
+	if err := s.auth.EnqueuePasswordResetTx(ctx, tx, u, email); err != nil {
+		// Surfaces ErrSmtpUnconfigured cleanly — admin handler maps this
+		// to a 503 telling the operator to configure SMTP first. The user
+		// row gets rolled back along with the deferred Rollback above.
 		return nil, err
 	}
 	meta, _ := json.Marshal(map[string]any{"role": role})
@@ -244,7 +254,6 @@ func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email,
 		return nil, err
 	}
 	u.Role = role
-	u.MustChangePassword = true
 	return s.toAdminView(u)
 }
 
@@ -295,12 +304,13 @@ func (s *AdminService) DeleteUser(ctx context.Context, actorID, targetID uuid.UU
 	})
 }
 
-// ResetUserPassword hashes the new password, sets must_change_password=true
-// in the same UPDATE, and revokes the target's sessions.
-func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID uuid.UUID, newPassword, ip, ua string) error {
-	if len(newPassword) < 10 {
-		return errors.New("new password must be at least 10 characters")
-	}
+// ResetUserPassword scrambles the target's password hash so the old one
+// stops working immediately, revokes every active session for them, and
+// emails them a 6-digit code so they can pick a new password through the
+// /reset flow. The admin never types a temporary password. Returns
+// ErrSmtpUnconfigured when SMTP isn't set up — admin handler maps that to
+// 503 so the operator knows to configure SMTP first.
+func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID uuid.UUID, ip, ua string) error {
 	target, err := s.users.FindByID(ctx, targetID)
 	if err != nil {
 		return err
@@ -308,24 +318,48 @@ func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID 
 	if target.DeletedAt != nil {
 		return repo.ErrNotFound
 	}
-	hash, err := crypto.HashPassword(newPassword, s.pepper)
+	plaintextEmail, err := s.email.Decrypt(target.EmailEncrypted)
 	if err != nil {
 		return err
 	}
-	if err := s.users.UpdatePasswordHashWithFlag(ctx, targetID, hash, true); err != nil {
+	scrambled, err := s.auth.ScrambledPasswordHash()
+	if err != nil {
 		return err
 	}
-	if err := s.sessions.DeleteAllForUser(ctx, targetID); err != nil {
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
 		return err
 	}
-	return s.audit.Insert(ctx, nil, &repo.AuditEntry{
+	defer tx.Rollback(ctx)
+
+	// Wipe the old hash atomically with the email enqueue so an attacker
+	// who phoned in the reset can't keep using the prior cookie or
+	// password while the email's in flight.
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET password_hash = $2 WHERE id = $1 AND deleted_at IS NULL`,
+		targetID, scrambled); err != nil {
+		return err
+	}
+	if err := s.auth.EnqueuePasswordResetTx(ctx, tx, target, plaintextEmail); err != nil {
+		return err
+	}
+	if err := s.audit.Insert(ctx, tx, &repo.AuditEntry{
 		ActorUserID:  actorID,
 		TargetUserID: &targetID,
 		Action:       "admin_reset_password",
 		IP:           strPtr(ip),
 		UserAgent:    strPtr(ua),
 		Success:      true,
-	})
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	// Sessions are deleted *after* commit — if the email enqueue rolled
+	// back we leave the legitimate user logged in.
+	return s.sessions.DeleteAllForUser(ctx, targetID)
 }
 
 // AdminGroupListItem mirrors the API response shape for /v1/admin/groups.

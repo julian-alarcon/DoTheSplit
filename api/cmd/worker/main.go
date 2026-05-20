@@ -54,7 +54,7 @@ func main() {
 	outboxRepo := repo.NewEmailOutboxRepo(pool)
 
 	categorySvc := service.NewCategoryService(categories)
-	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, emailCipher, logger)
+	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, emailCipher, cfg.WebOrigin, logger)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, emailCipher)
 	svc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
 	svc.SetNotifications(users, notificationSvc)

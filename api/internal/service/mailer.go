@@ -21,17 +21,18 @@ import (
 )
 
 type MailerService struct {
-	smtp   *repo.SmtpRepo
-	outbox *repo.EmailOutboxRepo
-	email  *crypto.EmailCipher
-	logger *slog.Logger
+	smtp      *repo.SmtpRepo
+	outbox    *repo.EmailOutboxRepo
+	email     *crypto.EmailCipher
+	webOrigin string
+	logger    *slog.Logger
 }
 
-func NewMailerService(s *repo.SmtpRepo, ob *repo.EmailOutboxRepo, email *crypto.EmailCipher, logger *slog.Logger) *MailerService {
+func NewMailerService(s *repo.SmtpRepo, ob *repo.EmailOutboxRepo, email *crypto.EmailCipher, webOrigin string, logger *slog.Logger) *MailerService {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &MailerService{smtp: s, outbox: ob, email: email, logger: logger}
+	return &MailerService{smtp: s, outbox: ob, email: email, webOrigin: webOrigin, logger: logger}
 }
 
 // IsConfigured returns true iff the smtp_config row exists with a usable host
@@ -51,7 +52,14 @@ func (m *MailerService) IsConfigured(ctx context.Context) (bool, error) {
 // Enqueue renders a template and persists the row. The recipient address is
 // AES-GCM encrypted using the same key as users.email so plaintext addresses
 // never sit at rest in this table. May participate in a caller transaction.
+//
+// WebOrigin is injected here unless the caller already set one (e.g. the
+// admin SMTP-test handler), so per-call sites don't have to remember to
+// thread the public URL through every TemplateVars.
 func (m *MailerService) Enqueue(ctx context.Context, q repo.Querier, to, template string, vars TemplateVars) error {
+	if vars.WebOrigin == "" {
+		vars.WebOrigin = m.webOrigin
+	}
 	subject, body := renderTemplate(template, vars)
 	if subject == "" {
 		return fmt.Errorf("unknown email template: %s", template)
@@ -75,6 +83,8 @@ func renderTemplate(template string, vars TemplateVars) (string, string) {
 		return RenderVerifyRegister(vars)
 	case "verify_change_email":
 		return RenderVerifyChangeEmail(vars)
+	case "password_reset":
+		return RenderPasswordReset(vars)
 	case "welcome":
 		return RenderWelcome(vars)
 	case "recurring_run":
@@ -163,6 +173,9 @@ func truncErr(s string) string {
 // waiting on the worker's next tick. Most call sites should use Enqueue
 // instead — synchronous send blocks the request.
 func (m *MailerService) SendNow(ctx context.Context, to, template string, vars TemplateVars) error {
+	if vars.WebOrigin == "" {
+		vars.WebOrigin = m.webOrigin
+	}
 	subject, body := renderTemplate(template, vars)
 	if subject == "" {
 		return fmt.Errorf("unknown email template: %s", template)

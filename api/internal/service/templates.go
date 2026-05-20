@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -10,9 +11,9 @@ import (
 // Why plain prose with no `<a>` tags:
 //   - mail clients with proportional default fonts (Proton Mail, Gmail web)
 //     turn any monospace decoration into garbled spacing,
-//   - Brevo's free plan rewrites every `<a href>` to a tracking redirector
-//     even on transactional mail; bare URLs in plain-text bodies are left
-//     alone, so users can copy them safely,
+//   - many transactional email providers rewrite every `<a href>` into a
+//     tracking redirector even on transactional mail; bare URLs in
+//     plain-text bodies are left alone, so users can copy them safely,
 //   - the security model uses a 6-digit code the user types — there are no
 //     links to click in the verification flow at all.
 
@@ -28,7 +29,8 @@ type TemplateVars struct {
 	NewEmail    string
 	// WebOrigin is the public base URL of this instance (e.g.
 	// "https://split.example.com"). Rendered as bare text in templates that
-	// reference the app — never wrapped in `<a>` so Brevo can't rewrite it.
+	// reference the app — never wrapped in `<a>` so transactional providers
+	// can't rewrite it into a tracking URL.
 	WebOrigin string
 }
 
@@ -38,15 +40,26 @@ type TemplateVars struct {
 // it's just text and doesn't depend on font metrics.
 const emailHeader = "DoTheSplit\n==========\n\n"
 
-// RenderVerifyRegister builds the registration verification email.
+// RenderVerifyRegister builds the registration verification email. The
+// verification URL is rendered as bare plain text (not an <a href>) so that
+// transactional providers — many of which rewrite every HTML link into a
+// tracker URL — leave it intact and the user can copy it. The URL
+// pre-fills the recipient's email so they only have to paste the code on
+// the destination page.
 func RenderVerifyRegister(v TemplateVars) (subject, body string) {
 	subject = "Confirm your DoTheSplit registration"
+	verifyURL := nameOr(v.WebOrigin, "") + "/verify"
+	if v.NewEmail != "" {
+		verifyURL += "?email=" + url.QueryEscape(v.NewEmail)
+	}
 	body = emailHeader +
 		"Hi " + nameOr(v.DisplayName, "there") + ",\n\n" +
 		"Welcome to DoTheSplit! Your registration code is:\n\n" +
 		"    " + v.Code + "\n\n" +
-		"Open the verification page in DoTheSplit and paste this code to\n" +
-		"finish creating your account. The code expires in 15 minutes.\n\n" +
+		"Copy and open this link:\n\n" +
+		"    " + verifyURL + "\n\n" +
+		"and paste the code to finish creating your account.\n" +
+		"The code expires in 15 minutes.\n\n" +
 		"If you did not register, you can ignore this email.\n"
 	return
 }
@@ -62,6 +75,34 @@ func RenderWelcome(v TemplateVars) (subject, body string) {
 		"settlements, or being added to a group from the notification\n" +
 		"preferences page in your account settings.\n\n" +
 		"Have fun splitting bills!\n"
+	return
+}
+
+// RenderPasswordReset doubles as the "set a password" email for both the
+// forgot-password flow and admin-driven account creation/reset. The body
+// keeps both paths legible without surfacing the distinction (the user
+// just sees a code and where to enter it). The reset URL is bare plain
+// text — many transactional providers rewrite <a href> targets to a
+// tracker URL but leave plain-text URLs alone — and pre-fills the
+// recipient's email so the user only has to paste the code. Critically,
+// sending the user straight to /reset (instead of letting them navigate
+// via /forgot) avoids triggering a second RequestPasswordReset, which
+// would invalidate this email's code.
+func RenderPasswordReset(v TemplateVars) (subject, body string) {
+	subject = "Set your DoTheSplit password"
+	resetURL := nameOr(v.WebOrigin, "") + "/reset"
+	if v.NewEmail != "" {
+		resetURL += "?email=" + url.QueryEscape(v.NewEmail)
+	}
+	body = emailHeader +
+		"Hi " + nameOr(v.DisplayName, "there") + ",\n\n" +
+		"Use this code to set your DoTheSplit password:\n\n" +
+		"    " + v.Code + "\n\n" +
+		"Copy and open this link:\n\n" +
+		"    " + resetURL + "\n\n" +
+		"and paste the code along with the password you want to use.\n" +
+		"The code expires in 15 minutes.\n\n" +
+		"If you did not expect this email, you can ignore it.\n"
 	return
 }
 
@@ -105,8 +146,9 @@ func RenderSettlementCreated(v TemplateVars) (subject, body string) {
 }
 
 // RenderSmtpTest is the body sent by the admin "Send test email" button.
-// Plain text, bare URL — Brevo only rewrites links in `<a href>` tags, so a
-// raw URL in a text/plain body stays intact and admins can copy it.
+// Plain text, bare URL — transactional providers typically only rewrite
+// links in `<a href>` tags, so a raw URL in a text/plain body stays intact
+// and admins can copy it.
 func RenderSmtpTest(v TemplateVars) (subject, body string) {
 	subject = "DoTheSplit SMTP test"
 	origin := nameOr(v.WebOrigin, "your DoTheSplit instance")

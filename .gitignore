@@ -1,5 +1,7 @@
 # Go
 /api/bin/
+/api/api
+/api/worker
 /api/coverage.out
 *.test
 *.out

@@ -318,6 +318,66 @@ func TestAdminSelfPromoteBlocked(t *testing.T) {
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 }
 
+// TestRegisterRejectsRoleField is a regression guard against mass-assignment:
+// the RegisterRequest schema is additionalProperties:false and handlers use
+// bindStrictJSON, so a body smuggling role:"admin" must be rejected with 400
+// before the user is ever inserted. If a future refactor swaps in a lax
+// binder, this test fails loud.
+func TestRegisterRejectsRoleField(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	// Burn the setup ceremony first so /v1/auth/register is the live path.
+	_, _ = registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+
+	resp, body := request(t, "POST", base+"/v1/auth/register", map[string]any{
+		"email":        "mallory@test.dev",
+		"password":     "passwordpassword",
+		"display_name": "Mallory",
+		"role":         "admin",
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
+
+	// And confirm no user was created with that email.
+	var n int
+	err := ts.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&n)
+	require.NoError(t, err)
+	require.Equal(t, 1, n, "only the bootstrap admin should exist")
+}
+
+// TestAdminAuthzNegativeDestructive extends TestAdminAuthzNegative to the
+// state-changing admin endpoints (PATCH/DELETE/POST). A regular user must get
+// 403 from the RequireAdmin middleware *before* any service-level check runs,
+// so the body can be empty - we are asserting the router wiring, not the
+// handler logic.
+func TestAdminAuthzNegativeDestructive(t *testing.T) {
+	ts := setup(t)
+	base := ts.srv.URL
+
+	admin, _ := registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
+	_, userCookie := registerUser(t, base, "user@test.dev", "passwordpassword", "User")
+	adminID := admin["id"].(string)
+
+	for _, ep := range []struct {
+		method, path string
+	}{
+		{"PATCH", "/v1/admin/users/" + adminID + "/role"},
+		{"DELETE", "/v1/admin/users/" + adminID},
+		{"POST", "/v1/admin/users/" + adminID + "/password"},
+		{"POST", "/v1/admin/users"},
+		{"PUT", "/v1/admin/smtp"},
+		{"GET", "/v1/admin/smtp/password"},
+	} {
+		resp, _ := request(t, ep.method, base+ep.path, map[string]any{
+			"role":     "admin",
+			"password": "passwordpassword",
+		}, userCookie)
+		require.Equal(t, http.StatusForbidden, resp.StatusCode,
+			"regular user must get 403 from %s %s", ep.method, ep.path)
+	}
+}
+
 // TestAdminSetRoleStepUp asserts the step-up password is enforced on PATCH.
 func TestAdminSetRoleStepUp(t *testing.T) {
 	ts := setup(t)

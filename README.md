@@ -84,8 +84,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Review possible security bypass on my current API/Web setup for a normal user to gain admin rights
-
 - Publish tagged releases + images to the GitHub Container Registry.
 - TrueNAS deployment recipe or instructions
 

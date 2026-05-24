@@ -1,0 +1,18 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  exclusions:
+    rules:
+      # Deferred Close/Rollback in Go is idiomatic and the error is
+      # uninteresting - the underlying op already failed (Rollback) or
+      # we're done reading (Body.Close). Don't fight the language.
+      - linters: [errcheck]
+        text: 'Error return value of `[^`]+\.(Close|Rollback)` is not checked'
+      # Test files don't need errcheck for HTTP body close in helpers.
+      - linters: [errcheck]
+        path: _test\.go
+        text: 'Error return value of `[^`]+\.Close` is not checked'

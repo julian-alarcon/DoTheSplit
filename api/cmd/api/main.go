@@ -19,6 +19,12 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
+// Stamped at build time via go build -ldflags "-X main.version=... -X main.commit=...".
+var (
+	version = "dev"
+	commit  = "dev"
+)
+
 func main() {
 	// Self-probe used by the Docker HEALTHCHECK; runs before any DB or
 	// config setup so a sick instance can still answer the probe path.
@@ -123,6 +129,8 @@ func main() {
 		Notifications: notificationSvc,
 		Users:         users,
 		Audit:         auditRepo,
+		Version:       version,
+		Commit:        commit,
 	}
 	h := server.New(srv)
 

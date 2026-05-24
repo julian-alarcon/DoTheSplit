@@ -36,6 +36,28 @@ docker compose up -d
 
 Open http://localhost:3000.
 
+## Container images
+
+Tagged releases publish multi-arch (`linux/amd64`, `linux/arm64`) OCI images to
+the GitHub Container Registry:
+
+| Image | Tags |
+|---|---|
+| `ghcr.io/julian-alarcon/dothesplit-api` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
+| `ghcr.io/julian-alarcon/dothesplit-web` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
+
+`:dev` always points at the latest commit on `main`. The api image hosts both
+the `/api` and `/worker` entrypoints; in compose, override `entrypoint:
+["/worker"]` to run the worker. Pull a pinned release for production:
+
+```bash
+docker pull ghcr.io/julian-alarcon/dothesplit-api:v0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit-web:v0.3.0
+```
+
+The running version is reported by `GET /healthz` (api) and the page footer
+(web), so you can confirm what's deployed at a glance.
+
 ## Secrets you must back up
 
 Three values in `.env` are **the** load-bearing secrets for this app:
@@ -84,7 +106,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Publish tagged releases + images to the GitHub Container Registry.
 - TrueNAS deployment recipe or instructions
 
 ### Medium term

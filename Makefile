@@ -54,8 +54,9 @@ lint-web: ## Lint web
 build: ## Build Go binaries
 	cd api && go build -o bin/api ./cmd/api && go build -o bin/worker ./cmd/worker
 
-up: ## Rebuild + start the full stack, baking the current git SHA into the web image
+up: ## Rebuild + start the full stack, baking the current git SHA + VERSION into images
 	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) \
+	BUILD_VERSION=$$(cat VERSION 2>/dev/null || echo dev) \
 		docker compose up -d --build
 
 licenses: ## Generate THIRD_PARTY_LICENSES.md and web/src/lib/credits.json

@@ -98,19 +98,19 @@
     },
     {
       "name": "@astrojs/node",
-      "version": "10.0.6",
+      "version": "10.1.1",
       "license": "MIT",
       "url": "https://github.com/withastro/astro"
     },
     {
       "name": "@tailwindcss/vite",
-      "version": "4.2.4",
+      "version": "4.3.0",
       "license": "MIT",
       "url": "https://github.com/tailwindlabs/tailwindcss"
     },
     {
       "name": "astro",
-      "version": "6.2.2",
+      "version": "6.3.6",
       "license": "MIT",
       "url": "https://github.com/withastro/astro"
     },
@@ -122,7 +122,7 @@
     },
     {
       "name": "tailwindcss",
-      "version": "4.2.4",
+      "version": "4.3.0",
       "license": "MIT",
       "url": "https://github.com/tailwindlabs/tailwindcss"
     },

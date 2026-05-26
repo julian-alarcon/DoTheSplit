@@ -74,6 +74,9 @@ type testStack struct {
 	pool       *pgxpool.Pool
 	ctr        testcontainers.Container
 	setupToken string // cleartext install token captured from EnsureToken
+	// Service handles exposed for tests that need to drive background paths
+	// (e.g. the recurring-expense worker tick) directly.
+	recurringSvc *service.RecurringService
 }
 
 // setupTokens maps test-server URL → install-token cleartext, so the
@@ -183,7 +186,7 @@ func setup(t *testing.T) *testStack {
 	srv := httptest.NewServer(h)
 	setupTokens.Store(srv.URL, setupTok)
 
-	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok}
+	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok, recurringSvc: recurringSvc}
 	t.Cleanup(func() {
 		srv.Close()
 		pool.Close()

@@ -48,6 +48,9 @@ services:
   api:
     build:
       context: ./api
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +88,9 @@ services:
   worker:
     build:
       context: ./api
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,8 +117,9 @@ services:
       dockerfile: web/Dockerfile
       args:
         # Baked into the image so the footer can show which revision is live.
-        # Use `make up` or export BUILD_COMMIT=$(git rev-parse --short HEAD) to populate.
+        # `make up` populates both from the working tree (git short SHA + VERSION file).
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     depends_on:
       - api
     environment:

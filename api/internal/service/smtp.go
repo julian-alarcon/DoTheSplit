@@ -184,14 +184,14 @@ func (s *SmtpService) Test(ctx context.Context) (*SmtpTestResult, error) {
 			return &SmtpTestResult{Success: false, Error: "dial_timeout"}, nil
 		}
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	client, err := smtp.NewClient(conn, c.Host)
 	if err != nil {
 		return &SmtpTestResult{Success: false, Error: "smtp_handshake_failed"}, nil
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if c.TLSMode == "starttls" {
 		if err := client.StartTLS(&tls.Config{ServerName: c.Host}); err != nil {

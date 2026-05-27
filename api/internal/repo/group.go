@@ -60,7 +60,7 @@ func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, cr
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
 	err = tx.QueryRow(ctx, `
@@ -150,7 +150,7 @@ func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*
 	var splitJSON any
 	splitProvided := in.DefaultSplit != nil
 	if splitProvided {
-		if *in.DefaultSplit == nil || len(*in.DefaultSplit) == 0 {
+		if len(*in.DefaultSplit) == 0 {
 			splitJSON = nil // SQL NULL → clears the column
 		} else {
 			b, err := json.Marshal(*in.DefaultSplit)

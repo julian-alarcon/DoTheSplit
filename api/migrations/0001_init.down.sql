@@ -1,6 +1,8 @@
-DROP TABLE IF EXISTS app_setup           CASCADE;
-DROP TABLE IF EXISTS admin_audit         CASCADE;
-DROP TABLE IF EXISTS smtp_config         CASCADE;
+DROP TABLE IF EXISTS app_setup                 CASCADE;
+DROP TABLE IF EXISTS email_outbox               CASCADE;
+DROP TABLE IF EXISTS email_verification_tokens  CASCADE;
+DROP TABLE IF EXISTS admin_audit                CASCADE;
+DROP TABLE IF EXISTS smtp_config                CASCADE;
 DROP TABLE IF EXISTS expense_revisions   CASCADE;
 DROP TABLE IF EXISTS recurring_expenses  CASCADE;
 DROP TABLE IF EXISTS settlements         CASCADE;

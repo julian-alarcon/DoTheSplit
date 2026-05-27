@@ -20,8 +20,15 @@ import (
 // advisoryKey is any fixed int64; this one happens to spell "dtsrec" in hex-ish.
 const advisoryKey int64 = 0x00DEADBEEFDA71EC
 
+// Stamped at build time via -ldflags "-X main.version=... -X main.commit=...".
+var (
+	version = "dev"
+	commit  = "dev"
+)
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger.Info("worker starting", slog.String("version", version), slog.String("commit", commit))
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -19,23 +19,6 @@ func randEmail() string {
 	return "u" + hex.EncodeToString(b[:]) + "@test.dev"
 }
 
-// registerUserMaybe issues the same register call as registerUser, but
-// tolerates failures (used by the bootstrap-race test where some calls may
-// race losers may still get 201 with role=user, all should succeed but
-// content varies).
-func registerUserMaybe(t *testing.T, base, email, pw, name string) (map[string]any, *http.Cookie) {
-	t.Helper()
-	resp, body := request(t, "POST", base+"/v1/auth/register", map[string]any{
-		"email":        email,
-		"password":     pw,
-		"display_name": name,
-	}, nil)
-	if resp.StatusCode != http.StatusCreated {
-		return body, nil
-	}
-	return body, sessionCookie(resp)
-}
-
 // TestAdminBootstrapFirstUser verifies that the very first registered user
 // becomes an admin and the second one does not.
 func TestAdminBootstrapFirstUser(t *testing.T) {

@@ -46,7 +46,7 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	err = tx.QueryRow(ctx, `
 		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at)
@@ -234,7 +234,7 @@ func (r *ExpenseRepo) Update(
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var e Expense
 	err = tx.QueryRow(ctx, `

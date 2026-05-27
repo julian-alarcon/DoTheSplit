@@ -11,11 +11,11 @@
  */
 
 /** Source grid side length. Must stay in sync with AvatarClientSize on the server. */
-const SOURCE = 8;
+export const SOURCE = 8;
 
-type RGB = [number, number, number];
+export type RGB = [number, number, number];
 
-function rgbToHsl([r, g, b]: RGB): [number, number, number] {
+export function rgbToHsl([r, g, b]: RGB): [number, number, number] {
   const rn = r / 255;
   const gn = g / 255;
   const bn = b / 255;
@@ -34,7 +34,7 @@ function rgbToHsl([r, g, b]: RGB): [number, number, number] {
   return [h / 6, s, l];
 }
 
-function hslToRgb(h: number, s: number, l: number): RGB {
+export function hslToRgb(h: number, s: number, l: number): RGB {
   if (s === 0) {
     const v = Math.round(l * 255);
     return [v, v, v];
@@ -60,7 +60,7 @@ function hslToRgb(h: number, s: number, l: number): RGB {
  * Returns a square source rect (centered crop) so the 8x8 output isn't
  * squished when the input is 16:9 or portrait.
  */
-function centerSquare(w: number, h: number): { sx: number; sy: number; s: number } {
+export function centerSquare(w: number, h: number): { sx: number; sy: number; s: number } {
   const s = Math.min(w, h);
   return { sx: Math.floor((w - s) / 2), sy: Math.floor((h - s) / 2), s };
 }
@@ -120,7 +120,7 @@ async function pixelateFile(
   }
 }
 
-function toBase64NoPrefix(dataUrl: string): string {
+export function toBase64NoPrefix(dataUrl: string): string {
   const i = dataUrl.indexOf(",");
   return i === -1 ? dataUrl : dataUrl.slice(i + 1);
 }

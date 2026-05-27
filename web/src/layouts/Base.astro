@@ -23,6 +23,10 @@ const user = Astro.locals.user;
 // locally without a git context. Short SHA already (handled by the build args)
 // but fall back to trimming here so we never render a 40-char string.
 const buildCommit = (process.env.BUILD_COMMIT ?? "dev").slice(0, 12);
+// BUILD_VERSION is the release-please-managed semver from VERSION / package.json,
+// stamped at image build time. Falls back to "dev" for local non-Docker dev.
+const buildVersion = process.env.BUILD_VERSION ?? "dev";
+const isReleasedVersion = buildVersion !== "dev" && !buildVersion.includes("-dev");
 // If the user has an explicit stored timezone override, surface it on <html>
 // so the client-side reformatter pins to it. Without an override, the client
 // is free to use its own device-detected zone (which it always knows).
@@ -99,6 +103,17 @@ const tzOverride = user?.timezone ?? null;
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4">
         <span>
           DoTheSplit ·
+          {isReleasedVersion ? (
+            <a
+              href={`https://github.com/julian-alarcon/dothesplit/releases/tag/v${buildVersion}`}
+              class="font-mono hover:underline"
+              rel="noopener noreferrer"
+              target="_blank"
+            >v{buildVersion}</a>
+          ) : (
+            <code class="font-mono">{buildVersion}</code>
+          )}
+          ·
           {buildCommit === "dev" ? (
             <span>build <code class="font-mono">dev</code></span>
           ) : (

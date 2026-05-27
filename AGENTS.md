@@ -10,7 +10,7 @@ DoTheSplit - a expense-sharing app.
 
 - **Backend**: Go 1.25, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/).
 - **Frontend**: Astro 6 (SSR, `@astrojs/node`) + Tailwind v4. No React islands, no component library - pages are pure `.astro` + tiny ES-module scripts under [web/src/scripts/](web/src/scripts/). Source in [web/](web/).
-- **Database**: PostgreSQL 16. Migrations in [api/migrations/](api/migrations/).
+- **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
 - **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only - see "Cookie naming" below).
 
@@ -114,19 +114,34 @@ On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never har
 
 ## Testing
 
-- Go unit tests colocate with packages (`*_test.go`).
-- Integration tests spin up real Postgres via `testcontainers-go/postgres` in [api/internal/server/server_test.go](api/internal/server/server_test.go). When adding endpoints, extend this test to exercise at least one positive and one authz-negative case.
-- Run everything with `make test` (Go + web). Go alone: `cd api && go test ./... -race`.
-- Don't mock the DB in tests - we want real SQL behavior.
+Three layers, all run in CI on every PR:
+
+- **Go unit tests** colocate with packages (`*_test.go`). Pure logic only - split math, balance simplification, Argon2 round-trip, config loading.
+- **Go integration tests** spin up real Postgres via `testcontainers-go/postgres`. Two homes:
+  - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, cookie naming switch).
+  - [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) for schema-only invariants (up/down round-trip, group-delete FK cascades).
+- **Web unit tests** via [vitest](https://vitest.dev) under [web/src/scripts/*.test.ts](web/src/scripts/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math.
+- **End-to-end** via [Playwright](https://playwright.dev) under [web/tests/e2e/](web/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the SSR Astro pages. Catches contract drift between the web bridge and the Go API.
+
+Invariants for adding tests:
+
+- **When adding endpoints**, extend the integration suite with at least one positive case AND one authz-negative case. The strict-JSON matrix test ([api/internal/server/strict_json_test.go](api/internal/server/strict_json_test.go)) and the group authz matrix ([api/internal/server/group_authz_test.go](api/internal/server/group_authz_test.go)) are parameterized - add your new endpoint there too.
+- **Don't mock the DB.** We want real SQL behavior, including FK cascades, partial unique indexes, and `FOR UPDATE` semantics.
+- **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
+- **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
+
+Run everything with `make test`. Go alone: `cd api && go test ./... -race`. Web unit alone: `cd web && npm test`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `cd web && SETUP_TOKEN=... npm run test:e2e`.
 
 ## Running the app
 
 - `docker compose up -d --build` - full LAN stack on `http://localhost:3000` (web) and `http://localhost:8080` (api).
+- `make up` - same, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from the top-level `VERSION` file) into the images so `/healthz` and the web footer self-identify.
 - `make dev-api` / `make dev-web` for local non-Docker dev.
 - After any change that affects the API contract: `make gen`, then rebuild the containers whose code changed (`api`, `worker`, `web`).
+- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit-{api,web}:vX.Y.Z`). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
 
 ## Scope boundaries (don't build these without asking)
 
 Deferred from v1 - raise with the user before adding:
 
-- Password reset via SMTP, OAuth, expense edits, multi-currency FX conversion, PWA offline, real-time sync, file receipts, audit log UI, pending-invite flow.
+- OAuth / passkeys, multi-currency FX conversion, PWA offline mode, real-time sync (SSE / WebSockets), file receipts / expense attachments, CSV import / export, full-resolution avatars (8x8 GDPR-minimisation is deliberate), account hard-delete (soft delete preserves co-members' ledgers).

@@ -30,6 +30,24 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// testHTTPClient is a per-package client with an explicit timeout and a
+// fresh transport. Using http.DefaultClient across many tests pools TCP
+// connections to httptest servers that get torn down by t.Cleanup; a
+// goroutine that picks a stale conn from the pool can hang inside Do() for
+// the full kernel TCP retransmit window (15+ minutes), which masquerades
+// as a test deadlock under -race on slow CI runners.
+var testHTTPClient = &http.Client{
+	// Generous timeout because under -race + 2 vCPU CI, Argon2id hashes
+	// (~250ms each, 64 MiB) can stack on top of pgxpool conn-acquire and
+	// SELECT … FOR UPDATE waits. 90s caps a hung test without flaking on
+	// the heavy concurrent paths (TestAdminBootstrapRace).
+	Timeout: 90 * time.Second,
+	Transport: &http.Transport{
+		DisableKeepAlives:   true,
+		MaxIdleConnsPerHost: -1,
+	},
+}
+
 // readMigrations concatenates every *.up.sql file in migrations/ in filename order.
 func readMigrations(t *testing.T) string {
 	t.Helper()
@@ -56,6 +74,9 @@ type testStack struct {
 	pool       *pgxpool.Pool
 	ctr        testcontainers.Container
 	setupToken string // cleartext install token captured from EnsureToken
+	// Service handles exposed for tests that need to drive background paths
+	// (e.g. the recurring-expense worker tick) directly.
+	recurringSvc *service.RecurringService
 }
 
 // setupTokens maps test-server URL → install-token cleartext, so the
@@ -82,7 +103,14 @@ func setup(t *testing.T) *testStack {
 	dsn, err := pgc.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, err)
 
-	pool, err := pgxpool.New(ctx, dsn)
+	// Bump pool size well above the highest concurrency the suite issues
+	// (TestAdminBootstrapRace fires 8 in parallel; we add headroom for
+	// pgxpool keepalive checks and other background queries that compete
+	// for conns under -race on small CI runners).
+	poolCfg, err := pgxpool.ParseConfig(dsn)
+	require.NoError(t, err)
+	poolCfg.MaxConns = 16
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, readMigrations(t))
 	require.NoError(t, err)
@@ -158,7 +186,7 @@ func setup(t *testing.T) *testStack {
 	srv := httptest.NewServer(h)
 	setupTokens.Store(srv.URL, setupTok)
 
-	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok}
+	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok, recurringSvc: recurringSvc}
 	t.Cleanup(func() {
 		srv.Close()
 		pool.Close()
@@ -180,11 +208,11 @@ func request(t *testing.T, method, url string, body any, cookie *http.Cookie) (*
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var out map[string]any
 	if resp.Body != nil {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		_ = json.NewDecoder(resp.Body).Decode(&out)
 	}
 	return resp, out
@@ -205,11 +233,11 @@ func rawRequest(t *testing.T, method, url string, body any, cookie *http.Cookie)
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var data []byte
 	if resp.Body != nil {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		data, _ = io.ReadAll(resp.Body)
 	}
 	return resp, data
@@ -228,11 +256,11 @@ func requestList(t *testing.T, method, url string, body any, cookie *http.Cookie
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var out []map[string]any
 	if resp.Body != nil {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		_ = json.NewDecoder(resp.Body).Decode(&out)
 	}
 	return resp, out

@@ -204,14 +204,14 @@ func (m *MailerService) sendOne(ctx context.Context, cfg *repo.SmtpConfig, to, s
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	client, err := smtp.NewClient(conn, cfg.Host)
 	if err != nil {
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if cfg.TLSMode == "starttls" {
 		if err := client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {

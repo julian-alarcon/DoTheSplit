@@ -20,11 +20,13 @@ RUN npm run build
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION}
 WORKDIR /app
 ENV NODE_ENV=production
-# The build-time commit SHA is surfaced to the SSR runtime via process.env so
-# the footer in every page can show "build abc1234". Defaults to "dev" when no
-# git context is available (e.g. building from a tarball or outside CI).
+# Build-time metadata surfaced to the SSR runtime via process.env so the
+# footer on every page can show the version + commit. Defaults to "dev" when
+# no git/release context is available (e.g. building from a tarball locally).
 ARG BUILD_COMMIT=dev
+ARG BUILD_VERSION=dev
 ENV BUILD_COMMIT=${BUILD_COMMIT}
+ENV BUILD_VERSION=${BUILD_VERSION}
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json

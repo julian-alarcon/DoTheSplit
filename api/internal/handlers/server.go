@@ -37,6 +37,11 @@ type Server struct {
 	Notifications *service.NotificationService
 	Users         *repo.UserRepo
 	Audit         *repo.AuditRepo
+
+	// Version and Commit are stamped into the binary at build time and
+	// reported by /healthz so deployments can self-identify.
+	Version string
+	Commit  string
 }
 
 func writeErr(c *gin.Context, status int, code, message string) {

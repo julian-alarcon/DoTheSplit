@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.4.0...v0.4.1) (2026-05-28)
+
+
+### Bug Fixes
+
+* **ci:** use PAT for release-please so tag pushes trigger downstream workflows ([6498426](https://github.com/julian-alarcon/DoTheSplit/commit/6498426220c571ff38750c8a86c5564e78379921))
+* **ci:** use web/package.json as single version source ([0336003](https://github.com/julian-alarcon/DoTheSplit/commit/033600350da27c4acf47fe4bff1474dc573f8993))
+
 ## [0.4.0](https://github.com/julian-alarcon/dothesplit/compare/v0.3.0...v0.4.0) (2026-05-27)
 
 

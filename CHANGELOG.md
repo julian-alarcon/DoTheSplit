@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.5.0...v0.5.1) (2026-06-02)
+
+
+### Bug Fixes
+
+* re added border for text input to improve visibility ([4db7e9e](https://github.com/julian-alarcon/DoTheSplit/commit/4db7e9e2beee04fd42622ba8010b98e3757ecc69))
+* readded border for text input to improve visibility ([0852dcc](https://github.com/julian-alarcon/DoTheSplit/commit/0852dccbbc31035ffdcae911086e90b3f2edc8c5))
+* updated credit files ([3c3945a](https://github.com/julian-alarcon/DoTheSplit/commit/3c3945a7e126adba10729617d3bb66c0dbeca480))
+
 ## [0.5.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.4.1...v0.5.0) (2026-06-02)
 
 

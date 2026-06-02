@@ -106,7 +106,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Add details/description
+- Add details
 - Collapse username to icon, add search icon, add down arrow to show native menu (Settings, About (rename credits to about, add about credits sections), Logout)
 - Avatar border similar to Catagories (Rounded rectangle)
 - Bug - Background / Font color Non avatar initials image

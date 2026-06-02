@@ -14,8 +14,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       password: form.get("password"),
     }),
   });
-  if (res.status === 401) return redirect("/account?error=email_password", 302);
-  if (res.status === 409) return redirect("/account?error=email_taken", 302);
-  if (!res.ok) return redirect("/account?error=email_invalid", 302);
-  return redirect("/account?ok=email_requested", 302);
+  if (res.status === 401) return redirect("/settings?error=email_password", 302);
+  if (res.status === 409) return redirect("/settings?error=email_taken", 302);
+  if (!res.ok) return redirect("/settings?error=email_invalid", 302);
+  return redirect("/settings?ok=email_requested", 302);
 };

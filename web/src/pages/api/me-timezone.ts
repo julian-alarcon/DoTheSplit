@@ -16,6 +16,6 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     headers: { "Content-Type": "application/json", cookie },
     body: JSON.stringify({ timezone: tz }),
   });
-  if (!res.ok) return redirect("/account?error=tz", 302);
-  return redirect("/account?ok=tz", 302);
+  if (!res.ok) return redirect("/settings?error=tz", 302);
+  return redirect("/settings?ok=tz", 302);
 };

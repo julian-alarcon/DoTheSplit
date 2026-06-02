@@ -49,36 +49,75 @@ const tzOverride = user?.timezone ?? null;
     <script src="/src/scripts/tz-cookie.ts"></script>
     <script src="/src/scripts/local-time.ts"></script>
     <script src="/src/scripts/dialog-scroll-lock.ts"></script>
+    <script src="/src/scripts/user-menu.ts"></script>
   </head>
   <body class="flex min-h-screen flex-col">
     <header class="border-b border-border bg-card/70 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <a href={user ? "/groups" : "/"} class="text-lg font-semibold">DoTheSplit</a>
         {user ? (
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
             {user.is_admin && (
               <a
                 href="/admin"
-                class="inline-flex items-center gap-1 rounded-md border border-amber-400/60 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-500/60 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                class="inline-flex items-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-500/60 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
                 aria-label="Admin"
               >
                 <FaIcon name="shield-halved" />
-                <span>Admin</span>
+                <span class="hidden sm:inline">Admin</span>
               </a>
             )}
-            <a
-              href="/account"
-              class="flex items-center gap-2 rounded-md text-sm text-neutral-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:text-neutral-300 dark:focus-visible:ring-neutral-500"
+            <button
+              type="button"
+              aria-label="Search"
+              class="user-menu-icon-btn"
+              disabled
+              title="Search (coming soon)"
             >
-              <Avatar
-                userId={user.id}
-                displayName={user.display_name}
-                hasAvatar={user.has_avatar}
-                avatarUpdatedAt={user.avatar_updated_at}
-                size={24}
-              />
-              <span>{user.display_name}</span>
-            </a>
+              <FaIcon name="magnifying-glass" />
+            </button>
+            <div class="user-menu" data-user-menu>
+              <button
+                type="button"
+                class="user-menu-trigger"
+                data-user-menu-trigger
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="user-menu-panel"
+              >
+                <Avatar
+                  userId={user.id}
+                  displayName={user.display_name}
+                  hasAvatar={user.has_avatar}
+                  avatarUpdatedAt={user.avatar_updated_at}
+                  size={24}
+                />
+                <span class="hidden text-sm sm:inline">{user.display_name}</span>
+                <FaIcon name="chevron-down" size={12} class="user-menu-chevron" />
+              </button>
+              <div
+                id="user-menu-panel"
+                class="user-menu-panel"
+                role="menu"
+                aria-label="Account menu"
+                hidden
+              >
+                <a href="/settings" role="menuitem" class="user-menu-item">
+                  <FaIcon name="gear" />
+                  <span>Settings</span>
+                </a>
+                <a href="/about" role="menuitem" class="user-menu-item">
+                  <FaIcon name="circle-info" />
+                  <span>About</span>
+                </a>
+                <form method="POST" action="/api/logout" role="none">
+                  <button type="submit" role="menuitem" class="user-menu-item">
+                    <FaIcon name="right-from-bracket" />
+                    <span>Logout</span>
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         ) : (
           <nav class="flex gap-4 text-sm">
@@ -126,7 +165,6 @@ const tzOverride = user?.timezone ?? null;
               >{buildCommit}</a>
             </span>
           )}
-          · <a href="/credits" class="hover:underline">Credits</a>
         </span>
         <ThemeSwitcher />
       </div>

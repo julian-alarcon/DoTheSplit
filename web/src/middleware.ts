@@ -58,7 +58,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     path === "/verify" ||
     path === "/forgot" ||
     path === "/reset" ||
-    path === "/credits" ||
+    path === "/about" ||
     path.startsWith("/api/") ||
     path === "/favicon.ico";
 

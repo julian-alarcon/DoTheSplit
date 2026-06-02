@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     headers: { cookie },
   });
   if (!res.ok && res.status !== 204) {
-    return redirect("/account?error=avatar", 302);
+    return redirect("/settings?error=avatar", 302);
   }
-  return redirect("/account?ok=avatar_cleared", 302);
+  return redirect("/settings?ok=avatar_cleared", 302);
 };

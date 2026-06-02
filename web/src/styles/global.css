@@ -573,3 +573,82 @@ svg[data-icon-slug="other"] {
 .toggle-input:disabled + .toggle-track {
   @apply cursor-not-allowed opacity-50;
 }
+
+/* Header user menu. Click-to-toggle, native theme tokens (--popover, --border).
+   The trigger collapses to icon-only at <640px (display name + chevron's text
+   neighbour both get `sm:inline`). The panel sits absolutely under the
+   trigger and stays accessible via arrow keys / Escape (see user-menu.ts). */
+.user-menu {
+  position: relative;
+}
+.user-menu-trigger {
+  @apply inline-flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2;
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid transparent;
+  --tw-ring-color: var(--ring);
+}
+.user-menu-trigger:hover {
+  background: var(--muted);
+  border-color: var(--border);
+}
+.user-menu-trigger[aria-expanded="true"] {
+  background: var(--muted);
+  border-color: var(--border);
+}
+.user-menu-chevron {
+  color: var(--muted-foreground);
+  transition: transform 150ms ease;
+}
+.user-menu-trigger[aria-expanded="true"] .user-menu-chevron {
+  transform: rotate(180deg);
+}
+.user-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.375rem);
+  min-width: 12rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 0.25rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.user-menu-panel[hidden] {
+  display: none;
+}
+.user-menu-item {
+  @apply flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none;
+  background: transparent;
+  color: inherit;
+  border: 0;
+}
+.user-menu-item:hover,
+.user-menu-item:focus-visible {
+  background: var(--muted);
+}
+
+/* Icon-only header button (used for the search placeholder). Same surface
+   tones as .btn-icon but smaller (32px) so it lines up with the user-menu
+   trigger height. */
+.user-menu-icon-btn {
+  @apply inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2;
+  background: transparent;
+  color: var(--muted-foreground);
+  border: 1px solid transparent;
+  --tw-ring-color: var(--ring);
+}
+.user-menu-icon-btn:hover:not(:disabled) {
+  background: var(--muted);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.user-menu-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

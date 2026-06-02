@@ -5,12 +5,14 @@ import credits from "@/lib/credits.json";
 const { project, fontAwesome, inter, backend, frontend } = credits;
 ---
 
-<Base title="Credits">
+<Base title="About">
   <div class="mx-auto max-w-3xl">
-    <h1 class="mb-2 text-2xl font-semibold">Credits</h1>
+    <h1 class="mb-2 text-2xl font-semibold">About</h1>
     <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
-      DoTheSplit is built on open-source software. Thanks to all the maintainers
-      below.
+      {project.name} is a small, self-hosted expense-sharing app. It runs on
+      your LAN with one Postgres, one Go API, and one Astro web bridge, and it
+      keeps shared ledgers honest without sending anyone's data to a third
+      party.
     </p>
 
     <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -20,6 +22,11 @@ const { project, fontAwesome, inter, backend, frontend } = credits;
         <a href={`${project.url}/blob/main/LICENSE`} class="underline" rel="noopener noreferrer" target="_blank">{project.license} license</a>.
       </p>
     </section>
+
+    <h2 class="mb-2 mt-8 text-xl font-semibold">Credits</h2>
+    <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
+      Built on open-source software. Thanks to all the maintainers below.
+    </p>
 
     <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-2 text-lg font-semibold">Font Awesome Free Icons</h2>

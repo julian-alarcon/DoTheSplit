@@ -106,8 +106,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Add details
-- Collapse username to icon, add search icon, add down arrow to show native menu (Settings, About (rename credits to about, add about credits sections), Logout)
 - Avatar border similar to Catagories (Rounded rectangle)
 - Bug - Background / Font color Non avatar initials image
 - Add password confirmation to Delete dialog of account
@@ -150,7 +148,7 @@ DoTheSplit is released under the [MIT License](LICENSE).
 Third-party attribution lives in two places:
 
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md): generated list of every direct and transitive Go module and npm package with SPDX license + source link. Includes the Font Awesome CC BY 4.0 attribution.
-- `/credits` route in the running app: human-readable summary linked from every page footer.
+- `/about` route in the running app: human-readable summary linked from the user menu in the header.
 
 CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/web.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
 

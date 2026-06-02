@@ -9,7 +9,7 @@ export default defineConfig({
   integrations: [icon()],
   // Self-hosted Inter - keeps font bytes on our origin so the app never reaches
   // fonts.googleapis.com / fonts.gstatic.com. License text and attribution live
-  // in src/assets/fonts/inter/OFL.txt and the /credits page.
+  // in src/assets/fonts/inter/OFL.txt and the /about page.
   fonts: [
     {
       provider: fontProviders.local(),

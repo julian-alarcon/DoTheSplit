@@ -50,6 +50,7 @@ type CreateExpenseInput struct {
 	AmountCents int64
 	Currency    string
 	Description string
+	Notes       string
 	IncurredAt  time.Time
 	Mode        SplitMode
 	Splits      []SplitInput
@@ -112,6 +113,7 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 		AmountCents: in.AmountCents,
 		Currency:    in.Currency,
 		Description: in.Description,
+		Notes:       in.Notes,
 		IncurredAt:  in.IncurredAt,
 		Splits:      shares,
 	}
@@ -144,6 +146,7 @@ type UpdateExpenseInput struct {
 	AmountCents *int64
 	CategoryID  *uuid.UUID
 	PayerID     *uuid.UUID
+	Notes       *string
 	Mode        *SplitMode
 	Splits      []SplitInput
 	IncurredAt  *time.Time
@@ -153,7 +156,7 @@ type UpdateExpenseInput struct {
 // Any group member may update; the edit history records who made each change.
 // Every changed field appends an expense_revisions row.
 func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUID, in UpdateExpenseInput) (*repo.Expense, error) {
-	if in.Description == nil && in.AmountCents == nil && in.CategoryID == nil && in.PayerID == nil && in.Mode == nil && in.Splits == nil && in.IncurredAt == nil {
+	if in.Description == nil && in.AmountCents == nil && in.CategoryID == nil && in.PayerID == nil && in.Mode == nil && in.Splits == nil && in.IncurredAt == nil && in.Notes == nil {
 		return nil, fmt.Errorf("%w: nothing to update", ErrBadSplit)
 	}
 	if in.AmountCents != nil && *in.AmountCents <= 0 {
@@ -211,7 +214,7 @@ func (s *ExpenseService) Update(ctx context.Context, actorID, expenseID uuid.UUI
 		}
 	}
 
-	return s.exps.Update(ctx, expenseID, actorID, in.Description, in.AmountCents, in.CategoryID, in.PayerID, in.IncurredAt, resolved)
+	return s.exps.Update(ctx, expenseID, actorID, in.Description, in.AmountCents, in.CategoryID, in.PayerID, in.IncurredAt, in.Notes, resolved)
 }
 
 // ListRevisions returns the full edit history of an expense (oldest first).

@@ -1,9 +1,10 @@
 ---
 import FaIcon from "@/components/FaIcon.astro";
 
-// Shared split-configuration UI. Renders a tappable summary row that opens
+// Shared expense-details UI. Renders a tappable summary row that opens
 // a <dialog> for choosing split mode (equal / exact / percent) across group
-// members. The hidden input[name="splits_json"] is read by the SSR handler.
+// members and capturing free-form notes. The hidden input[name="splits_json"]
+// and the textarea[name="notes"] are read by the SSR handler.
 //
 // All dynamic logic lives in web/src/scripts/split-editor.ts, which the page
 // importing this component must also include.
@@ -29,6 +30,7 @@ interface Props {
   currentUserId?: string;
   initialSplits?: InitialSplit[];
   defaultSplit?: DefaultSplitEntry[];
+  initialNotes?: string;
 }
 
 const {
@@ -37,6 +39,7 @@ const {
   currentUserId,
   initialSplits = [],
   defaultSplit = [],
+  initialNotes = "",
 } = Astro.props as Props;
 
 const membersJSON = JSON.stringify(
@@ -45,7 +48,7 @@ const membersJSON = JSON.stringify(
 const initialJSON = JSON.stringify(initialSplits);
 const defaultJSON = JSON.stringify(defaultSplit);
 
-const titleId = "split-title";
+const titleId = "details-title";
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500";
 ---
@@ -64,14 +67,14 @@ const focusRing =
   <button
     type="button"
     data-split-open
-    aria-label="Configure split"
+    aria-label="Edit details"
     class={`flex w-full items-center justify-between gap-3 rounded-md border border-neutral-300 bg-white px-3 py-2 text-left text-sm hover:bg-neutral-50 ${focusRing} dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800`}
   >
     <span class="min-w-0 flex-1 text-neutral-600 dark:text-neutral-400" data-split-summary>
       Split equally between {members.length} member{members.length === 1 ? "" : "s"}
     </span>
     <span class="flex shrink-0 items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-      <span class="hidden sm:inline">Configure</span>
+      <span class="hidden sm:inline">Details</span>
       <FaIcon name="chevron-right" />
     </span>
   </button>
@@ -84,7 +87,7 @@ const focusRing =
   >
     <div class="flex flex-col gap-4 p-5">
       <div class="flex items-center justify-between">
-        <h3 id={titleId} class="text-lg font-medium">Configure split</h3>
+        <h3 id={titleId} class="text-lg font-medium">Details</h3>
         <button
           type="button"
           data-split-cancel
@@ -138,6 +141,18 @@ const focusRing =
         <span class="text-neutral-600 dark:text-neutral-400" data-split-remaining></span>
         <span class="font-mono" data-split-total></span>
       </div>
+
+      <label class="field">
+        <textarea
+          name="notes"
+          maxlength="2000"
+          rows="3"
+          placeholder=" "
+          data-split-notes
+          class="field-input"
+        >{initialNotes}</textarea>
+        <span class="field-label">Notes</span>
+      </label>
 
       <p class="min-h-[1.25em] text-xs text-red-600 dark:text-red-400" data-split-error></p>
 

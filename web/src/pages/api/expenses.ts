@@ -15,6 +15,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const categoryID = (form.get("category_id") ?? "").toString().trim();
   const incurredAtRaw = (form.get("incurred_at") ?? "").toString().trim();
   const cadence = (form.get("cadence") ?? "").toString().trim();
+  const notes = (form.get("notes") ?? "").toString();
 
   const { mode, splits } = parseSplitsJSON(form.get("splits_json"));
 
@@ -26,6 +27,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     splits,
   };
   if (categoryID) body.category_id = categoryID;
+  if (notes) body.notes = notes;
   // <input type="date"> emits "YYYY-MM-DD". Anchor at noon UTC to dodge
   // timezone edge cases that would push the displayed date a day off.
   let incurredAtISO: string | null = null;

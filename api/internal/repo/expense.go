@@ -22,6 +22,7 @@ type Expense struct {
 	AmountCents int64
 	Currency    string
 	Description string
+	Notes       string
 	IncurredAt  time.Time
 	CreatedAt   time.Time
 	DeletedAt   *time.Time
@@ -49,10 +50,10 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	err = tx.QueryRow(ctx, `
-		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
-	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.IncurredAt).
+	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.Notes, e.IncurredAt).
 		Scan(&e.ID, &e.CreatedAt)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 // ListByGroup returns non-deleted expenses with their splits, newest first.
 func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Expense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at, created_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at
 		FROM expenses
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY incurred_at DESC, created_at DESC
@@ -84,7 +85,7 @@ func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Exp
 	for rows.Next() {
 		var e Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
-			&e.Currency, &e.Description, &e.IncurredAt, &e.CreatedAt); err != nil {
+			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		exps = append(exps, e)
@@ -128,7 +129,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		return map[uuid.UUID]*Expense{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at, created_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at
 		FROM expenses
 		WHERE id = ANY($1) AND deleted_at IS NULL
 	`, ids)
@@ -140,7 +141,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 	for rows.Next() {
 		var e Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
-			&e.Currency, &e.Description, &e.IncurredAt, &e.CreatedAt); err != nil {
+			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		out[e.ID] = &e
@@ -173,10 +174,10 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, error) {
 	var e Expense
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at, created_at, deleted_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at
 		FROM expenses WHERE id = $1
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
-		&e.Description, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
+		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -228,6 +229,7 @@ func (r *ExpenseRepo) Update(
 	categoryID *uuid.UUID,
 	payerID *uuid.UUID,
 	incurredAt *time.Time,
+	notes *string,
 	newSplits []Split,
 ) (*Expense, error) {
 	tx, err := r.pool.Begin(ctx)
@@ -238,10 +240,10 @@ func (r *ExpenseRepo) Update(
 
 	var e Expense
 	err = tx.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, incurred_at, created_at, deleted_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at
 		FROM expenses WHERE id = $1 FOR UPDATE
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
-		&e.Description, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
+		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -256,6 +258,10 @@ func (r *ExpenseRepo) Update(
 	if description != nil && *description != e.Description {
 		revisions = append(revisions, struct{ field, oldV, newV string }{"description", e.Description, *description})
 		e.Description = *description
+	}
+	if notes != nil && *notes != e.Notes {
+		revisions = append(revisions, struct{ field, oldV, newV string }{"notes", e.Notes, *notes})
+		e.Notes = *notes
 	}
 	if categoryID != nil && *categoryID != e.CategoryID {
 		revisions = append(revisions, struct{ field, oldV, newV string }{"category_id", e.CategoryID.String(), categoryID.String()})
@@ -326,9 +332,9 @@ func (r *ExpenseRepo) Update(
 	}
 
 	if _, err := tx.Exec(ctx, `
-		UPDATE expenses SET description = $2, amount_cents = $3, category_id = $4, payer_id = $5, incurred_at = $6
+		UPDATE expenses SET description = $2, amount_cents = $3, category_id = $4, payer_id = $5, incurred_at = $6, notes = $7
 		WHERE id = $1
-	`, id, e.Description, e.AmountCents, e.CategoryID, e.PayerID, e.IncurredAt); err != nil {
+	`, id, e.Description, e.AmountCents, e.CategoryID, e.PayerID, e.IncurredAt, e.Notes); err != nil {
 		return nil, err
 	}
 

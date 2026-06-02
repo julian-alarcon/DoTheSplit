@@ -106,6 +106,13 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
+- Add details/description
+- Collapse username to icon, add search icon, add down arrow to show native menu (Settings, About (rename credits to about, add about credits sections), Logout)
+- Avatar border similar to Catagories (Rounded rectangle)
+- Bug - Background / Font color Non avatar initials image
+- Add password confirmation to Delete dialog of account
+- Switch contrast (Show deleted)
+- Basic Search
 - TrueNAS deployment recipe or instructions
 
 ### Medium term
@@ -114,7 +121,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 - Filtering by recurrency or category or date
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Search & filter** expenses by category, member, date range.
+- **Filter** expenses by category, member, date range.
 - **Import** from CSV
 - **Export** a group's ledger to CSV.
 - **Expense attachments / receipts** (photo or PDF).

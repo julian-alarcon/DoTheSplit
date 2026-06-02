@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.4.1...v0.5.0) (2026-06-02)
+
+
+### Features
+
+* added notes to expenses ([e0d6f74](https://github.com/julian-alarcon/DoTheSplit/commit/e0d6f749fd57e4c9d177ffad749e388a2732561c))
+* added notes to expenses ([6a32e8b](https://github.com/julian-alarcon/DoTheSplit/commit/6a32e8b49c09f7733598f5cca5e8f04125c1d1a5))
+
 ## [0.4.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.4.0...v0.4.1) (2026-05-28)
 
 

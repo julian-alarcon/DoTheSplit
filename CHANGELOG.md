@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.5.1...v0.6.0) (2026-06-02)
+
+
+### Features
+
+* **web:** collapsible header user menu with search placeholder ([a3eaf40](https://github.com/julian-alarcon/DoTheSplit/commit/a3eaf407a8b6c0e681d02429b792f2b58ea4f3f8))
+
 ## [0.5.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.5.0...v0.5.1) (2026-06-02)
 
 

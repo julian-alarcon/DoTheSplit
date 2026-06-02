@@ -227,13 +227,24 @@ svg[data-icon-slug="other"] {
   background: var(--card);
   color: var(--card-foreground);
   border-radius: 0.375rem;
-  /* Use an inset box-shadow for the bottom line instead of border-bottom so
-     it respects border-radius cleanly (no 1px tail past the rounded corners). */
-  box-shadow: inset 0 -2px 0 0 var(--field-color);
+  /* Use inset box-shadows instead of borders so all four edges respect
+     border-radius cleanly (no 1px tails past the rounded corners). The
+     top and lateral edges are 1px in the lighter --border tone; the
+     bottom keeps the 2px --field-color emphasis that drives the focus
+     indicator and gives the lower corners their bolder curve. */
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--field-color);
   transition: box-shadow 120ms ease;
 }
 .field:focus-within {
-  box-shadow: inset 0 -2px 0 0 var(--field-focus);
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--field-focus);
 }
 
 .field-input {
@@ -277,7 +288,11 @@ svg[data-icon-slug="other"] {
    which doesn't render the native constraint-validation
    tooltip - so without these rules a failed submit looks like a no-op. */
 .field:has(.field-input:user-invalid) {
-  box-shadow: inset 0 -2px 0 0 var(--color-red-600);
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--color-red-600);
 }
 .field-error {
   display: none;
@@ -322,7 +337,11 @@ svg[data-icon-slug="other"] {
   color: var(--card-foreground);
   border: 0;
   border-radius: 0.375rem;
-  box-shadow: inset 0 -2px 0 0 var(--field-color);
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--field-color);
   padding: 0.25rem 0.5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -332,10 +351,18 @@ svg[data-icon-slug="other"] {
   appearance: textfield;
 }
 .field-input-num:focus {
-  box-shadow: inset 0 -2px 0 0 var(--field-focus);
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--field-focus);
 }
 .field-input-num:user-invalid {
-  box-shadow: inset 0 -2px 0 0 var(--color-red-600);
+  box-shadow:
+    inset 0 1px 0 0 var(--border),
+    inset 1px 0 0 0 var(--border),
+    inset -1px 0 0 0 var(--border),
+    inset 0 -2px 0 0 var(--color-red-600);
 }
 .field-input-num:disabled {
   opacity: 0.5;

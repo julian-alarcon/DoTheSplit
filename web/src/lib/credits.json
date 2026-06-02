@@ -139,6 +139,12 @@
       "url": "https://www.npmjs.com/package/@iconify-json/fa7-solid"
     },
     {
+      "name": "@playwright/test",
+      "version": "1.60.0",
+      "license": "Apache-2.0",
+      "url": "https://github.com/microsoft/playwright"
+    },
+    {
       "name": "@types/node",
       "version": "24.12.2",
       "license": "MIT",
@@ -151,10 +157,22 @@
       "url": "https://github.com/natemoo-re/astro-icon"
     },
     {
+      "name": "jsdom",
+      "version": "25.0.1",
+      "license": "MIT",
+      "url": "https://github.com/jsdom/jsdom"
+    },
+    {
       "name": "openapi-typescript",
       "version": "7.13.0",
       "license": "MIT",
       "url": "https://github.com/openapi-ts/openapi-typescript"
+    },
+    {
+      "name": "vitest",
+      "version": "3.2.4",
+      "license": "MIT",
+      "url": "https://github.com/vitest-dev/vitest"
     }
   ]
 }

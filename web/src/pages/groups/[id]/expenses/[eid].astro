@@ -114,6 +114,7 @@ const fieldLabel: Record<string, string> = {
   payer_id: "Paid by",
   splits: "Splits",
   incurred_at: "Date",
+  notes: "Notes",
 };
 ---
 
@@ -283,6 +284,7 @@ const fieldLabel: Record<string, string> = {
           currency={currency}
           currentUserId={userID}
           initialSplits={expense.splits.map((s) => ({ user_id: s.user_id, share_cents: s.share_cents }))}
+          initialNotes={expense.notes ?? ""}
         />
         <div class="flex items-center justify-end gap-2">
           <DatePicker

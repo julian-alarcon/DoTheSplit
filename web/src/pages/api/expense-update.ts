@@ -55,6 +55,13 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     body.splits = splits.splits;
   }
 
+  // Notes can be cleared to "" (sending the empty string is meaningful here),
+  // so only skip when the field was not present in the form at all.
+  const notesRaw = form.get("notes");
+  if (notesRaw !== null) {
+    body.notes = notesRaw.toString();
+  }
+
   if (Object.keys(body).length === 0) {
     return redirect(`/groups/${groupID}/expenses/${expenseID}`, 302);
   }

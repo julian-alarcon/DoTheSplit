@@ -1113,6 +1113,8 @@ export interface components {
              * @description Defaults to the `other` category when omitted.
              */
             category_id?: string;
+            /** @description Optional free-form notes about the expense. */
+            notes?: string;
             mode: components["schemas"]["SplitMode"];
             splits: components["schemas"]["SplitInput"][];
         };
@@ -1122,6 +1124,8 @@ export interface components {
             amount_cents?: number;
             /** Format: uuid */
             category_id?: string;
+            /** @description Optional free-form notes about the expense. */
+            notes?: string;
             /**
              * Format: uuid
              * @description New payer; must be a current group member.
@@ -1167,6 +1171,7 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             category_id: string;
+            notes: string;
             splits: components["schemas"]["Split"][];
         };
         Category: {
@@ -1192,7 +1197,7 @@ export interface components {
              * @description Which field was changed.
              * @enum {string}
              */
-            field: "description" | "amount_cents" | "category_id" | "payer_id";
+            field: "description" | "amount_cents" | "category_id" | "payer_id" | "splits" | "incurred_at" | "notes";
             /** @description Previous value, stringified. */
             old_value: string;
             /** @description New value, stringified. */

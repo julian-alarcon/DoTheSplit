@@ -1659,6 +1659,7 @@ components:
           type: string
           format: uuid
           description: "Defaults to the `other` category when omitted."
+        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
         mode: { $ref: "#/components/schemas/SplitMode" }
         splits:
           type: array
@@ -1681,6 +1682,7 @@ components:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
         category_id: { type: string, format: uuid }
+        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
         payer_id:
           type: string
           format: uuid
@@ -1708,7 +1710,7 @@ components:
     Expense:
       type: object
       required:
-        [id, group_id, description, amount_cents, currency, payer_id, created_by, incurred_at, created_at, splits, category_id]
+        [id, group_id, description, amount_cents, currency, payer_id, created_by, incurred_at, created_at, splits, category_id, notes]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -1726,6 +1728,7 @@ components:
         incurred_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
         category_id: { type: string, format: uuid }
+        notes: { type: string }
         splits:
           type: array
           items: { $ref: "#/components/schemas/Split" }
@@ -1749,7 +1752,7 @@ components:
         edited_at:  { type: string, format: date-time }
         field:
           type: string
-          enum: [description, amount_cents, category_id, payer_id]
+          enum: [description, amount_cents, category_id, payer_id, splits, incurred_at, notes]
           description: Which field was changed.
         old_value:  { type: string, description: "Previous value, stringified." }
         new_value:  { type: string, description: "New value, stringified." }

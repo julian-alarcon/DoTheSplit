@@ -52,6 +52,10 @@ func (s *Server) CreateExpense(c *gin.Context) {
 	if req.Currency != nil {
 		currency = *req.Currency
 	}
+	notes := ""
+	if req.Notes != nil {
+		notes = *req.Notes
+	}
 
 	splits := make([]service.SplitInput, len(req.Splits))
 	for i, sp := range req.Splits {
@@ -69,6 +73,7 @@ func (s *Server) CreateExpense(c *gin.Context) {
 		AmountCents: req.AmountCents,
 		Currency:    currency,
 		Description: req.Description,
+		Notes:       notes,
 		IncurredAt:  incurredAt,
 		Mode:        service.SplitMode(req.Mode),
 		Splits:      splits,
@@ -130,6 +135,7 @@ func (s *Server) UpdateExpense(c *gin.Context) {
 		AmountCents: req.AmountCents,
 		CategoryID:  req.CategoryId,
 		PayerID:     req.PayerId,
+		Notes:       req.Notes,
 		IncurredAt:  req.IncurredAt,
 	}
 	if req.Mode != nil {
@@ -245,6 +251,7 @@ func toAPIExpense(e *repo.Expense) apigen.Expense {
 		AmountCents: e.AmountCents,
 		Currency:    e.Currency,
 		Description: e.Description,
+		Notes:       e.Notes,
 		IncurredAt:  e.IncurredAt,
 		CreatedAt:   e.CreatedAt,
 		Splits:      splits,

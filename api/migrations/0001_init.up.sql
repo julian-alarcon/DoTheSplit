@@ -130,6 +130,7 @@ CREATE TABLE expenses (
     amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
     currency     CHAR(3) NOT NULL DEFAULT 'USD',
     description  TEXT NOT NULL,
+    notes        TEXT NOT NULL DEFAULT '',
     incurred_at  TIMESTAMPTZ NOT NULL,
     category_id  UUID NOT NULL REFERENCES categories(id),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -186,7 +187,7 @@ CREATE TABLE expense_revisions (
     expense_id UUID NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
     edited_by  UUID NOT NULL REFERENCES users(id),
     edited_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    field      TEXT NOT NULL CHECK (field IN ('description', 'amount_cents', 'category_id', 'payer_id', 'splits', 'incurred_at')),
+    field      TEXT NOT NULL CHECK (field IN ('description', 'amount_cents', 'category_id', 'payer_id', 'splits', 'incurred_at', 'notes')),
     old_value  TEXT NOT NULL,
     new_value  TEXT NOT NULL
 );

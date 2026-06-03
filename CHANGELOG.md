@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.7.0...v0.8.0) (2026-06-03)
+
+
+### Features
+
+* **web,api:** added filters to search results ([f15f243](https://github.com/julian-alarcon/DoTheSplit/commit/f15f24355b8af697b725da1e8cabe97c470228da))
+* **web,api:** added search feature ([b049c8d](https://github.com/julian-alarcon/DoTheSplit/commit/b049c8d653441441f7d44b437d2675d35fec2d7b))
+
 ## [0.7.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.6.0...v0.7.0) (2026-06-03)
 
 

@@ -118,17 +118,16 @@ const allTimezones: string[] =
       >
         <div class="flex items-center gap-4">
           <div
-            class="shrink-0 overflow-hidden rounded border border-neutral-300 dark:border-neutral-700"
-            style={`width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px`}
+            class="avatar-64 shrink-0 overflow-hidden rounded border border-neutral-300 dark:border-neutral-700"
             data-avatar-preview-slot
           >
             {user.has_avatar ? (
               <img
                 src={`/api/user-avatar?id=${user.id}&v=${encodeURIComponent(user.avatar_updated_at ?? "")}`}
                 alt="Avatar preview"
+                class="avatar-64 block"
                 width={PREVIEW_SIZE}
                 height={PREVIEW_SIZE}
-                style={`width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px;display:block`}
               />
             ) : (
               <Avatar

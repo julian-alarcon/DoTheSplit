@@ -106,10 +106,8 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Avatar border similar to Catagories (Rounded rectangle)
-- Bug - Background / Font color Non avatar initials image
 - Add password confirmation to Delete dialog of account
-- Switch contrast (Show deleted)
+- Switch contrast,. when activated/deactivated is not clear (Name: Show deleted)
 - Basic Search
 - TrueNAS deployment recipe or instructions
 

@@ -2,24 +2,33 @@
 /*
  * Compact avatar block. Renders the server-stored 256x256 PNG (which is a
  * nearest-neighbour upscale of the user's 8x8 client-side pixelation) when
- * `hasAvatar` is true, otherwise a deterministic colored square with 1-2
- * initials derived from the display name.
+ * `hasAvatar` is true, otherwise a square with 1-2 initials derived from
+ * the display name.
  *
- * The stored bitmap is already blocky, so the browser only down-scales to the
- * target size and no `image-rendering` hints are needed.
+ * Sizing comes from `.avatar-N` classes in global.css (NOT inline style):
+ * the strict CSP emits style hashes, which makes browsers ignore
+ * `'unsafe-inline'` for `style="..."` attributes too. Inline-style
+ * dimensions and colors get silently dropped at runtime.
  */
 
 interface Props {
+  /** Used to fetch the server-stored avatar bitmap when `hasAvatar` is true. */
   userId: string;
   displayName: string;
   hasAvatar?: boolean;
   avatarUpdatedAt?: string | null;
-  /** Side length in CSS pixels. Default 24px (matches inline text size). */
-  size?: number;
+  /** Side length in CSS pixels. Must be one of the values backed by an
+      `.avatar-N` class in global.css. */
+  size?: 16 | 18 | 20 | 24 | 32 | 48 | 56 | 64;
+  /** When true, draw a 1px panel-tone border on both branches so the image
+      and the initials fallback have an identical outer footprint. */
+  bordered?: boolean;
   class?: string;
 }
 
-const { userId, displayName, hasAvatar, avatarUpdatedAt, size = 24, class: extraClass = "" } = Astro.props;
+const { userId, displayName, hasAvatar, avatarUpdatedAt, size = 24, bordered = false, class: extraClass = "" } = Astro.props;
+const borderClass = bordered ? "border border-neutral-300 dark:border-neutral-700" : "";
+const sizeClass = `avatar-${size}`;
 
 /** First letters of up to two name parts, upper-cased. */
 function initialsOf(name: string): string {
@@ -29,20 +38,11 @@ function initialsOf(name: string): string {
   return "??";
 }
 
-/** Deterministic hsl color derived from the user UUID - every user is stable + distinct. */
-function colorOf(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360}, 65%, 45%)`;
-}
-
 const initials = initialsOf(displayName);
-const fallbackBg = colorOf(userId);
 // Cache-bust avatar URL on every upload.
 const avatarSrc = hasAvatar
   ? `/api/user-avatar?id=${encodeURIComponent(userId)}&v=${encodeURIComponent(avatarUpdatedAt ?? "")}`
   : null;
-const fontPx = Math.max(10, Math.round(size * 0.45));
 ---
 
 {
@@ -52,15 +52,13 @@ const fontPx = Math.max(10, Math.round(size * 0.45));
       alt=""
       width={size}
       height={size}
-      style={`width:${size}px;height:${size}px;`}
-      class={`inline-block shrink-0 rounded align-middle ${extraClass}`}
+      class={`avatar ${sizeClass} inline-block shrink-0 rounded align-middle ${borderClass} ${extraClass}`}
     />
   ) : (
     <span
       role="img"
       aria-label={displayName}
-      style={`width:${size}px;height:${size}px;background-color:${fallbackBg};font-size:${fontPx}px;`}
-      class={`inline-flex shrink-0 items-center justify-center rounded align-middle font-semibold leading-none text-white ${extraClass}`}
+      class={`avatar ${sizeClass} inline-flex shrink-0 items-center justify-center rounded align-middle font-semibold leading-none ${borderClass} ${extraClass}`}
     >
       {initials}
     </span>

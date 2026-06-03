@@ -94,10 +94,11 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, per-group currency, invites, leave, transfer ownership, default percent split for 2-member groups.
-- **Expenses**: equal / exact / percent splits, ten categories, custom date, full edit history with per-member split diffs.
+- **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs.
 - **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
-- **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP.
+- **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
+- **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP, password confirmation for self-delete.
 - **API**: OpenAPI 3.0.3 contract at [docs/openapi.yaml](docs/openapi.yaml); every business endpoint is under `/v1/...`.
 
 ## Roadmap
@@ -106,16 +107,15 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Basic Search
 - TrueNAS deployment recipe or instructions
 
 ### Medium term
 
 - **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
-- Filtering by recurrency or category or date
+- Extend search filters with date range and member.
+- Add **Filter** to expenses activity list by category, member, date range.
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Filter** expenses by category, member, date range.
 - **Import** from CSV
 - **Export** a group's ledger to CSV.
 - **Expense attachments / receipts** (photo or PDF).

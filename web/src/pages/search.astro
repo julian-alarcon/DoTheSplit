@@ -1,0 +1,335 @@
+---
+import Base from "@/layouts/Base.astro";
+import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import CategoryIcon from "@/components/CategoryIcon.astro";
+import { apiFor } from "@/lib/api/client";
+import type { components } from "@/lib/api/schema";
+
+const api = apiFor(Astro.locals.cookie);
+
+const rawQuery = Astro.url.searchParams.get("q") ?? "";
+const q = rawQuery.trim();
+const requestedGroups = Astro.url.searchParams
+  .getAll("group_id")
+  .filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
+
+// Fetch categories so expense rows can render their group-tinted icon, like
+// the Activity feed does. Errors aren't fatal - we degrade to a generic icon.
+const categoriesRes = await api.GET("/v1/categories");
+const categories = categoriesRes.data ?? [];
+const categoryByID = new Map(categories.map((c) => [c.id, c]));
+
+type SearchItem = components["schemas"]["ActivityItem"];
+type SearchGroup = components["schemas"]["SearchGroupRef"];
+
+let items: SearchItem[] = [];
+let groups: SearchGroup[] = [];
+let usedQuery = "";
+let queryError: string | null = null;
+
+if (q.length >= 2) {
+  // openapi-fetch infers the `query` param shape from SearchParams: q is
+  // required, group_id is an optional string[]. Pass the raw values straight
+  // through so the client serializes group_id as repeated `group_id=...`.
+  const { data, error, response } = await api.GET("/v1/search", {
+    params: {
+      query: requestedGroups.length > 0
+        ? { q, group_id: requestedGroups }
+        : { q },
+    },
+  });
+  if (error || !data) {
+    queryError = response?.status === 400 ? "Search query is too short." : "Search failed.";
+  } else {
+    items = data.items;
+    groups = data.groups;
+    usedQuery = data.query;
+  }
+} else if (q.length === 1) {
+  queryError = "Type at least 2 characters to search.";
+}
+
+// If the user hasn't searched yet, we still want the filter chips populated
+// with their groups. Fetch /v1/groups on the empty path.
+if (q.length < 2 && groups.length === 0) {
+  const groupsRes = await api.GET("/v1/groups");
+  const all = groupsRes.data ?? [];
+  groups = all.map((g) => ({
+    id: g.id,
+    name: g.name,
+    default_currency: g.default_currency,
+    members: g.members,
+  }));
+}
+
+const groupByID = new Map(groups.map((g) => [g.id, g]));
+// Preserve API order (server returned newest-first across all groups). When we
+// render, we walk items in feed order and lazily emit a "group section" header
+// the first time a new group_id appears - this keeps overall recency intact
+// across groups while still grouping consecutive hits from the same one.
+type ExpenseHit = NonNullable<SearchItem["expense"]>;
+type SettlementHit = NonNullable<SearchItem["settlement"]>;
+
+function groupForItem(item: SearchItem): SearchGroup | undefined {
+  const gid = item.expense?.group_id ?? item.settlement?.group_id;
+  return gid ? groupByID.get(gid) : undefined;
+}
+
+// Compute counts per group for the filter chip row.
+const hitCountByGroup = new Map<string, number>();
+for (const item of items) {
+  const g = groupForItem(item);
+  if (!g) continue;
+  hitCountByGroup.set(g.id, (hitCountByGroup.get(g.id) ?? 0) + 1);
+}
+
+const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+// Section breaks: walk items, emit a group header when group_id changes.
+type Row =
+  | { kind: "group-header"; group: SearchGroup; count: number }
+  | { kind: "item"; item: SearchItem };
+const rows: Row[] = [];
+let lastGroupID: string | null = null;
+let runningCount = 0;
+let runStart = -1;
+for (let i = 0; i < items.length; i++) {
+  const item = items[i];
+  const g = groupForItem(item);
+  if (!g) continue;
+  if (g.id !== lastGroupID) {
+    if (runStart >= 0) {
+      // patch the count in the previous header
+      const header = rows[runStart] as Extract<Row, { kind: "group-header" }>;
+      header.count = runningCount;
+    }
+    rows.push({ kind: "group-header", group: g, count: 0 });
+    runStart = rows.length - 1;
+    runningCount = 0;
+    lastGroupID = g.id;
+  }
+  rows.push({ kind: "item", item });
+  runningCount++;
+}
+if (runStart >= 0) {
+  (rows[runStart] as Extract<Row, { kind: "group-header" }>).count = runningCount;
+}
+
+// For each group filter link, build the URL preserving q and toggling membership.
+function chipURL(toggle: string | null): string {
+  const sp = new URLSearchParams();
+  if (q) sp.set("q", q);
+  if (toggle === null) {
+    // "All groups": clear group_id
+  } else {
+    let next: string[];
+    if (requestedGroups.includes(toggle)) {
+      next = requestedGroups.filter((id) => id !== toggle);
+    } else {
+      next = [...requestedGroups, toggle];
+    }
+    for (const id of next) sp.append("group_id", id);
+  }
+  const qs = sp.toString();
+  return qs ? `/search?${qs}` : "/search";
+}
+
+const allGroupsActive = requestedGroups.length === 0;
+---
+
+<Base title="Search" back={{ href: "/groups", label: "Groups" }}>
+  <h1 class="mb-4 text-2xl font-semibold">Search</h1>
+
+  <form method="GET" action="/search" class="mb-4 flex flex-col gap-3">
+    <label class="field">
+      <input
+        type="search"
+        name="q"
+        value={q}
+        minlength="2"
+        maxlength="200"
+        autofocus
+        autocomplete="off"
+        placeholder=" "
+        class="field-input"
+      />
+      <span class="field-label">Search expense and settlement notes</span>
+    </label>
+    {requestedGroups.map((id) => (
+      <input type="hidden" name="group_id" value={id} />
+    ))}
+    <div class="flex justify-end">
+      <button type="submit" class="btn-primary">
+        <FaIcon name="magnifying-glass" />
+        <span>Search</span>
+      </button>
+    </div>
+  </form>
+
+  {groups.length > 0 && (
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+        Filter:
+      </span>
+      <a
+        href={chipURL(null)}
+        class={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+          allGroupsActive
+            ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+            : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+        }`}
+      >
+        All groups
+      </a>
+      {groups.map((g) => {
+        const active = requestedGroups.includes(g.id);
+        return (
+          <a
+            href={chipURL(g.id)}
+            class={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
+                : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            }`}
+          >
+            <span class="truncate max-w-[12rem]">{g.name}</span>
+            {q.length >= 2 && hitCountByGroup.has(g.id) && (
+              <span class="tabular-nums opacity-80">({hitCountByGroup.get(g.id)})</span>
+            )}
+          </a>
+        );
+      })}
+    </div>
+  )}
+
+  {queryError && (
+    <p class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+      {queryError}
+    </p>
+  )}
+
+  {q.length < 2 ? (
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      Type at least 2 characters to search across all your groups.
+    </p>
+  ) : items.length === 0 && !queryError ? (
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      No matches for <span class="font-medium">{usedQuery}</span>.
+    </p>
+  ) : (
+    <ul class="flex flex-col gap-2">
+      {rows.map((row) => {
+        if (row.kind === "group-header") {
+          const g = row.group;
+          return (
+            <li
+              class="flex items-baseline justify-between gap-3 px-1 pt-3 first:pt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+            >
+              <a href={`/groups/${g.id}`} class="truncate hover:underline">{g.name}</a>
+              <span class="tabular-nums normal-case">
+                {row.count} {row.count === 1 ? "match" : "matches"}
+              </span>
+            </li>
+          );
+        }
+        const item = row.item;
+        const g = groupForItem(item)!;
+        const memberByID = new Map(g.members.map((m: SearchGroup["members"][number]) => [m.user_id, m] as const));
+        if (item.expense) {
+          const e: ExpenseHit = item.expense;
+          const cat = categoryByID.get(e.category_id);
+          const payer = memberByID.get(e.payer_id);
+          return (
+            <li>
+              <a
+                href={`/groups/${g.id}/expenses/${e.id}`}
+                class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+              >
+                <div class="flex min-w-0 items-center gap-3">
+                  <span class="shrink-0 inline-flex items-center justify-center" title={cat?.label ?? ""}>
+                    <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+                  </span>
+                  <div class="min-w-0">
+                    <div class="truncate font-medium">{e.description}</div>
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                      <span>{dateFmt.format(new Date(e.incurred_at))} · paid by</span>
+                      <Avatar
+                        userId={e.payer_id}
+                        displayName={payer?.display_name ?? "?"}
+                        hasAvatar={payer?.has_avatar}
+                        avatarUpdatedAt={payer?.avatar_updated_at}
+                        size={16}
+                      />
+                      <span class="truncate">{payer?.display_name ?? "?"}</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="shrink-0 font-mono text-xl tabular-nums">
+                  {new Intl.NumberFormat(undefined, {
+                    style: "currency",
+                    currency: e.currency,
+                    currencyDisplay: "narrowSymbol",
+                  }).format(e.amount_cents / 100)}
+                </span>
+              </a>
+            </li>
+          );
+        }
+        if (!item.settlement) return null;
+        const s: SettlementHit = item.settlement;
+        const from = memberByID.get(s.from_user_id);
+        const to = memberByID.get(s.to_user_id);
+        return (
+          <li>
+            <a
+              href={`/groups/${g.id}/settlements/${s.id}`}
+              class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
+            >
+              <div class="flex min-w-0 items-center gap-3">
+                <span
+                  class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                  title="Settlement"
+                >
+                  <FaIcon name="arrow-right" size={14} />
+                </span>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-1.5 font-medium">
+                    <Avatar
+                      userId={s.from_user_id}
+                      displayName={from?.display_name ?? "?"}
+                      hasAvatar={from?.has_avatar}
+                      avatarUpdatedAt={from?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{from?.display_name ?? "?"}</span>
+                    <span class="text-neutral-600 dark:text-neutral-400">paid</span>
+                    <Avatar
+                      userId={s.to_user_id}
+                      displayName={to?.display_name ?? "?"}
+                      hasAvatar={to?.has_avatar}
+                      avatarUpdatedAt={to?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{to?.display_name ?? "?"}</span>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                    <span>{dateFmt.format(new Date(s.settled_at))} · settlement</span>
+                    {s.note && <span class="truncate">· {s.note}</span>}
+                  </div>
+                </div>
+              </div>
+              <span class="shrink-0 font-mono text-xl tabular-nums">
+                {new Intl.NumberFormat(undefined, {
+                  style: "currency",
+                  currency: g.default_currency,
+                  currencyDisplay: "narrowSymbol",
+                }).format(s.amount_cents / 100)}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  )}
+</Base>

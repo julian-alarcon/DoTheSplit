@@ -67,6 +67,7 @@ func main() {
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
 	activityRepo := repo.NewActivityRepo(pool)
+	searchRepo := repo.NewSearchRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
 	setupRepo := repo.NewSetupRepo(pool)
@@ -85,6 +86,7 @@ func main() {
 	settlementSvc := service.NewSettlementService(settlements, groups)
 	recurringSvc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
+	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
 	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, auth, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
 	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
@@ -122,6 +124,7 @@ func main() {
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
 		Activity:      activitySvc,
+		SearchSvc:     searchSvc,
 		Admin:         adminSvc,
 		Smtp:          smtpSvc,
 		Setup:         setupSvc,

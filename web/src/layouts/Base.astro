@@ -67,15 +67,14 @@ const tzOverride = user?.timezone ?? null;
                 <span class="hidden sm:inline">Admin</span>
               </a>
             )}
-            <button
-              type="button"
+            <a
+              href="/search"
               aria-label="Search"
               class="user-menu-icon-btn"
-              disabled
-              title="Search (coming soon)"
+              title="Search"
             >
               <FaIcon name="magnifying-glass" />
-            </button>
+            </a>
             <div class="user-menu" data-user-menu>
               <button
                 type="button"

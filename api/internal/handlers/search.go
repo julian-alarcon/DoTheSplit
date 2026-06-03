@@ -1,0 +1,94 @@
+package handlers
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
+	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
+	"github.com/julian-alarcon/dothesplit/api/internal/service"
+)
+
+func (s *Server) Search(c *gin.Context) {
+	u := middleware.User(c)
+	q := c.Query("q")
+
+	limit := 0
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeErr(c, http.StatusBadRequest, "bad_request", "limit must be an integer")
+			return
+		}
+		limit = n
+	}
+
+	var groupIDs []uuid.UUID
+	for _, raw := range c.QueryArray("group_id") {
+		if raw == "" {
+			continue
+		}
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeErr(c, http.StatusBadRequest, "bad_request", "group_id must be a UUID")
+			return
+		}
+		groupIDs = append(groupIDs, id)
+	}
+
+	res, err := s.SearchSvc.Search(c.Request.Context(), u.ID, q, groupIDs, limit)
+	switch {
+	case errors.Is(err, service.ErrBadSearchQuery):
+		writeErr(c, http.StatusBadRequest, "bad_request", "q must be at least 2 characters")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, toAPISearchResponse(res))
+}
+
+func toAPISearchResponse(r *service.SearchResult) apigen.SearchResponse {
+	items := make([]apigen.ActivityItem, 0, len(r.Items))
+	for _, item := range r.Items {
+		ai := apigen.ActivityItem{
+			Kind:       apigen.ActivityItemKind(item.Kind),
+			OccurredAt: item.OccurredAt,
+		}
+		switch item.Kind {
+		case repo.ActivityExpense:
+			if item.Expense != nil {
+				e := toAPIExpense(item.Expense)
+				ai.Expense = &e
+			}
+		case repo.ActivitySettlement:
+			if item.Settlement != nil {
+				st := toAPISettlement(item.Settlement)
+				ai.Settlement = &st
+			}
+		}
+		items = append(items, ai)
+	}
+	groups := make([]apigen.SearchGroupRef, 0, len(r.Groups))
+	for _, gi := range r.Groups {
+		ms := make([]apigen.GroupMember, 0, len(gi.Members))
+		for i := range gi.Members {
+			ms = append(ms, toAPIMember(&gi.Members[i]))
+		}
+		groups = append(groups, apigen.SearchGroupRef{
+			Id:              gi.Group.ID,
+			Name:            gi.Group.Name,
+			DefaultCurrency: gi.Group.DefaultCurrency,
+			Members:         ms,
+		})
+	}
+	return apigen.SearchResponse{
+		Query:  r.Query,
+		Items:  items,
+		Groups: groups,
+	}
+}

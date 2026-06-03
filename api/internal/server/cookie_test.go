@@ -151,6 +151,7 @@ func bootStackWithCookieSecure(t *testing.T, cookieSecure bool) (*httptest.Serve
 		Settlements: settlementSvc,
 		Recurring:   recurringSvc,
 		Activity:    service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
+		SearchSvc:   service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Admin:       service.NewAdminService(pool, users, groups, sessions, auditRepo, authSvc, emailC, cfg.PasswordPepper),
 		Smtp:        service.NewSmtpService(smtpRepo, emailC),
 		Setup:       setupSvc,

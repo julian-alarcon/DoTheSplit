@@ -30,6 +30,7 @@ type Server struct {
 	Settlements *service.SettlementService
 	Recurring   *service.RecurringService
 	Activity    *service.ActivityService
+	SearchSvc   *service.SearchService
 	Admin         *service.AdminService
 	Smtp          *service.SmtpService
 	Setup         *service.SetupService

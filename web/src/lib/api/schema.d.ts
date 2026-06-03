@@ -584,6 +584,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search expenses and settlements across the caller's groups
+         * @description Case-insensitive substring match over the expense `description`/`notes`
+         *     fields and the settlement `note` field. Results are limited to groups
+         *     the caller is a member of, exclude soft-deleted rows, and are returned
+         *     newest-first across all groups (by `occurred_at`, then `created_at`).
+         *     The optional repeated `group_id` parameter narrows the search to those
+         *     groups; group ids the caller is not a member of are silently ignored.
+         *     The optional `category_id` parameter narrows results to a single
+         *     category and implies "expenses only" - settlements are excluded when
+         *     it is set, since they have no category. Unknown ids yield zero matches.
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups/{id}/recurring-expenses": {
         parameters: {
             query?: never;
@@ -1267,6 +1295,39 @@ export interface components {
             items: components["schemas"]["ActivityItem"][];
             /** @description Pass to the next request as `cursor`. Absent when there are no more items. */
             next_cursor?: string;
+        };
+        /**
+         * @description Group descriptor returned alongside search results so the client can
+         *     render the "GroupA" section heading, payer/recipient avatars, and the
+         *     per-group filter without a follow-up `/v1/groups` round-trip.
+         */
+        SearchGroupRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            default_currency: string;
+            members: components["schemas"]["GroupMember"][];
+        };
+        /**
+         * @description Flat list of matching expenses and settlements, newest first across
+         *     all groups. The client groups them by `group_id` for display. The
+         *     `groups` field is the set of groups the caller is a member of (or the
+         *     subset they filtered to) and is what the per-group filter chip row
+         *     is built from - it is *not* limited to groups that produced a hit.
+         *     `available_category_ids` lists every distinct category present among
+         *     the expenses that match `q` + `group_id` (independent of the active
+         *     `category_id` filter), so the client can hide categories that have
+         *     no hits in the current search from the category picker.
+         */
+        SearchResponse: {
+            query: string;
+            items: components["schemas"]["ActivityItem"][];
+            groups: components["schemas"]["SearchGroupRef"][];
+            /**
+             * @description Distinct expense categories matching `q` + `group_id`, ignoring
+             *     the active `category_id` filter. Empty when no expenses match.
+             */
+            available_category_ids: string[];
         };
         /** @enum {string} */
         Cadence: "daily" | "weekly" | "biweekly" | "monthly" | "yearly";
@@ -2618,6 +2679,40 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                /** @description Substring to match. Whitespace is trimmed. */
+                q: string;
+                /** @description Repeat to filter to one or more groups. Omit to search all groups the caller belongs to. */
+                group_id?: string[];
+                /**
+                 * @description Narrow results to a single category. When set, settlements are
+                 *     excluded from the response. Unknown id silently yields zero matches.
+                 */
+                category_id?: string;
+                /** @description Max items returned. Defaults to 100. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     listRecurringExpenses: {

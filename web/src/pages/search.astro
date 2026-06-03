@@ -1,0 +1,466 @@
+---
+import Base from "@/layouts/Base.astro";
+import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import CategoryIcon from "@/components/CategoryIcon.astro";
+import { apiFor } from "@/lib/api/client";
+import type { components } from "@/lib/api/schema";
+
+const api = apiFor(Astro.locals.cookie);
+
+const rawQuery = Astro.url.searchParams.get("q") ?? "";
+const q = rawQuery.trim();
+const rawGroup = Astro.url.searchParams.get("group_id") ?? "";
+const requestedGroup = /^[0-9a-fA-F-]{36}$/.test(rawGroup) ? rawGroup : "";
+const rawCategory = Astro.url.searchParams.get("category_id") ?? "";
+const requestedCategory = /^[0-9a-fA-F-]{36}$/.test(rawCategory) ? rawCategory : "";
+
+// Categories drive both the per-row icon (like the Activity feed) and the
+// category filter picker. Errors aren't fatal - rows degrade to a generic icon.
+const categoriesRes = await api.GET("/v1/categories");
+const categories = categoriesRes.data ?? [];
+const categoryByID = new Map(categories.map((c) => [c.id, c]));
+
+type SearchItem = components["schemas"]["ActivityItem"];
+type SearchGroup = components["schemas"]["SearchGroupRef"];
+
+let items: SearchItem[] = [];
+let groups: SearchGroup[] = [];
+let availableCategoryIDs: string[] = [];
+let usedQuery = "";
+let queryError: string | null = null;
+let hasSearched = false;
+
+if (q.length >= 2) {
+  hasSearched = true;
+  const query: { q: string; group_id?: string[]; category_id?: string } = { q };
+  if (requestedGroup) query.group_id = [requestedGroup];
+  if (requestedCategory) query.category_id = requestedCategory;
+  const { data, error, response } = await api.GET("/v1/search", {
+    params: { query },
+  });
+  if (error || !data) {
+    queryError = response?.status === 400 ? "Search query is too short." : "Search failed.";
+  } else {
+    items = data.items;
+    groups = data.groups;
+    availableCategoryIDs = data.available_category_ids;
+    usedQuery = data.query;
+  }
+} else if (q.length === 1) {
+  queryError = "Type at least 2 characters to search.";
+}
+
+// Always fetch the full group list so the Group picker can show every group
+// the caller belongs to, not just the ones with hits in the current query.
+const groupsRes = await api.GET("/v1/groups");
+const allGroups = groupsRes.data ?? [];
+if (groups.length === 0) {
+  groups = allGroups.map((g) => ({
+    id: g.id,
+    name: g.name,
+    default_currency: g.default_currency,
+    members: g.members,
+  }));
+}
+
+const groupByID = new Map(groups.map((g) => [g.id, g]));
+const allGroupsByID = new Map(allGroups.map((g) => [g.id, g]));
+type ExpenseHit = NonNullable<SearchItem["expense"]>;
+type SettlementHit = NonNullable<SearchItem["settlement"]>;
+
+function groupForItem(item: SearchItem): SearchGroup | undefined {
+  const gid = item.expense?.group_id ?? item.settlement?.group_id;
+  return gid ? groupByID.get(gid) : undefined;
+}
+
+const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+// Section breaks: walk items, emit a group header when group_id changes.
+type Row =
+  | { kind: "group-header"; group: SearchGroup; count: number }
+  | { kind: "item"; item: SearchItem };
+const rows: Row[] = [];
+let lastGroupID: string | null = null;
+let runningCount = 0;
+let runStart = -1;
+for (let i = 0; i < items.length; i++) {
+  const item = items[i];
+  const g = groupForItem(item);
+  if (!g) continue;
+  if (g.id !== lastGroupID) {
+    if (runStart >= 0) {
+      const header = rows[runStart] as Extract<Row, { kind: "group-header" }>;
+      header.count = runningCount;
+    }
+    rows.push({ kind: "group-header", group: g, count: 0 });
+    runStart = rows.length - 1;
+    runningCount = 0;
+    lastGroupID = g.id;
+  }
+  rows.push({ kind: "item", item });
+  runningCount++;
+}
+if (runStart >= 0) {
+  (rows[runStart] as Extract<Row, { kind: "group-header" }>).count = runningCount;
+}
+
+const selectedGroup = requestedGroup ? allGroupsByID.get(requestedGroup) : undefined;
+const selectedCategory = requestedCategory ? categoryByID.get(requestedCategory) : undefined;
+const groupLabel = selectedGroup?.name ?? "All";
+const categoryLabel = selectedCategory?.label ?? "All";
+// Filter row stays open if the user has any non-default filter applied;
+// otherwise it's collapsed behind the "Filter" toggle.
+const filtersOpen = Boolean(requestedGroup || requestedCategory);
+
+// Restrict the category picker to categories that actually appear in the
+// current result set (so a user searching "pizza" doesn't see "Rent" as a
+// dead option). The currently-selected category is always kept in the list
+// even if the active filter has narrowed it out, so the user can switch off
+// it. Before any search, show the full category list.
+const availableCategorySet = new Set(availableCategoryIDs);
+if (requestedCategory) availableCategorySet.add(requestedCategory);
+const visibleCategories = hasSearched
+  ? categories.filter((c) => availableCategorySet.has(c.id))
+  : categories;
+---
+
+<Base title="Search" back={{ href: "/groups", label: "Groups" }}>
+  <h1 class="mb-4 text-2xl font-semibold">Search</h1>
+
+  <form
+    method="GET"
+    action="/search"
+    class="mb-4 flex flex-col gap-3"
+    data-filter-form
+    data-filter-autosubmit
+  >
+    <label class="field">
+      <input
+        type="search"
+        name="q"
+        value={q}
+        minlength="2"
+        maxlength="200"
+        autofocus
+        autocomplete="off"
+        placeholder=" "
+        class="field-input"
+      />
+      <span class="field-label">Search expense and settlement notes</span>
+    </label>
+
+    <div class="flex justify-end">
+      <button type="submit" class="btn-primary">
+        <FaIcon name="magnifying-glass" />
+        <span>Search</span>
+      </button>
+    </div>
+
+    <details class="group" open={filtersOpen}>
+      <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500 [&::-webkit-details-marker]:hidden">
+        <FaIcon name="filter" size={12} />
+        <span>Filter</span>
+        <FaIcon name="chevron-down" size={10} class="transition-transform group-open:rotate-180" />
+      </summary>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Filter:
+        </span>
+
+        {/* Group picker chip */}
+        <span data-filter-picker class="contents">
+          <input
+            type="hidden"
+            name="group_id"
+            value={requestedGroup}
+            data-filter-strip-empty
+          />
+          <button
+            type="button"
+            data-filter-open
+            aria-label="Filter by group"
+            title="Filter by group"
+            class="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+          >
+            <span class="text-neutral-500 dark:text-neutral-400">Group:</span>
+            <span data-filter-label class="truncate max-w-[10rem]">{groupLabel}</span>
+            <FaIcon name="chevron-down" size={10} />
+          </button>
+          <dialog
+            data-filter-dialog
+            aria-modal="true"
+            aria-labelledby="group-filter-title"
+            class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-sm rounded-md border border-neutral-200 bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-neutral-900/40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          >
+            <div class="flex flex-col gap-3 p-5">
+              <div class="flex items-center justify-between gap-3">
+                <h3 id="group-filter-title" class="text-lg font-medium">Filter by group</h3>
+                <button
+                  type="button"
+                  data-filter-cancel
+                  aria-label="Close"
+                  title="Close"
+                  class="rounded-md px-2 py-1 text-sm text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+                >
+                  <FaIcon name="xmark" size={14} />
+                </button>
+              </div>
+              <ul class="flex max-h-[60vh] flex-col gap-0.5 overflow-auto">
+                <li>
+                  <button
+                    type="button"
+                    data-filter-option
+                    data-value=""
+                    data-label="All"
+                    class="field-category-option"
+                  >
+                    <span class="inline-flex h-7 w-7 items-center justify-center text-neutral-500 dark:text-neutral-400">
+                      <FaIcon name="layer-group" size={16} />
+                    </span>
+                    <span>All groups</span>
+                  </button>
+                </li>
+                {allGroups.map((g) => (
+                  <li>
+                    <button
+                      type="button"
+                      data-filter-option
+                      data-value={g.id}
+                      data-label={g.name}
+                      class="field-category-option"
+                    >
+                      <span class="inline-flex h-7 w-7 items-center justify-center text-neutral-500 dark:text-neutral-400">
+                        <FaIcon name="users" size={16} />
+                      </span>
+                      <span>{g.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </dialog>
+        </span>
+
+        {/* Category picker chip */}
+        <span data-filter-picker class="contents">
+          <input
+            type="hidden"
+            name="category_id"
+            value={requestedCategory}
+            data-filter-strip-empty
+          />
+          <button
+            type="button"
+            data-filter-open
+            aria-label="Filter by category"
+            title="Filter by category"
+            class="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+          >
+            <span class="text-neutral-500 dark:text-neutral-400">Category:</span>
+            <span data-filter-icon class="inline-flex items-center justify-center">
+              {selectedCategory && (
+                <CategoryIcon
+                  slug={selectedCategory.slug}
+                  groupLabel={selectedCategory.group_label}
+                  size={14}
+                />
+              )}
+            </span>
+            <span data-filter-label class="truncate max-w-[10rem]">{categoryLabel}</span>
+            <FaIcon name="chevron-down" size={10} />
+          </button>
+          <dialog
+            data-filter-dialog
+            aria-modal="true"
+            aria-labelledby="category-filter-title"
+            class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-sm rounded-md border border-neutral-200 bg-white p-0 text-neutral-900 shadow-xl backdrop:bg-neutral-900/40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          >
+            <div class="flex flex-col gap-3 p-5">
+              <div class="flex items-center justify-between gap-3">
+                <h3 id="category-filter-title" class="text-lg font-medium">Filter by category</h3>
+                <button
+                  type="button"
+                  data-filter-cancel
+                  aria-label="Close"
+                  title="Close"
+                  class="rounded-md px-2 py-1 text-sm text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+                >
+                  <FaIcon name="xmark" size={14} />
+                </button>
+              </div>
+              <ul class="flex max-h-[60vh] flex-col gap-0.5 overflow-auto">
+                <li>
+                  <button
+                    type="button"
+                    data-filter-option
+                    data-value=""
+                    data-label="All"
+                    class="field-category-option"
+                  >
+                    <span class="inline-flex h-7 w-7 items-center justify-center text-neutral-500 dark:text-neutral-400">
+                      <FaIcon name="layer-group" size={16} />
+                    </span>
+                    <span>All categories</span>
+                  </button>
+                </li>
+                {visibleCategories.map((c, i) => (
+                  <>
+                    {(i === 0 || visibleCategories[i - 1].group_label !== c.group_label) && (
+                      <li class="field-category-group" role="presentation">{c.group_label}</li>
+                    )}
+                    <li>
+                      <button
+                        type="button"
+                        data-filter-option
+                        data-value={c.id}
+                        data-label={c.label}
+                        class="field-category-option"
+                      >
+                        <CategoryIcon slug={c.slug} groupLabel={c.group_label} size={28} />
+                        <span>{c.label}</span>
+                      </button>
+                    </li>
+                  </>
+                ))}
+              </ul>
+            </div>
+          </dialog>
+        </span>
+      </div>
+    </details>
+  </form>
+  <script>
+    import "@/scripts/filter-picker.ts";
+  </script>
+
+  {queryError && (
+    <p class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+      {queryError}
+    </p>
+  )}
+
+  {q.length < 2 ? (
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      Type at least 2 characters to search across all your groups.
+    </p>
+  ) : items.length === 0 && !queryError ? (
+    <p class="text-sm text-neutral-500 dark:text-neutral-400">
+      No matches for <span class="font-medium">{usedQuery}</span>.
+    </p>
+  ) : (
+    <ul class="flex flex-col gap-2">
+      {rows.map((row) => {
+        if (row.kind === "group-header") {
+          const g = row.group;
+          return (
+            <li
+              class="flex items-baseline justify-between gap-3 px-1 pt-3 first:pt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+            >
+              <a href={`/groups/${g.id}`} class="truncate hover:underline">{g.name}</a>
+              <span class="tabular-nums normal-case">
+                {row.count} {row.count === 1 ? "match" : "matches"}
+              </span>
+            </li>
+          );
+        }
+        const item = row.item;
+        const g = groupForItem(item)!;
+        const memberByID = new Map(g.members.map((m: SearchGroup["members"][number]) => [m.user_id, m] as const));
+        if (item.expense) {
+          const e: ExpenseHit = item.expense;
+          const cat = categoryByID.get(e.category_id);
+          const payer = memberByID.get(e.payer_id);
+          return (
+            <li>
+              <a
+                href={`/groups/${g.id}/expenses/${e.id}`}
+                class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+              >
+                <div class="flex min-w-0 items-center gap-3">
+                  <span class="shrink-0 inline-flex items-center justify-center" title={cat?.label ?? ""}>
+                    <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+                  </span>
+                  <div class="min-w-0">
+                    <div class="truncate font-medium">{e.description}</div>
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                      <span>{dateFmt.format(new Date(e.incurred_at))} · paid by</span>
+                      <Avatar
+                        userId={e.payer_id}
+                        displayName={payer?.display_name ?? "?"}
+                        hasAvatar={payer?.has_avatar}
+                        avatarUpdatedAt={payer?.avatar_updated_at}
+                        size={16}
+                      />
+                      <span class="truncate">{payer?.display_name ?? "?"}</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="shrink-0 font-mono text-xl tabular-nums">
+                  {new Intl.NumberFormat(undefined, {
+                    style: "currency",
+                    currency: e.currency,
+                    currencyDisplay: "narrowSymbol",
+                  }).format(e.amount_cents / 100)}
+                </span>
+              </a>
+            </li>
+          );
+        }
+        if (!item.settlement) return null;
+        const s: SettlementHit = item.settlement;
+        const from = memberByID.get(s.from_user_id);
+        const to = memberByID.get(s.to_user_id);
+        return (
+          <li>
+            <a
+              href={`/groups/${g.id}/settlements/${s.id}`}
+              class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
+            >
+              <div class="flex min-w-0 items-center gap-3">
+                <span
+                  class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                  title="Settlement"
+                >
+                  <FaIcon name="arrow-right" size={14} />
+                </span>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-1.5 font-medium">
+                    <Avatar
+                      userId={s.from_user_id}
+                      displayName={from?.display_name ?? "?"}
+                      hasAvatar={from?.has_avatar}
+                      avatarUpdatedAt={from?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{from?.display_name ?? "?"}</span>
+                    <span class="text-neutral-600 dark:text-neutral-400">paid</span>
+                    <Avatar
+                      userId={s.to_user_id}
+                      displayName={to?.display_name ?? "?"}
+                      hasAvatar={to?.has_avatar}
+                      avatarUpdatedAt={to?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{to?.display_name ?? "?"}</span>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                    <span>{dateFmt.format(new Date(s.settled_at))} · settlement</span>
+                    {s.note && <span class="truncate">· {s.note}</span>}
+                  </div>
+                </div>
+              </div>
+              <span class="shrink-0 font-mono text-xl tabular-nums">
+                {new Intl.NumberFormat(undefined, {
+                  style: "currency",
+                  currency: g.default_currency,
+                  currencyDisplay: "narrowSymbol",
+                }).format(s.amount_cents / 100)}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  )}
+</Base>

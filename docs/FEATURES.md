@@ -12,7 +12,9 @@ avatar** generated in-browser from any image: pixelated PNG ≤ 1024 bytes,
 re-encoded server-side; falls back to deterministic initials when absent.
 Soft-delete your account with a stable `Deleted user #<short-uuid>` tombstone so
 shared history stays traceable; the email index is partial-unique on
-`deleted_at IS NULL`, so the address is reusable after deletion.
+`deleted_at IS NULL`, so the address is reusable after deletion. Self-delete
+requires the current password as a confirmation step in the same form, and all
+existing sessions for the user are revoked atomically.
 
 ## First-run setup
 
@@ -63,9 +65,10 @@ Three split modes via a shared in-app editor:
 - **percent**: per-member percentage with live total validation
 
 Expenses carry a category (one of ten seeded categories, rendered with Font
-Awesome icons), an optional custom date (defaults to today), and a
-description. Any group member can edit description / amount / category / payer
-/ splits / date after the fact; splits either rescale proportionally on
+Awesome icons), an optional custom date (defaults to today), a description,
+and optional free-text **notes** for context the description shouldn't carry.
+Any group member can edit description / amount / category / payer / splits /
+notes / date after the fact; splits either rescale proportionally on
 amount-only edits or are re-resolved when a new mode/split is supplied.
 Soft-delete is open to any group member. The full edit history shows who /
 when / field / old → new, including per-member split diffs.
@@ -88,6 +91,34 @@ Paginated, time-ordered feed of expenses + settlements per group. Months are
 labelled, ordering matches the underlying timestamps regardless of insertion
 order, and pagination state is URL-encoded so deep links work.
 
+## Search
+
+Cross-group search at `/search` over a case-insensitive substring of `q`
+(min 2 chars) against expense **description** + **notes** and settlement
+**notes**. Results are scoped to groups the actor is a member of; foreign
+group ids in the query string are silently dropped, soft-deleted rows are
+excluded, and ILIKE wildcards (`%`, `_`) in the user's query are escaped so
+they match literally. Two optional filters narrow the set:
+
+- **Group** (single-select): restricts hits to one of the actor's groups.
+- **Category** (single-select): restricts hits to expenses in that category
+  and excludes settlements entirely (settlements have no category).
+
+The response carries an `available_category_ids` list — the distinct
+categories present in the unfiltered result set for the current `q` + group
+scope — so the category picker only offers categories that actually have
+matches. The list is computed independently of the active category filter so
+the user can still switch off it. Both filters live in a collapsible panel
+below the search button and auto-open when any filter is active.
+
+## Settings & about
+
+The personal area is at `/settings` (display name, password, timezone,
+avatar, account deletion). The third-party attribution and license summary
+lives at `/about`, linked from the header user menu. The header itself
+exposes a collapsible user menu so navigation, theme switcher, and search
+share one row on small screens.
+
 ## Security
 
 - Argon2id passwords with a server-side pepper.
@@ -100,7 +131,8 @@ order, and pagination state is URL-encoded so deep links work.
   a shared module.
 - HSTS only when `COOKIE_SECURE=true`. Session cookie is `__Host-dts_session`
   on HTTPS, plain `dts_session` on the HTTP LAN profile.
-- Step-up password prompt for destructive admin actions.
+- Step-up password prompt for destructive admin actions, and password
+  confirmation before self-delete (with all sessions revoked on success).
 
 ## API contract
 

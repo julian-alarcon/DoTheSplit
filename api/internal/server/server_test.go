@@ -175,6 +175,7 @@ func setup(t *testing.T) *testStack {
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
 		Activity:      service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
+		SearchSvc:     service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Admin:         service.NewAdminService(pool, users, groups, sessionRepo, auditRepo, authSvc, email, cfg.PasswordPepper),
 		Smtp:          service.NewSmtpService(smtpRepo, email),
 		Setup:         setupSvc,

@@ -52,6 +52,8 @@ tags:
     description: Templates materialized into real expenses by the background worker.
   - name: activity
     description: Merged, paginated feed of expenses and settlements for a group, newest first.
+  - name: search
+    description: Cross-group full-text search over expense descriptions/notes and settlement notes (member-only rows).
   - name: health
     description: Liveness and readiness probes (unversioned).
   - name: admin
@@ -862,6 +864,57 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/search:
+    get:
+      summary: Search expenses and settlements across the caller's groups
+      description: |
+        Case-insensitive substring match over the expense `description`/`notes`
+        fields and the settlement `note` field. Results are limited to groups
+        the caller is a member of, exclude soft-deleted rows, and are returned
+        newest-first across all groups (by `occurred_at`, then `created_at`).
+        The optional repeated `group_id` parameter narrows the search to those
+        groups; group ids the caller is not a member of are silently ignored.
+        The optional `category_id` parameter narrows results to a single
+        category and implies "expenses only" - settlements are excluded when
+        it is set, since they have no category. Unknown ids yield zero matches.
+      operationId: search
+      tags: [search]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 200 }
+          description: Substring to match. Whitespace is trimmed.
+        - in: query
+          name: group_id
+          required: false
+          schema:
+            type: array
+            items: { type: string, format: uuid }
+          style: form
+          explode: true
+          description: Repeat to filter to one or more groups. Omit to search all groups the caller belongs to.
+        - in: query
+          name: category_id
+          required: false
+          schema: { type: string, format: uuid }
+          description: |
+            Narrow results to a single category. When set, settlements are
+            excluded from the response. Unknown id silently yields zero matches.
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+          description: Max items returned. Defaults to 100.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/groups/{id}/recurring-expenses:
     get:
@@ -1846,6 +1899,49 @@ components:
         next_cursor:
           type: string
           description: "Pass to the next request as `cursor`. Absent when there are no more items."
+
+    SearchGroupRef:
+      type: object
+      required: [id, name, default_currency, members]
+      description: |
+        Group descriptor returned alongside search results so the client can
+        render the "GroupA" section heading, payer/recipient avatars, and the
+        per-group filter without a follow-up `/v1/groups` round-trip.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        default_currency: { type: string, minLength: 3, maxLength: 3 }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/GroupMember" }
+
+    SearchResponse:
+      type: object
+      required: [query, items, groups, available_category_ids]
+      description: |
+        Flat list of matching expenses and settlements, newest first across
+        all groups. The client groups them by `group_id` for display. The
+        `groups` field is the set of groups the caller is a member of (or the
+        subset they filtered to) and is what the per-group filter chip row
+        is built from - it is *not* limited to groups that produced a hit.
+        `available_category_ids` lists every distinct category present among
+        the expenses that match `q` + `group_id` (independent of the active
+        `category_id` filter), so the client can hide categories that have
+        no hits in the current search from the category picker.
+      properties:
+        query: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityItem" }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/SearchGroupRef" }
+        available_category_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: |
+            Distinct expense categories matching `q` + `group_id`, ignoring
+            the active `category_id` filter. Empty when no expenses match.
 
     Cadence:
       type: string

@@ -645,6 +645,15 @@ svg[data-icon-slug="other"] {
 .user-menu-item:focus-visible {
   background: var(--muted);
 }
+/* In dark themes --muted equals --popover (both neutral-900), so the hover
+   highlight vanishes. Lift to --accent which is one step brighter. */
+:root[data-theme="dark"] .user-menu-item:hover,
+:root[data-theme="dark"] .user-menu-item:focus-visible,
+:root[data-theme="high-contrast"] .user-menu-item:hover,
+:root[data-theme="high-contrast"] .user-menu-item:focus-visible {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
 
 /* Icon-only header button (used for the search placeholder). Same surface
    tones as .btn-icon but smaller (32px) so it lines up with the user-menu

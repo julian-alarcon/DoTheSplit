@@ -106,7 +106,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- Fix Switch contrast, when activated/deactivated is not clear (Name: Show deleted)
 - Basic Search
 - TrueNAS deployment recipe or instructions
 

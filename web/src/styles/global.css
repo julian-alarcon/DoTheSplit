@@ -554,6 +554,19 @@ svg[data-icon-slug="other"] {
   background: var(--card);
 }
 
+/* Off-state contrast in dark themes: --muted and --card both resolve to
+   neutral-900, which makes the track and knob indistinguishable. Lift the
+   track to neutral-800 (--secondary) and the knob to a bright neutral so
+   the disabled state reads at a glance. */
+:root[data-theme="dark"] .toggle-track,
+:root[data-theme="high-contrast"] .toggle-track {
+  background: var(--secondary);
+}
+:root[data-theme="dark"] .toggle-track::after,
+:root[data-theme="high-contrast"] .toggle-track::after {
+  background: var(--muted-foreground);
+}
+
 .toggle-input:checked + .toggle-track {
   background: var(--primary);
   border-color: var(--primary);

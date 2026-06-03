@@ -91,6 +91,7 @@ const tzOverride = user?.timezone ?? null;
                   hasAvatar={user.has_avatar}
                   avatarUpdatedAt={user.avatar_updated_at}
                   size={24}
+                  bordered
                 />
                 <span class="hidden text-sm sm:inline">{user.display_name}</span>
                 <FaIcon name="chevron-down" size={12} class="user-menu-chevron" />

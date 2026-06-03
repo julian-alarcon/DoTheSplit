@@ -336,10 +336,21 @@ paths:
       summary: Soft-delete the current user (tombstones display_name, scrubs email, clears all sessions)
       operationId: deleteMe
       tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
           description: Account deleted; session cleared
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "423":
+          description: Step-up rate-limited; retry after the cooldown.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/me/password:
     post:

@@ -206,8 +206,16 @@ func TestDeleteMe(t *testing.T) {
 		"splits":       []map[string]any{{"user_id": userAID}},
 	}, cookieA)
 
-	// Delete the account.
-	resp, _ := request(t, "DELETE", base+"/v1/me", nil, cookieA)
+	// Wrong password is rejected and the account stays alive.
+	resp, _ := request(t, "DELETE", base+"/v1/me",
+		map[string]any{"password": "not-the-real-one"}, cookieA)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp, _ = request(t, "GET", base+"/v1/me", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Delete the account with the correct password.
+	resp, _ = request(t, "DELETE", base+"/v1/me",
+		map[string]any{"password": "passwordpassword"}, cookieA)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// Session is gone: /me now returns 401.

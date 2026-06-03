@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.6.0...v0.7.0) (2026-06-03)
+
+
+### Features
+
+* **web,api:** add password confirmation for delete user action, remove redundant login in settings ([c97f2f9](https://github.com/julian-alarcon/DoTheSplit/commit/c97f2f951c9501bee24a48cff5a5aeff7185f80c))
+
+
+### Bug Fixes
+
+* **web:** contrast highlight in user menu for dark and high contrast themes ([0699a10](https://github.com/julian-alarcon/DoTheSplit/commit/0699a1020ed248d7f9fe8df03a0398437f7543e4))
+* **web:** contrast in switcher fixed in dark and high contrast themes ([26b95c7](https://github.com/julian-alarcon/DoTheSplit/commit/26b95c7a3baac809ae4c8a4952bb1d661d987a57))
+* **web:** missing avatar border and size ([1ce1ea0](https://github.com/julian-alarcon/DoTheSplit/commit/1ce1ea073b1f1e70c0f0e1cd50709e20f7289fae))
+
 ## [0.6.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.5.1...v0.6.0) (2026-06-02)
 
 

@@ -40,7 +40,17 @@ func (s *Server) Search(c *gin.Context) {
 		groupIDs = append(groupIDs, id)
 	}
 
-	res, err := s.SearchSvc.Search(c.Request.Context(), u.ID, q, groupIDs, limit)
+	var categoryID *uuid.UUID
+	if raw := c.Query("category_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeErr(c, http.StatusBadRequest, "bad_request", "category_id must be a UUID")
+			return
+		}
+		categoryID = &id
+	}
+
+	res, err := s.SearchSvc.Search(c.Request.Context(), u.ID, q, groupIDs, categoryID, limit)
 	switch {
 	case errors.Is(err, service.ErrBadSearchQuery):
 		writeErr(c, http.StatusBadRequest, "bad_request", "q must be at least 2 characters")
@@ -86,9 +96,12 @@ func toAPISearchResponse(r *service.SearchResult) apigen.SearchResponse {
 			Members:         ms,
 		})
 	}
+	availCats := make([]uuid.UUID, 0, len(r.AvailableCategoryIDs))
+	availCats = append(availCats, r.AvailableCategoryIDs...)
 	return apigen.SearchResponse{
-		Query:  r.Query,
-		Items:  items,
-		Groups: groups,
+		Query:                r.Query,
+		Items:                items,
+		Groups:               groups,
+		AvailableCategoryIds: availCats,
 	}
 }

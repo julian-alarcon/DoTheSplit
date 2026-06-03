@@ -36,29 +36,52 @@ func NewSearchRepo(p *pgxpool.Pool) *SearchRepo { return &SearchRepo{pool: p} }
 // q is matched with ILIKE %q% on the underlying TEXT columns; the `%` and
 // `_` wildcards in the input are escaped so the user can't injection-break
 // the match.
-func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q string, limit int) ([]SearchRow, error) {
+//
+// When `categoryID` is non-nil, the result is restricted to expenses with that
+// category id, and settlements are excluded entirely (settlements have no
+// category).
+func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q string, categoryID *uuid.UUID, limit int) ([]SearchRow, error) {
 	if len(groupIDs) == 0 || strings.TrimSpace(q) == "" {
 		return nil, nil
 	}
 	pattern := "%" + escapeLike(q) + "%"
-	query := `
-		SELECT kind, group_id, occurred_at, created_at, id FROM (
+	var (
+		query string
+		args  []any
+	)
+	if categoryID != nil {
+		query = `
 			SELECT 'expense'::text AS kind, group_id, incurred_at AS occurred_at, created_at, id
 			FROM expenses
 			WHERE group_id = ANY($1)
 			  AND deleted_at IS NULL
+			  AND category_id = $4
 			  AND (description ILIKE $2 ESCAPE '\' OR notes ILIKE $2 ESCAPE '\')
-			UNION ALL
-			SELECT 'settlement'::text AS kind, group_id, settled_at AS occurred_at, created_at, id
-			FROM settlements
-			WHERE group_id = ANY($1)
-			  AND deleted_at IS NULL
-			  AND note ILIKE $2 ESCAPE '\'
-		) hits
-		ORDER BY occurred_at DESC, created_at DESC, id DESC
-		LIMIT $3
-	`
-	rows, err := r.pool.Query(ctx, query, groupIDs, pattern, limit)
+			ORDER BY occurred_at DESC, created_at DESC, id DESC
+			LIMIT $3
+		`
+		args = []any{groupIDs, pattern, limit, *categoryID}
+	} else {
+		query = `
+			SELECT kind, group_id, occurred_at, created_at, id FROM (
+				SELECT 'expense'::text AS kind, group_id, incurred_at AS occurred_at, created_at, id
+				FROM expenses
+				WHERE group_id = ANY($1)
+				  AND deleted_at IS NULL
+				  AND (description ILIKE $2 ESCAPE '\' OR notes ILIKE $2 ESCAPE '\')
+				UNION ALL
+				SELECT 'settlement'::text AS kind, group_id, settled_at AS occurred_at, created_at, id
+				FROM settlements
+				WHERE group_id = ANY($1)
+				  AND deleted_at IS NULL
+				  AND note ILIKE $2 ESCAPE '\'
+			) hits
+			ORDER BY occurred_at DESC, created_at DESC, id DESC
+			LIMIT $3
+		`
+		args = []any{groupIDs, pattern, limit}
+	}
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search activity: %w", err)
 	}
@@ -72,6 +95,39 @@ func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q
 		}
 		row.Kind = ActivityKind(kind)
 		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
+// AvailableCategories returns the set of distinct category_ids on non-deleted
+// expenses in `groupIDs` whose description/notes match `q` (case-insensitive
+// substring). The active category_id filter is *not* applied here on purpose -
+// the client uses this list to populate its category filter picker, so it
+// must reflect every category the user could switch to within the current
+// q + group scope.
+func (r *SearchRepo) AvailableCategories(ctx context.Context, groupIDs []uuid.UUID, q string) ([]uuid.UUID, error) {
+	if len(groupIDs) == 0 || strings.TrimSpace(q) == "" {
+		return nil, nil
+	}
+	pattern := "%" + escapeLike(q) + "%"
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT category_id
+		FROM expenses
+		WHERE group_id = ANY($1)
+		  AND deleted_at IS NULL
+		  AND (description ILIKE $2 ESCAPE '\' OR notes ILIKE $2 ESCAPE '\')
+	`, groupIDs, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("available categories: %w", err)
+	}
+	defer rows.Close()
+	var out []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
 	}
 	return out, rows.Err()
 }

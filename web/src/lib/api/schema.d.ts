@@ -599,6 +599,9 @@ export interface paths {
          *     newest-first across all groups (by `occurred_at`, then `created_at`).
          *     The optional repeated `group_id` parameter narrows the search to those
          *     groups; group ids the caller is not a member of are silently ignored.
+         *     The optional `category_id` parameter narrows results to a single
+         *     category and implies "expenses only" - settlements are excluded when
+         *     it is set, since they have no category. Unknown ids yield zero matches.
          */
         get: operations["search"];
         put?: never;
@@ -1311,11 +1314,20 @@ export interface components {
          *     `groups` field is the set of groups the caller is a member of (or the
          *     subset they filtered to) and is what the per-group filter chip row
          *     is built from - it is *not* limited to groups that produced a hit.
+         *     `available_category_ids` lists every distinct category present among
+         *     the expenses that match `q` + `group_id` (independent of the active
+         *     `category_id` filter), so the client can hide categories that have
+         *     no hits in the current search from the category picker.
          */
         SearchResponse: {
             query: string;
             items: components["schemas"]["ActivityItem"][];
             groups: components["schemas"]["SearchGroupRef"][];
+            /**
+             * @description Distinct expense categories matching `q` + `group_id`, ignoring
+             *     the active `category_id` filter. Empty when no expenses match.
+             */
+            available_category_ids: string[];
         };
         /** @enum {string} */
         Cadence: "daily" | "weekly" | "biweekly" | "monthly" | "yearly";
@@ -2676,6 +2688,11 @@ export interface operations {
                 q: string;
                 /** @description Repeat to filter to one or more groups. Omit to search all groups the caller belongs to. */
                 group_id?: string[];
+                /**
+                 * @description Narrow results to a single category. When set, settlements are
+                 *     excluded from the response. Unknown id silently yields zero matches.
+                 */
+                category_id?: string;
                 /** @description Max items returned. Defaults to 100. */
                 limit?: number;
             };

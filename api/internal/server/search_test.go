@@ -12,7 +12,9 @@ import (
 // TestSearchEndpoint covers the cross-group /v1/search contract: substring
 // match in description and notes (expenses) plus note (settlements), result
 // ordering across groups, the optional group_id filter, soft-delete exclusion,
-// non-member groups silently filtered out, and the min-length 400.
+// non-member groups silently filtered out, the min-length 400, and the
+// optional category_id filter (which restricts to expenses in that category
+// and excludes settlements entirely).
 func TestSearchEndpoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration: needs Docker/testcontainers")
@@ -179,4 +181,117 @@ func TestSearchEndpoint(t *testing.T) {
 	resp, body = request(t, "GET", base+"/v1/search?q="+url.QueryEscape("%%"), nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Empty(t, body["items"])
+
+	// --- category_id filter ---
+	// Pick two distinct categories to assign to fresh pizza expenses, then
+	// verify category_id narrows to the matching expense and excludes the
+	// "PIZZA tab leftovers" settlement.
+	resp, cats := requestList(t, "GET", base+"/v1/categories", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var groceriesID, trainID, otherID string
+	for _, c := range cats {
+		switch c["slug"] {
+		case "groceries":
+			groceriesID = c["id"].(string)
+		case "train":
+			trainID = c["id"].(string)
+		case "other":
+			otherID = c["id"].(string)
+		}
+	}
+	require.NotEmpty(t, groceriesID)
+	require.NotEmpty(t, trainID)
+	require.NotEmpty(t, otherID)
+
+	mkExpenseCat := func(group, payerID, desc string, amt int64, off int, catID string) string {
+		body := map[string]any{
+			"description":  desc,
+			"amount_cents": amt,
+			"payer_id":     payerID,
+			"category_id":  catID,
+			"mode":         "equal",
+			"incurred_at":  t0.Add(time.Duration(off) * time.Hour).Format(time.RFC3339Nano),
+			"splits": []map[string]any{
+				{"user_id": userA["id"]}, {"user_id": userB["id"]},
+			},
+		}
+		resp, e := request(t, "POST", base+"/v1/groups/"+group+"/expenses", body, cookieA)
+		require.Equal(t, http.StatusCreated, resp.StatusCode, e)
+		return e["id"].(string)
+	}
+	pizzaGroceries := mkExpenseCat(groupA, userA["id"].(string), "Pizza grocery run", 1100, 10, groceriesID)
+	pizzaTrain := mkExpenseCat(groupB, userA["id"].(string), "Pizza on the train", 1200, 11, trainID)
+
+	// 7) category_id narrows to expenses in that category; settlement is
+	// excluded even though its note matches the substring.
+	u = base + "/v1/search?q=pizza&category_id=" + url.QueryEscape(groceriesID)
+	resp, body = request(t, "GET", u, nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	expIDs, setIDs = collectIDs(body["items"].([]any))
+	require.ElementsMatch(t, []string{pizzaGroceries}, expIDs)
+	require.Empty(t, setIDs, "settlements must be excluded when category_id is set")
+
+	// 8) Unknown category id silently yields zero matches.
+	u = base + "/v1/search?q=pizza&category_id=" + url.QueryEscape("00000000-0000-0000-0000-000000000001")
+	resp, body = request(t, "GET", u, nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Empty(t, body["items"])
+
+	// 9) q + group_id + category_id intersect: only pizzaTrain (in GroupBeta
+	// AND tagged 'train') survives.
+	u = base + "/v1/search?q=pizza" +
+		"&group_id=" + url.QueryEscape(groupB) +
+		"&category_id=" + url.QueryEscape(trainID)
+	resp, body = request(t, "GET", u, nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	expIDs, setIDs = collectIDs(body["items"].([]any))
+	require.ElementsMatch(t, []string{pizzaTrain}, expIDs)
+	require.Empty(t, setIDs)
+
+	// 10) Malformed category_id is a 400 (not silently dropped) - matches the
+	// group_id parsing convention in the same handler.
+	resp, _ = request(t, "GET", base+"/v1/search?q=pizza&category_id=not-a-uuid", nil, cookieA)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	// --- available_category_ids ---
+	// The set of distinct categories present among matching expenses must be
+	// returned so the client can hide categories with no hits from the
+	// category picker. The original "Pizza night", "Friday dinner", "Stone-
+	// baked pizza" expenses were created without an explicit category, so
+	// they default to "other"; pizzaGroceries → groceries; pizzaTrain → train.
+	collectAvailable := func(body map[string]any) []string {
+		raw, _ := body["available_category_ids"].([]any)
+		out := make([]string, 0, len(raw))
+		for _, x := range raw {
+			out = append(out, x.(string))
+		}
+		return out
+	}
+
+	// 11) No category filter: all three categories in the q-matching set are
+	// reported.
+	resp, body = request(t, "GET", base+"/v1/search?q=pizza", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.ElementsMatch(t, []string{otherID, groceriesID, trainID}, collectAvailable(body))
+
+	// 12) `available_category_ids` is INDEPENDENT of the active category
+	// filter - the client needs to know what other categories the user could
+	// switch to even after they've narrowed.
+	u = base + "/v1/search?q=pizza&category_id=" + url.QueryEscape(groceriesID)
+	resp, body = request(t, "GET", u, nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.ElementsMatch(t, []string{otherID, groceriesID, trainID}, collectAvailable(body))
+
+	// 13) But it DOES respect the group_id filter: GroupBeta only contains
+	// pizzaB (other) and pizzaTrain (train); groceries is GroupAlpha-only.
+	u = base + "/v1/search?q=pizza&group_id=" + url.QueryEscape(groupB)
+	resp, body = request(t, "GET", u, nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.ElementsMatch(t, []string{otherID, trainID}, collectAvailable(body))
+
+	// 14) A query with no matches returns an empty list (not null).
+	resp, body = request(t, "GET", base+"/v1/search?q=zzznomatchzzz", nil, cookieA)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Empty(t, collectAvailable(body))
+	require.NotNil(t, body["available_category_ids"])
 }

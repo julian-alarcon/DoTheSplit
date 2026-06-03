@@ -40,9 +40,10 @@ func NewSearchService(g *GroupService, gr *repo.GroupRepo, s *repo.SearchRepo, e
 // SearchResult bundles flat hits with the (member-only) group descriptors the
 // client needs to render section headers and the per-group filter chip row.
 type SearchResult struct {
-	Query  string
-	Items  []ActivityItem
-	Groups []SearchGroupInfo
+	Query                string
+	Items                []ActivityItem
+	Groups               []SearchGroupInfo
+	AvailableCategoryIDs []uuid.UUID
 }
 
 type SearchGroupInfo struct {
@@ -56,7 +57,11 @@ type SearchGroupInfo struct {
 // actor has no groups, or every requested id was filtered out), the response
 // has no items but still echoes the query so the client renders a clean
 // "no results" state instead of a 404.
-func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string, requestedGroups []uuid.UUID, limit int) (*SearchResult, error) {
+//
+// `categoryID` (optional) narrows the result to one expense category and
+// excludes settlements entirely. An unknown id naturally produces zero
+// matches.
+func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string, requestedGroups []uuid.UUID, categoryID *uuid.UUID, limit int) (*SearchResult, error) {
 	q = strings.TrimSpace(q)
 	if len(q) < searchMinQueryLen {
 		return nil, ErrBadSearchQuery
@@ -115,10 +120,19 @@ func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string,
 		return result, nil
 	}
 
-	rows, err := s.search.SearchActivity(ctx, groupIDs, q, limit)
+	rows, err := s.search.SearchActivity(ctx, groupIDs, q, categoryID, limit)
 	if err != nil {
 		return nil, err
 	}
+
+	// Available categories are computed independently of `categoryID` so the
+	// client can still offer those categories as switchable options in the
+	// filter picker after the user has narrowed.
+	availCats, err := s.search.AvailableCategories(ctx, groupIDs, q)
+	if err != nil {
+		return nil, err
+	}
+	result.AvailableCategoryIDs = availCats
 
 	var expenseIDs, settlementIDs []uuid.UUID
 	for _, r := range rows {

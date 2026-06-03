@@ -108,6 +108,16 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 			extraField: "user_id",
 		},
 		{
+			name:   "delete_me",
+			method: "DELETE",
+			path:   "/v1/me",
+			auth:   aCookie,
+			body: map[string]any{
+				"password": "passwordpassword",
+			},
+			extraField: "force",
+		},
+		{
 			name:   "set_avatar",
 			method: "PUT",
 			path:   "/v1/me/avatar",

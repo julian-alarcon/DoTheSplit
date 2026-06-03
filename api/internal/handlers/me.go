@@ -143,11 +143,25 @@ func (s *Server) DeleteAvatar(c *gin.Context) {
 }
 
 // DeleteMe soft-deletes the calling account, scrubs PII, nukes sessions, and
-// clears the session cookie.
+// clears the session cookie. Requires the caller to re-enter their password
+// (step-up) to make session hijack → instant account loss harder.
 func (s *Server) DeleteMe(c *gin.Context) {
 	u := middleware.User(c)
 	if u == nil {
 		writeErr(c, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+	var req apigen.DeleteMeJSONRequestBody
+	if !bindStrictJSON(c, &req) {
+		return
+	}
+	if err := s.Auth.VerifyPassword(c.Request.Context(), u.ID, req.Password); err != nil {
+		switch {
+		case errors.Is(err, service.ErrStepUpRateLimited):
+			writeErr(c, http.StatusLocked, "rate_limited", "too many failed password attempts")
+		default:
+			writeErr(c, http.StatusUnauthorized, "invalid_credentials", "password is incorrect")
+		}
 		return
 	}
 	if err := s.MeSvc.SoftDelete(c.Request.Context(), u.ID); err != nil {

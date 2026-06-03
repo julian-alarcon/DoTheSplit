@@ -1,7 +1,7 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
-import ConfirmDialog from "@/components/ConfirmDialog.astro";
+import PasswordPromptDialog from "@/components/PasswordPromptDialog.astro";
 import FaIcon from "@/components/FaIcon.astro";
 const PREVIEW_SIZE = 64;
 
@@ -22,6 +22,8 @@ const errorMessages: Record<string, string> = {
   email_invalid: "Could not start the email change. Try a different address.",
   email_confirm_invalid: "That code didn't match. Try again.",
   email_confirm_expired: "Code expired. Request a new email change.",
+  delete_password: "Password is incorrect. Account was not deleted.",
+  delete_locked: "Too many failed password attempts. Try again in a minute.",
 };
 const okMessages: Record<string, string> = {
   rename: "Display name updated.",
@@ -282,19 +284,6 @@ const allTimezones: string[] =
       </form>
     </section>
 
-    <section class="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800 dark:bg-neutral-900">
-      <div>
-        <h2 class="font-medium">Sign out</h2>
-        <p class="text-sm text-neutral-600 dark:text-neutral-400">End your session on this device.</p>
-      </div>
-      <form method="POST" action="/api/logout" class="self-end sm:self-auto">
-        <button type="submit" class="btn-secondary">
-          <FaIcon name="right-from-bracket" />
-          <span>Log out</span>
-        </button>
-      </form>
-    </section>
-
     <section class="rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
@@ -302,15 +291,15 @@ const allTimezones: string[] =
         shared expenses other members still depend on stay traceable. This cannot be undone.
       </p>
       <form method="POST" action="/api/me-delete" class="flex justify-end">
-        <button type="button" data-confirm-open="confirm-delete-account" class="btn-danger">
+        <button type="button" data-password-open="confirm-delete-account" class="btn-danger">
           <FaIcon name="trash" />
           <span>Delete account</span>
         </button>
       </form>
-      <ConfirmDialog
+      <PasswordPromptDialog
         id="confirm-delete-account"
         title="Delete your account?"
-        message="Expenses you paid for stay visible under a tombstone so other members can still trace shared ledgers. This cannot be undone."
+        message="Re-enter your password to confirm. Expenses you paid for stay visible under a tombstone so other members can still trace shared ledgers. This cannot be undone."
         confirmLabel="Delete account"
         confirmIcon="trash"
       />
@@ -319,6 +308,6 @@ const allTimezones: string[] =
 
   <script>
     import "@/scripts/avatar-pixelate.ts";
-    import "@/scripts/confirm-dialog.ts";
+    import "@/scripts/password-prompt.ts";
   </script>
 </Base>

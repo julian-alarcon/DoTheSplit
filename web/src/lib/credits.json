@@ -3,7 +3,8 @@
     "name": "DoTheSplit",
     "license": "MIT",
     "copyright": "Copyright (c) 2026 Julian Alarcon",
-    "url": "https://github.com/julian-alarcon/dothesplit"
+    "url": "https://github.com/julian-alarcon/dothesplit",
+    "sponsorUrl": "https://github.com/sponsors/julian-alarcon"
   },
   "fontAwesome": {
     "creator": "Font Awesome",

@@ -9,10 +9,7 @@ const { project, fontAwesome, inter, backend, frontend } = credits;
   <div class="mx-auto max-w-3xl">
     <h1 class="mb-2 text-2xl font-semibold">About</h1>
     <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
-      {project.name} is a small, self-hosted expense-sharing app. It runs on
-      your LAN with one Postgres, one Go API, and one Astro web bridge, and it
-      keeps shared ledgers honest without sending anyone's data to a third
-      party.
+      {project.name} is a small, self-hosted expense-sharing app.
     </p>
 
     <section class="mb-8 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
@@ -20,6 +17,12 @@ const { project, fontAwesome, inter, backend, frontend } = credits;
       <p class="text-sm text-neutral-700 dark:text-neutral-300">
         {project.copyright}. Released under the
         <a href={`${project.url}/blob/main/LICENSE`} class="underline" rel="noopener noreferrer" target="_blank">{project.license} license</a>.
+      </p>
+      <p class="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
+        Source on
+        <a href={project.url} class="underline" rel="noopener noreferrer" target="_blank">GitHub</a>.
+        Support development via
+        <a href={project.sponsorUrl} class="underline" rel="noopener noreferrer" target="_blank">GitHub Sponsors</a>.
       </p>
     </section>
 

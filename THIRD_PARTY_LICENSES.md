@@ -114,7 +114,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | @emmetio/stream-reader@2.2.0 | MIT | https://github.com/emmetio/stream-reader |
 | @emnapi/runtime@1.10.0 | MIT | https://github.com/toyobayashi/emnapi |
 | @esbuild/linux-x64@0.27.7 | MIT | https://github.com/evanw/esbuild |
-| @iconify-json/fa7-solid@1.2.4 | CC-BY-4.0 | — |
+| @iconify-json/fa7-solid@1.2.4 | CC-BY-4.0 | n/a |
 | @iconify/tools@4.2.0 | MIT | https://github.com/iconify/tools |
 | @iconify/types@2.0.0 | MIT | https://github.com/iconify/iconify |
 | @iconify/utils@2.3.0 | MIT | https://github.com/iconify/iconify |
@@ -130,7 +130,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | @oslojs/encoding@1.1.0 | MIT | https://github.com/oslo-project/encoding |
 | @playwright/test@1.60.0 | Apache-2.0 | https://github.com/microsoft/playwright |
 | @redocly/ajv@8.11.2 | MIT | https://github.com/ajv-validator/ajv |
-| @redocly/config@0.22.0 | MIT | — |
+| @redocly/config@0.22.0 | MIT | n/a |
 | @redocly/openapi-core@1.34.14 | MIT | https://github.com/Redocly/redocly-cli |
 | @rollup/pluginutils@5.3.0 | MIT | https://github.com/rollup/plugins |
 | @rollup/rollup-linux-x64-gnu@4.60.2 | MIT | https://github.com/rollup/rollup |
@@ -620,4 +620,3 @@ available in the upstream repositories linked above.
 ```
 make licenses
 ```
-

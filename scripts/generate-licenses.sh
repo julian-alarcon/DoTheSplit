@@ -225,7 +225,7 @@ EOF
     to_entries
     | sort_by(.key)
     | .[]
-    | "| \(.key) | \(.value.licenses // "UNKNOWN" | if type=="array" then join(" OR ") else . end) | \(.value.repository // "—") |"
+    | "| \(.key) | \(.value.licenses // "UNKNOWN" | if type=="array" then join(" OR ") else . end) | \(.value.repository // "n/a") |"
   ' "$TMP/npm.json"
   echo
 

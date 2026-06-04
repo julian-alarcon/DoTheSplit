@@ -36,6 +36,12 @@ docker compose up -d
 
 Open http://localhost:3000.
 
+## Install on TrueNAS
+
+Running on TrueNAS SCALE? See [INSTALL.md](INSTALL.md) for the Custom App
+walkthrough: dataset layout, the host-path Postgres mount, and consuming the
+first-run setup token from the API logs.
+
 ## Container images
 
 Tagged releases publish multi-arch (`linux/amd64`, `linux/arm64`) OCI images to

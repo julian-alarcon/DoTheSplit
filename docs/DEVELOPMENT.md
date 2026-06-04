@@ -178,25 +178,9 @@ Then open <http://localhost:3000/login>, log in with the credentials you just cr
 
 ## Deploy (LAN / TrueNAS)
 
-This stack ships HTTP-only by default for LAN use on TrueNAS. For anything internet-facing, terminate TLS at an upstream reverse proxy (Caddy, Traefik, Cloudflare Tunnel) and flip the cookie flags.
-
-```bash
-# One-time, on the host
-cp .env.example .env
-echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"    >> .env
-echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"   >> .env
-echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"  >> .env
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
-# Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
-
-# For HTTPS deployments
-echo "COOKIE_SECURE=true"                          >> .env
-echo "WEB_ORIGIN=https://split.yourdomain.tld"     >> .env
-
-docker compose up -d --build
-```
-
-When `COOKIE_SECURE=true` the session cookie is renamed to `__Host-dts_session` (browsers reject the `__Host-` prefix without `Secure`). When `false`, it's the plain `dts_session`. The backend picks the right name automatically.
+Operator-facing install steps live in [../INSTALL.md](../INSTALL.md). What
+follows is the cryptographic background and update mechanics worth knowing
+when changing the deploy.
 
 ### What the three keys do
 

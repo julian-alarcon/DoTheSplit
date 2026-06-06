@@ -103,9 +103,13 @@ const others = otherCurrencies();
           </optgroup>
         </select>
       </label>
-      {currencyLocked && (
+      {currencyLocked ? (
         <p id="currency-lock-hint" class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
           Currency is fixed after the first expense or settlement. To change it, delete all activity or create a new group.
+        </p>
+      ) : (
+        <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+          Each group uses a single currency. Multi-currency groups are not supported.
         </p>
       )}
       <button type="submit" class="btn-primary mt-1 self-end">Save</button>

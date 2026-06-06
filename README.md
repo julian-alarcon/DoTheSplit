@@ -40,6 +40,7 @@ Open http://localhost:3000.
 - `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
+- `/docs/IMPORT.md`: importing a group from a Splitwise CSV export
 - `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`)
 - `/docker-compose.yml`: local + LAN deployment stack
 - `/scripts`: SBOM and third-party-license generators
@@ -110,7 +111,7 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short
 - **Accounts**: register / login, display name + password change, personal timezone, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
-- **Groups**: create / rename / delete, per-group currency, invites, leave, transfer ownership, default percent split for 2-member groups.
+- **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
 - **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs.
 - **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
@@ -124,16 +125,16 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- **Import** from CSV
+- **Export** a group's ledger to CSV.
 
 ### Medium term
 
 - **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
 - Extend search filters with date range and member.
 - Add **Filter** to expenses activity list by category, member, date range.
+- **Import** from Tricount
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Export** a group's ledger to CSV.
 - **Expense attachments / receipts** (photo or PDF).
 - **Backup**
 

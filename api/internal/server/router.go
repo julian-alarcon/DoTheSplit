@@ -90,6 +90,8 @@ func New(s *handlers.Server) http.Handler {
 
 	auth.GET("/search", s.Search)
 
+	auth.POST("/imports/splitwise", s.ImportSplitwise)
+
 	auth.GET("/groups/:id/recurring-expenses", s.ListRecurringExpenses)
 	auth.POST("/groups/:id/recurring-expenses", s.CreateRecurringExpense)
 	auth.DELETE("/recurring-expenses/:id", s.DeleteRecurringExpense)

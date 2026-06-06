@@ -198,6 +198,23 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 			},
 			extraField: "approved_by",
 		},
+		// Imports
+		{
+			name:   "import_splitwise",
+			method: "POST",
+			path:   "/v1/imports/splitwise",
+			auth:   aCookie,
+			body: map[string]any{
+				"csv":              "Date,Description,Category,Cost,Currency,Alice,Bob\n2024-01-01,A,Dining out,4.00,EUR,2.00,-2.00\n",
+				"group_name":       "G",
+				"default_currency": "EUR",
+				"members": []map[string]any{
+					{"csv_name": "Alice", "email": "alice@test.dev"},
+					{"csv_name": "Bob", "email": "bob@test.dev"},
+				},
+			},
+			extraField: "auto_apply",
+		},
 		// Recurring
 		{
 			name:   "create_recurring",

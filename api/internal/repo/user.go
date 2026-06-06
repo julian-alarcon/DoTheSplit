@@ -326,6 +326,39 @@ func (r *UserRepo) UpdateNotificationPrefs(ctx context.Context, id uuid.UUID, pr
 	return nil
 }
 
+// FindOrCreateStub returns an existing non-deleted user matching emailHash,
+// or inserts a new placeholder row when none exists. Stubs are non-loginable
+// (the caller passes an unguessable scrambled password hash) and exist solely
+// so importer flows can attach foreign keys for users who haven't registered
+// yet. The same return shape is used in both branches so callers can't
+// distinguish "real" from "stub" via the response, which preserves the
+// no-enumeration property of the import endpoint.
+func (r *UserRepo) FindOrCreateStub(ctx context.Context, q Querier, emailHash, emailEnc []byte, displayName, scrambledPwHash string) (*User, error) {
+	if q == nil {
+		q = poolQuerier{r.pool}
+	}
+	var u User
+	err := scanUser(q.QueryRow(ctx, `
+		SELECT `+userCols+`
+		FROM users WHERE email_hash = $1 AND deleted_at IS NULL
+	`, emailHash), &u)
+	if err == nil {
+		return &u, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	row := q.QueryRow(ctx, `
+		INSERT INTO users (email_hash, email_encrypted, display_name, password_hash)
+		VALUES ($1, $2, $3, $4)
+		RETURNING `+userCols+`
+	`, emailHash, emailEnc, displayName, scrambledPwHash)
+	if err := scanUser(row, &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 // SoftDelete marks the account as deleted, scrubs identifying fields, and
 // renames the user to a tombstone referencing their own UUID so historical
 // ledger entries stay traceable. Sessions should be cleared separately.

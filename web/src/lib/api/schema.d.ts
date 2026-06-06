@@ -612,6 +612,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/imports/splitwise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a group from a Splitwise CSV export (2..32 members)
+         * @description Parses a Splitwise CSV export and either previews the result
+         *     (`dry_run: true`) or commits it (`dry_run: false`) by creating a new
+         *     group, resolving member emails, and creating one or more expenses per
+         *     valid row.
+         *
+         *     Splitwise convention: each row's per-user column is the user's signed
+         *     net balance change for the row (`share - paid`). Negative users are
+         *     creditors (paid more than they owe), positive users are debtors. A
+         *     well-formed row sums to zero (within rounding tolerance) and has at
+         *     least one user on each side. Rows that violate the invariant (all
+         *     zero, same sign, sum too far from zero, blank, or the trailing
+         *     "Total balance" row) are skipped silently and counted in
+         *     `skipped_count`. The strict header
+         *     `Date,Description,Category,Cost,Currency,<name1>,<name2>,...` is
+         *     enforced.
+         *
+         *     For rows where multiple users paid (multi-creditor rows), each
+         *     creditor becomes a separate expense; the description gets a `[k/K]`
+         *     suffix so the imported group is still browsable. The total imported
+         *     amount may be less than the row's nominal cost in this case (each
+         *     creditor's self-share is dropped because dothesplit only supports
+         *     one payer per expense). Net balances are preserved exactly.
+         *
+         *     Member emails are not validated against the user database to avoid
+         *     leaking which addresses are registered. Unknown emails get a
+         *     non-loginable placeholder account so foreign keys stay valid; the real
+         *     owner can claim the account in a future flow.
+         *
+         *     Hard limits: 256 KiB raw CSV; 5000 rows; 32 members; field length
+         *     256 chars. Categories are mapped case-insensitively against the
+         *     seeded label list, falling back to `other`.
+         */
+        post: operations["importSplitwise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups/{id}/recurring-expenses": {
         parameters: {
             query?: never;
@@ -1211,6 +1261,104 @@ export interface components {
             label: string;
             /** @description Section header for the picker (e.g. `Entertainment`, `No category`). */
             group_label: string;
+        };
+        /**
+         * @example {
+         *       "csv": "Date,Description,Category,Cost,Currency,Alice,Bob\n2024-01-01,Coffee,Dining out,4.00,EUR,2.00,-2.00\n",
+         *       "group_name": "Prost",
+         *       "default_currency": "EUR",
+         *       "members": [
+         *         {
+         *           "csv_name": "Alice",
+         *           "email": "alice@example.com"
+         *         },
+         *         {
+         *           "csv_name": "Bob",
+         *           "email": "bob@example.com"
+         *         }
+         *       ],
+         *       "dry_run": true
+         *     }
+         */
+        ImportSplitwiseRequest: {
+            /** @description Raw CSV text exactly as exported by Splitwise. Hard cap 256 KiB. */
+            csv: string;
+            group_name: string;
+            default_currency: string;
+            /** @description One entry per CSV user column, in column order. Must match the header exactly. */
+            members: components["schemas"]["ImportSplitwiseMember"][];
+            /**
+             * @description When true, parses the CSV and returns the preview without writing anything.
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        ImportSplitwiseMember: {
+            /** @description Name as it appears in the CSV column header. */
+            csv_name: string;
+            /** Format: email */
+            email: string;
+        };
+        ImportSplitwiseResponse: {
+            /**
+             * Format: uuid
+             * @description Set only when the import was committed (`dry_run: false`).
+             */
+            group_id?: string;
+            group_name: string;
+            default_currency: string;
+            members: components["schemas"]["ImportSplitwiseMember"][];
+            /** @description Number of valid expenses parsed from the CSV. */
+            expense_count: number;
+            /** @description Number of valid settlements parsed from the CSV (rows whose Splitwise category is "Payment"). */
+            settlement_count: number;
+            /** @description Number of rows skipped (malformed, structurally invalid, or the trailing "Total balance" row). */
+            skipped_count: number;
+            /** @description Raw CSV records (rejoined with commas) for rows that were skipped, capped at 50 entries. Useful for surfacing why an import didn't include certain rows. */
+            skipped: string[];
+            /** @description Projected net balance per member after the import, derived from the expenses AND settlements that will actually be created (sign convention matches /v1/groups/{id}/balances). */
+            balances: components["schemas"]["ImportSplitwiseBalance"][];
+            preview: components["schemas"]["ImportSplitwisePreviewRow"][];
+            settlement_preview: components["schemas"]["ImportSplitwiseSettlementPreview"][];
+            /**
+             * @description Distinct ISO currency codes seen in the CSV, in first-seen order.
+             *     DoTheSplit groups are single-currency, so a length > 1 means the
+             *     CSV mixes currencies and the imported values will be stored under
+             *     the chosen `default_currency` regardless of their original code.
+             *     UI clients should warn the user in that case.
+             */
+            csv_currencies: string[];
+        };
+        ImportSplitwiseBalance: {
+            /** @description Member name as it appears in the CSV header. */
+            csv_name: string;
+            /**
+             * Format: int64
+             * @description Net cents; positive = member is owed, negative = member owes.
+             */
+            net_cents: number;
+        };
+        ImportSplitwisePreviewRow: {
+            description: string;
+            /** Format: date-time */
+            incurred_at: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            category_slug: string;
+            payer_csv_name: string;
+        };
+        ImportSplitwiseSettlementPreview: {
+            note: string;
+            /** Format: date-time */
+            settled_at: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            /** @description Member who paid (CSV column header). */
+            from_csv_name: string;
+            /** @description Member who received the payment (CSV column header). */
+            to_csv_name: string;
         };
         ExpenseRevision: {
             /** Format: uuid */
@@ -2709,6 +2857,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importSplitwise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSplitwiseRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview (when `dry_run: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            /** @description Created (when `dry_run: false`) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

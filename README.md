@@ -40,7 +40,7 @@ Open http://localhost:3000.
 - `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
-- `/docs/IMPORT.md`: importing a group from a Splitwise CSV export
+- `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
 - `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`)
 - `/docker-compose.yml`: local + LAN deployment stack
 - `/scripts`: SBOM and third-party-license generators
@@ -113,9 +113,10 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
 - **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs.
-- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages.
+- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
 - **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
+- **Import & export**: CSV in / out via `/import` (Splitwise or DoTheSplit) and group settings → Export. The DoTheSplit format keeps the Splitwise prefix and adds `Time`, `Payer`, `Notes`, `Created`, `CreatedBy`, so a round-trip preserves second-precision timestamps, explicit payers, and per-expense notes.
 - **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP, password confirmation for self-delete.
 - **API**: OpenAPI 3.0.3 contract at [docs/openapi.yaml](docs/openapi.yaml); every business endpoint is under `/v1/...`.
 
@@ -125,18 +126,16 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- **Export** a group's ledger to CSV.
+- Extend search filters with date range and member.
+- Add **Filter** to expenses activity list by category, member, date range.
+- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
 
 ### Medium term
 
-- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
-- Extend search filters with date range and member.
-- Add **Filter** to expenses activity list by category, member, date range.
-- **Import** from Tricount
+- **Backup**
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Expense attachments / receipts** (photo or PDF).
-- **Backup**
+- **Import** from Tricount
 
 ### Longer term / ideas
 
@@ -144,6 +143,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 - **Real-time sync** (push updates via SSE or WebSockets instead of the current polling / refresh-on-focus model).
 - **TLS terminated by Caddy in-compose** as a first-class option, replacing the current "terminate outside the stack" note below.
 - **Multi-currency FX**: today each group picks one default currency; cross-currency groups would need conversion rates and a locked-at-time-of-entry policy.
+- **Expense attachments / receipts** (photo or PDF).
 
 Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format is a deliberate GDPR-minimizing choice), account hard-delete (soft delete preserves other members' ledgers).
 

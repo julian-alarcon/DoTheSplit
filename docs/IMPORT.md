@@ -1,8 +1,16 @@
-# Importing a group
+# Importing and exporting a group
 
 DoTheSplit can hydrate a brand-new group from a CSV export of another
-expense-sharing service. The first supported source is Splitwise. More
-importers will be added behind the same `/import` page.
+expense-sharing service, and any group member can download a CSV of the
+group's full ledger from settings. Two import sources ship today:
+
+- **Splitwise** ([Splitwise section](#splitwise)): the source format the
+  rest of this document was written against.
+- **DoTheSplit** ([DoTheSplit section](#dothesplit)): the file produced
+  by the export endpoint, a strict superset of the Splitwise format.
+
+More importers (Tricount and friends) will land behind the same
+`/import` page.
 
 ## Splitwise
 
@@ -137,3 +145,79 @@ importer from being used to enumerate the user table.
 If you re-import a CSV that names the same email twice in different runs,
 you will create two separate groups; the placeholder user is reused if it
 already exists.
+
+## Exporting a group
+
+Open a group, go to **Settings**, and click **Export CSV** in the Export
+block. The file is `<group-slug>_<YYYY-MM-DD>_export.csv`. Any member can
+export.
+
+The header is a strict superset of the Splitwise format:
+
+```
+Date,Description,Category,Cost,Currency,Time,Payer,Notes,Created,CreatedBy,<member1>,<member2>,...
+```
+
+The first 5 mandatory columns and the trailing per-member columns match
+the Splitwise format exactly. The middle columns carry the data the
+Splitwise format drops:
+
+| Column      | What it is                                                                          |
+|-------------|-------------------------------------------------------------------------------------|
+| `Time`      | RFC 3339 time component of `incurred_at` / `settled_at` in UTC (`HH:MM:SSZ`).      |
+| `Payer`     | Display name of the payer (or settlement sender). Bypasses sign-based inference.   |
+| `Notes`     | Free-form `expense.notes` field. Empty for settlements.                            |
+| `Created`   | RFC 3339 timestamp of when the row was first written in DoTheSplit.                |
+| `CreatedBy` | Display name of the user who entered the row.                                       |
+
+Per-row member columns hold each member's signed `paid - share` in the
+group's default currency (positive = the member is owed for this row,
+negative = the member owes). A `Total balance` footer mirrors the
+balances endpoint.
+
+Settlements appear as rows with `Category = Payment`; the from-user's
+column gets the positive amount and the to-user's the negative.
+
+The file carries display names, never emails. On re-import you map each
+CSV name to an email, exactly like the Splitwise import flow.
+
+## DoTheSplit
+
+A DoTheSplit-flavored CSV (the one the export endpoint emits) is the
+input to `/import/dothesplit`. The flow is identical to the Splitwise
+importer (file picker → name/email mapping → preview → commit), and the
+five-column Splitwise format is also accepted (the optional middle
+columns degrade gracefully to "no time / no explicit payer / no notes").
+
+What the dothesplit importer reads from the extra columns:
+
+- `Time`: combined with `Date` to populate `incurred_at` /
+  `settled_at` to the second. The Splitwise importer rounds to
+  midnight; this one does not.
+- `Payer`: the named payer wins over the sign-based inference. This
+  matters for rows where multiple members have non-zero sign (the
+  Splitwise inference picks the largest creditor; the explicit column
+  is the source of truth for the original group state).
+- `Notes`: round-trips into `expense.notes`. Empty for settlements.
+- `Created` / `CreatedBy`: shown in the preview as provenance, not
+  stored. The new group has fresh audit columns with the importing
+  user as `created_by`.
+
+The legacy Splitwise importer also accepts dothesplit-shaped files
+(it skips the optional columns), so you can re-import an exported
+DoTheSplit CSV through either route. The dothesplit importer is the
+faithful one.
+
+### Round-trip guarantees
+
+Exporting a group, then re-importing the file via `/import/dothesplit`,
+produces a fresh group whose:
+
+- balances match the source group's balances exactly,
+- expenses preserve description, amount, payer, notes, and `incurred_at`
+  to the second,
+- settlements preserve from / to / amount / note / `settled_at`.
+
+The new group has fresh `created_at` / `created_by` per row (the
+importing user is the new creator), and member emails come from the
+mapping you supplied at commit time, not from the file.

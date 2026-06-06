@@ -1,17 +1,14 @@
-# DoTheSplit
+<p align="center">
+  <img src="logo.svg" alt="DoTheSplit logo" width="180" />
+</p>
 
-Open-source expense-sharing app. See [BLUEPRINT.md](BLUEPRINT.md) for the product
-definition.
+<h1 align="center">DoTheSplit</h1>
 
-## Layout
+<p align="center">
+  Open-source expense-sharing app. See <a href="BLUEPRINT.md">BLUEPRINT.md</a> for the product definition.
+</p>
 
-- `/api`: Go backend (Gin, pgx, oapi-codegen)
-- `/web`: Astro 6 + Tailwind v4 frontend (SSR via `@astrojs/node`)
-- `/docs/openapi.yaml`: API contract (source of truth)
-- `/docker-compose.yml`: local & LAN deployment
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
-guide.
+---
 
 ## Quick start
 

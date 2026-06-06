@@ -33,6 +33,20 @@ docker compose up -d
 
 Open http://localhost:3000.
 
+
+## Layout
+
+- `/api`: Go 1.25 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
+- `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
+- `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
+- `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
+- `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`)
+- `/docker-compose.yml`: local + LAN deployment stack
+- `/scripts`: SBOM and third-party-license generators
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
+guide and [INSTALL.md](INSTALL.md) for production install paths.
+
 ## Install on TrueNAS
 
 Running on TrueNAS SCALE? See [INSTALL.md](INSTALL.md) for the Custom App
@@ -110,7 +124,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- TrueNAS deployment recipe or instructions
+- **Import** from CSV
 
 ### Medium term
 
@@ -119,7 +133,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 - Add **Filter** to expenses activity list by category, member, date range.
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Import** from CSV
 - **Export** a group's ledger to CSV.
 - **Expense attachments / receipts** (photo or PDF).
 - **Backup**

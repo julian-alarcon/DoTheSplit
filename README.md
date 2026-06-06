@@ -1,17 +1,14 @@
-# DoTheSplit
+<p align="center">
+  <img src="logo.svg" alt="DoTheSplit logo" width="180" />
+</p>
 
-Open-source expense-sharing app. See [BLUEPRINT.md](BLUEPRINT.md) for the product
-definition.
+<h1 align="center">DoTheSplit</h1>
 
-## Layout
+<p align="center">
+  Open-source expense-sharing app. See <a href="BLUEPRINT.md">BLUEPRINT.md</a> for the product definition.
+</p>
 
-- `/api`: Go backend (Gin, pgx, oapi-codegen)
-- `/web`: Astro 6 + Tailwind v4 frontend (SSR via `@astrojs/node`)
-- `/docs/openapi.yaml`: API contract (source of truth)
-- `/docker-compose.yml`: local & LAN deployment
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
-guide.
+---
 
 ## Quick start
 
@@ -35,6 +32,21 @@ docker compose up -d
 ```
 
 Open http://localhost:3000.
+
+
+## Layout
+
+- `/api`: Go 1.25 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
+- `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
+- `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
+- `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
+- `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
+- `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`)
+- `/docker-compose.yml`: local + LAN deployment stack
+- `/scripts`: SBOM and third-party-license generators
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
+guide and [INSTALL.md](INSTALL.md) for production install paths.
 
 ## Install on TrueNAS
 
@@ -99,11 +111,12 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short
 - **Accounts**: register / login, display name + password change, personal timezone, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
-- **Groups**: create / rename / delete, per-group currency, invites, leave, transfer ownership, default percent split for 2-member groups.
+- **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
 - **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs.
-- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages.
+- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated activity feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
 - **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
+- **Import & export**: CSV in / out via `/import` (Splitwise or DoTheSplit) and group settings → Export. The DoTheSplit format keeps the Splitwise prefix and adds `Time`, `Payer`, `Notes`, `Created`, `CreatedBy`, so a round-trip preserves second-precision timestamps, explicit payers, and per-expense notes.
 - **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP, password confirmation for self-delete.
 - **API**: OpenAPI 3.0.3 contract at [docs/openapi.yaml](docs/openapi.yaml); every business endpoint is under `/v1/...`.
 
@@ -113,19 +126,16 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Near term
 
-- TrueNAS deployment recipe or instructions
+- Extend search filters with date range and member.
+- Add **Filter** to expenses activity list by category, member, date range.
+- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
 
 ### Medium term
 
-- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
-- Extend search filters with date range and member.
-- Add **Filter** to expenses activity list by category, member, date range.
+- **Backup**
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
-- **Import** from CSV
-- **Export** a group's ledger to CSV.
-- **Expense attachments / receipts** (photo or PDF).
-- **Backup**
+- **Import** from Tricount
 
 ### Longer term / ideas
 
@@ -133,6 +143,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 - **Real-time sync** (push updates via SSE or WebSockets instead of the current polling / refresh-on-focus model).
 - **TLS terminated by Caddy in-compose** as a first-class option, replacing the current "terminate outside the stack" note below.
 - **Multi-currency FX**: today each group picks one default currency; cross-currency groups would need conversion rates and a locked-at-time-of-entry policy.
+- **Expense attachments / receipts** (photo or PDF).
 
 Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format is a deliberate GDPR-minimizing choice), account hard-delete (soft delete preserves other members' ledgers).
 

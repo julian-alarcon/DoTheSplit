@@ -23,8 +23,11 @@ function setupFilterPicker(root: HTMLElement) {
   const openBtn = root.querySelector<HTMLElement>("[data-filter-open]");
   const labelEl = root.querySelector<HTMLElement>("[data-filter-label]");
   const iconEl = root.querySelector<HTMLElement>("[data-filter-icon]");
-  const hiddenInput = root.querySelector<HTMLInputElement>("input[type=hidden]");
-  const cancelBtns = root.querySelectorAll<HTMLButtonElement>("[data-filter-cancel]");
+  const hiddenInput =
+    root.querySelector<HTMLInputElement>("input[type=hidden]");
+  const cancelBtns = root.querySelectorAll<HTMLButtonElement>(
+    "[data-filter-cancel]",
+  );
   if (!dialog || !openBtn || !labelEl || !hiddenInput) return;
 
   openBtn.addEventListener("click", (e) => {
@@ -39,32 +42,34 @@ function setupFilterPicker(root: HTMLElement) {
     });
   });
 
-  root.querySelectorAll<HTMLButtonElement>("[data-filter-option]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const value = btn.dataset.value ?? "";
-      const label = btn.dataset.label ?? "";
-      hiddenInput.value = value;
-      hiddenInput.dispatchEvent(new Event("input", { bubbles: true }));
-      hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
-      labelEl.textContent = label;
-      if (iconEl) {
-        const sourceSvg = btn.querySelector("svg");
-        if (sourceSvg) {
-          iconEl.replaceChildren(sourceSvg.cloneNode(true));
-        } else {
-          iconEl.replaceChildren();
+  root
+    .querySelectorAll<HTMLButtonElement>("[data-filter-option]")
+    .forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const value = btn.dataset.value ?? "";
+        const label = btn.dataset.label ?? "";
+        hiddenInput.value = value;
+        hiddenInput.dispatchEvent(new Event("input", { bubbles: true }));
+        hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+        labelEl.textContent = label;
+        if (iconEl) {
+          const sourceSvg = btn.querySelector("svg");
+          if (sourceSvg) {
+            iconEl.replaceChildren(sourceSvg.cloneNode(true));
+          } else {
+            iconEl.replaceChildren();
+          }
         }
-      }
-      dialog.close();
-      // If this picker is inside a form marked for autosubmit, re-run the
-      // search immediately so the user doesn't have to click Search again.
-      if (root.closest("[data-filter-autosubmit]")) {
-        const form = root.closest("form");
-        form?.requestSubmit();
-      }
+        dialog.close();
+        // If this picker is inside a form marked for autosubmit, re-run the
+        // search immediately so the user doesn't have to click Search again.
+        if (root.closest("[data-filter-autosubmit]")) {
+          const form = root.closest("form");
+          form?.requestSubmit();
+        }
+      });
     });
-  });
 }
 
 document
@@ -73,12 +78,18 @@ document
 
 // Strip empty filter inputs on submit so the resulting URL stays clean
 // (e.g. /search?q=foo instead of /search?q=foo&group_id=&category_id=).
-document.querySelectorAll<HTMLFormElement>("[data-filter-form]").forEach((form) => {
-  form.addEventListener("submit", () => {
-    form.querySelectorAll<HTMLInputElement>("input[type=hidden][data-filter-strip-empty]").forEach((input) => {
-      if (input.value === "") input.disabled = true;
+document
+  .querySelectorAll<HTMLFormElement>("[data-filter-form]")
+  .forEach((form) => {
+    form.addEventListener("submit", () => {
+      form
+        .querySelectorAll<HTMLInputElement>(
+          "input[type=hidden][data-filter-strip-empty]",
+        )
+        .forEach((input) => {
+          if (input.value === "") input.disabled = true;
+        });
     });
   });
-});
 
 export {};

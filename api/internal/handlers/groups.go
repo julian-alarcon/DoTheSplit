@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -205,6 +209,71 @@ func toAPIGroup(g *repo.Group, members []repo.GroupMember) apigen.Group {
 			entries[i] = apigen.DefaultSplitEntry{UserId: e.UserID, BasisPoints: int(e.BasisPoints)}
 		}
 		out.DefaultSplit = &entries
+	}
+	return out
+}
+
+// ExportGroupCSV streams the full group ledger as a Splitwise-compatible
+// CSV with dothesplit-only metadata columns. Any group member can call
+// it (membership enforced by the service).
+func (s *Server) ExportGroupCSV(c *gin.Context) {
+	u := middleware.User(c)
+	groupID, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	var buf bytes.Buffer
+	res, err := s.Exporter.Export(c.Request.Context(), &buf, u.ID, groupID)
+	switch {
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("%s_%s_export.csv", slugifyForFilename(res.GroupName), res.GeneratedAt.Format("2006-01-02"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Status(http.StatusOK)
+	_, _ = c.Writer.Write(buf.Bytes())
+}
+
+// slugifyForFilename produces a filesystem-safe slug. Lowercase ASCII
+// alphanumerics and dashes only; runs of other characters collapse to
+// a single dash; capped at 40 chars; falls back to "group" when the
+// input has no usable characters.
+func slugifyForFilename(name string) string {
+	var b strings.Builder
+	prevDash := true
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			prevDash = false
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			// Drop non-ASCII letters/digits to keep filenames portable.
+			if !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		default:
+			if !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+		if b.Len() >= 40 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "group"
 	}
 	return out
 }

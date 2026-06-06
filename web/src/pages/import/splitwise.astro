@@ -1,0 +1,155 @@
+---
+import Base from "@/layouts/Base.astro";
+import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currencies";
+
+const locale = Astro.locals.locale;
+const others = otherCurrencies();
+---
+
+<Base title="Import Splitwise" back={{ href: "/import", label: "Import" }}>
+  <h1 class="mb-2 text-2xl font-semibold">Splitwise</h1>
+  <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
+    Upload a Splitwise CSV export. Any group size is supported. We parse the
+    file on the server, show you a preview, and let you confirm before any
+    data is written.
+  </p>
+
+  {/* Phase 1: file picker. */}
+  <section id="phase-pick" class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <form id="csv-pick-form" class="flex flex-col gap-3">
+      <label class="field">
+        <input
+          id="csv-file"
+          name="csv_file"
+          type="file"
+          accept=".csv,text/csv"
+          required
+          class="field-input file:mr-3 file:rounded-sm file:border-0 file:bg-neutral-100 file:px-3 file:py-1 file:text-sm dark:file:bg-neutral-800"
+        />
+        <span class="field-label" data-required>CSV file</span>
+      </label>
+      <p class="field-error">Pick a Splitwise CSV export (.csv, max 256 KiB).</p>
+      <p id="csv-pick-error" class="hidden text-sm text-red-600 dark:text-red-400" role="alert"></p>
+      <button type="submit" class="btn-primary mt-2 self-end">Next</button>
+    </form>
+  </section>
+
+  {/* Phase 2: preview + confirm. Hidden until phase 1 succeeds. */}
+  <section id="phase-review" class="mt-4 hidden flex-col gap-4">
+    <form
+      id="csv-import-form"
+      method="POST"
+      action="/api/import-splitwise"
+      class="flex flex-col gap-3 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <input type="hidden" id="csv-text" name="csv" value="" />
+
+      <label class="field">
+        <input
+          id="group-name"
+          name="group_name"
+          required
+          maxlength="80"
+          placeholder=" "
+          class="field-input"
+        />
+        <span class="field-label" data-required>Group name</span>
+      </label>
+      <p class="field-error">Required.</p>
+
+      <label class="field-select-row">
+        <span>Default currency</span>
+        <select id="default-currency" name="default_currency" class="field-select">
+          <optgroup label="Common">
+            {COMMON_CURRENCIES.map((c) => (
+              <option value={c} selected={c === "EUR"}>{currencyLabel(c, locale)}</option>
+            ))}
+          </optgroup>
+          <optgroup label="All currencies">
+            {others.map((c) => (
+              <option value={c}>{currencyLabel(c, locale)}</option>
+            ))}
+          </optgroup>
+        </select>
+      </label>
+      <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+        DoTheSplit groups use a single currency. We pre-select the first one we
+        find in the CSV; you can pick any currency before importing.
+      </p>
+      <div
+        id="currency-mixed-warning"
+        class="hidden rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        role="alert"
+      >
+        <p class="font-medium">This CSV mixes multiple currencies</p>
+        <p class="mt-1">
+          Splitwise allows multi-currency groups; DoTheSplit does not. The
+          imported amounts are kept as-is but stored under the single chosen
+          currency, so the values will not be a faithful conversion of the
+          originals. Detected in the file: <span id="currency-mixed-list" class="font-mono"></span>.
+        </p>
+      </div>
+
+      <fieldset class="flex flex-col gap-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+        <legend class="px-1 text-sm font-medium">Members</legend>
+        <p class="text-xs text-neutral-600 dark:text-neutral-400">
+          Map each Splitwise name to the email of a registered DoTheSplit user.
+          Unknown emails will work too: the imported expenses are kept against a
+          placeholder account that the real owner can claim later.
+        </p>
+        <div id="member-fields" class="flex flex-col gap-3"></div>
+      </fieldset>
+
+      <input type="hidden" id="member-count" name="member_count" value="" />
+
+      <div class="rounded-md border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <div class="mb-2 font-medium">Balances preview</div>
+        <p class="mb-2 text-xs text-neutral-600 dark:text-neutral-400">
+          Projected net balance per member after the import. Derived from the
+          expenses that will actually be created.
+        </p>
+        <ul id="balances-list" class="flex flex-col gap-1"></ul>
+      </div>
+
+      <div class="rounded-md border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-medium">Expenses preview</span>
+          <span id="counts" class="text-xs text-neutral-600 dark:text-neutral-400"></span>
+        </div>
+        <ul id="preview-list" class="flex flex-col gap-2"></ul>
+        <p id="preview-more" class="mt-2 hidden text-xs text-neutral-600 dark:text-neutral-400"></p>
+      </div>
+
+      <div id="settlement-section" class="hidden rounded-md border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-medium">Settlements preview</span>
+          <span id="settlement-counts" class="text-xs text-neutral-600 dark:text-neutral-400"></span>
+        </div>
+        <p class="mb-2 text-xs text-neutral-600 dark:text-neutral-400">
+          Splitwise <code>Payment</code> rows are imported as settlements (cash
+          transfers between members), not expenses.
+        </p>
+        <ul id="settlement-list" class="flex flex-col gap-2"></ul>
+        <p id="settlement-more" class="mt-2 hidden text-xs text-neutral-600 dark:text-neutral-400"></p>
+      </div>
+
+      <details id="skipped-section" class="hidden rounded-md border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <summary class="cursor-pointer font-medium">
+          Skipped rows <span id="skipped-counter" class="text-xs font-normal text-neutral-600 dark:text-neutral-400"></span>
+        </summary>
+        <p class="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
+          Lines from the CSV the importer didn't include (bad date, malformed cost, sign-mismatched balances, etc.) shown verbatim:
+        </p>
+        <pre id="skipped-list" class="mt-2 max-h-64 overflow-auto rounded-sm bg-neutral-50 p-2 font-mono text-xs leading-relaxed dark:bg-neutral-950"></pre>
+        <p id="skipped-more" class="mt-2 hidden text-xs text-neutral-600 dark:text-neutral-400"></p>
+      </details>
+
+      <div class="mt-2 flex items-center justify-between gap-3">
+        <button type="button" id="phase-back" class="btn-secondary btn-sm">Pick another file</button>
+        <button type="submit" class="btn-primary">Import</button>
+      </div>
+    </form>
+  </section>
+
+  <script src="/src/scripts/import-splitwise.ts"></script>
+</Base>

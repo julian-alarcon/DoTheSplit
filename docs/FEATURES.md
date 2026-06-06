@@ -78,6 +78,12 @@ when / field / old → new, including per-member split diffs.
 Net-balance computation over all expenses + settlements, plus a simplified "X
 owes Y" view. Settlements are recorded directly from the group page, appear in
 the same paginated activity feed as expenses, and have their own detail page.
+The settle-up form lets the actor pick **who is paying** (defaults to
+themselves), so a member can record a settlement on someone else's behalf
+without impersonating. Any group member can later edit a settlement
+(`PATCH /v1/settlements/{id}`): from / to / amount / note / settled-at are
+all mutable as long as both parties are still group members and differ from
+each other.
 
 ## Recurring expenses
 
@@ -110,6 +116,35 @@ scope — so the category picker only offers categories that actually have
 matches. The list is computed independently of the active category filter so
 the user can still switch off it. Both filters live in a collapsible panel
 below the search button and auto-open when any filter is active.
+
+## Import & export
+
+CSV-based import and export, anchored on the Splitwise format so users can
+move ledgers in and out of the app without lock-in.
+
+- **Splitwise import** at `/import/splitwise` parses an N-person Splitwise
+  CSV export, shows a dry-run preview (member balances, first few expenses,
+  settlement preview, mixed-currency warning, skipped rows), then commits as
+  a brand-new group. Rows where multiple people paid become multiple
+  expenses with a `[k/K]` description suffix; `Payment` rows become
+  settlements. Unknown member emails get non-loginable placeholder accounts
+  so the foreign keys stay valid (the real owner can claim later).
+- **Group CSV export** lives in group settings (`Export` block, any
+  member). The download is a Splitwise-shaped CSV plus dothesplit-only
+  metadata columns (`Time`, `Payer`, `Notes`, `Created`, `CreatedBy`)
+  inserted between `Currency` and the per-member block. The file is
+  re-importable through both the legacy Splitwise importer (which silently
+  skips the extra columns) and the dothesplit importer (which reads them).
+- **DoTheSplit import** at `/import/dothesplit` is the inverse of the
+  exporter: same dry-run/commit flow as the Splitwise importer, but the
+  parser honors the extra columns - second-precision `incurred_at` from
+  `Date + Time`, explicit `Payer` (overrides sign-based payer inference),
+  and `Notes` round-trip into `expense.notes`. `Created` / `CreatedBy` are
+  surfaced in the preview as provenance but not stored: the new group has
+  fresh audit columns with the importing user as `created_by`.
+- **Identity in the file**: column headers carry display names, never
+  emails. Both importers ask the user to map each CSV name to an email at
+  commit time, exactly the same flow.
 
 ## Settings & about
 

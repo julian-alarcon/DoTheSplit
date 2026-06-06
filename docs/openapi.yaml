@@ -54,6 +54,8 @@ tags:
     description: Merged, paginated feed of expenses and settlements for a group, newest first.
   - name: search
     description: Cross-group full-text search over expense descriptions/notes and settlement notes (member-only rows).
+  - name: imports
+    description: Bulk-import flows that hydrate a brand-new group from an external service's export. Currently Splitwise CSVs (2..32 members).
   - name: health
     description: Liveness and readiness probes (unversioned).
   - name: admin
@@ -580,6 +582,52 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/groups/{id}/export.csv:
+    get:
+      summary: Export the group's expenses and settlements as a CSV
+      description: |
+        Streams a CSV file with every non-deleted expense and settlement
+        in the group, in chronological order, followed by a final
+        `Total balance` row that mirrors `/v1/groups/{id}/balances`.
+
+        The format is a superset of Splitwise's CSV export:
+
+        ```
+        Date,Time,Description,Category,Cost,Currency,Payer,Notes,Created,CreatedBy,<member1>,<member2>,...
+        ```
+
+        The first 5 columns and the trailing per-member columns match
+        Splitwise's format (so the file can be re-imported through
+        `/v1/imports/splitwise`). The middle columns carry the extra
+        data dothesplit stores so a re-import via
+        `/v1/imports/dothesplit` can rebuild the group faithfully:
+        `Time` keeps the second-precision incurred-at timestamp,
+        `Payer` makes the payer explicit (avoiding sign-based
+        inference), `Notes` round-trips the expense's free-form notes,
+        and `Created`/`CreatedBy` carry provenance. Settlements appear
+        as `Payment` rows.
+
+        Per-row member columns hold each member's signed `paid - share`
+        in the group's default currency, formatted with two fraction
+        digits. Members are listed in `joined_at` order. Soft-deleted
+        users render with their stored display name (a stable
+        non-identifying tombstone), so the column header is stable.
+      operationId: exportGroupCSV
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/groups/{id}/members:
     post:
       summary: Add a member to a group (invitee must be registered)
@@ -825,6 +873,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      summary: Update a settlement (any group member)
+      description: |
+        Editable fields: `from_user_id`, `to_user_id`, `amount_cents`, `note`,
+        `settled_at`. Both parties must be current members of the settlement's
+        group, and must differ from each other. Any group member may edit.
+      operationId: updateSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/SettlementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSettlementRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       summary: Soft-delete a settlement (any group member)
       operationId: deleteSettlement
@@ -913,6 +986,109 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SearchResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/imports/splitwise:
+    post:
+      summary: Import a group from a Splitwise CSV export (2..32 members)
+      description: |
+        Parses a Splitwise CSV export and either previews the result
+        (`dry_run: true`) or commits it (`dry_run: false`) by creating a new
+        group, resolving member emails, and creating one or more expenses per
+        valid row.
+
+        Splitwise convention: each row's per-user column is the user's signed
+        net balance change for the row (`share - paid`). Negative users are
+        creditors (paid more than they owe), positive users are debtors. A
+        well-formed row sums to zero (within rounding tolerance) and has at
+        least one user on each side. Rows that violate the invariant (all
+        zero, same sign, sum too far from zero, blank, or the trailing
+        "Total balance" row) are skipped silently and counted in
+        `skipped_count`. The strict header
+        `Date,Description,Category,Cost,Currency,<name1>,<name2>,...` is
+        enforced.
+
+        For rows where multiple users paid (multi-creditor rows), each
+        creditor becomes a separate expense; the description gets a `[k/K]`
+        suffix so the imported group is still browsable. The total imported
+        amount may be less than the row's nominal cost in this case (each
+        creditor's self-share is dropped because dothesplit only supports
+        one payer per expense). Net balances are preserved exactly.
+
+        Member emails are not validated against the user database to avoid
+        leaking which addresses are registered. Unknown emails get a
+        non-loginable placeholder account so foreign keys stay valid; the real
+        owner can claim the account in a future flow.
+
+        Hard limits: 256 KiB raw CSV; 5000 rows; 32 members; field length
+        256 chars. Categories are mapped case-insensitively against the
+        seeded label list, falling back to `other`.
+      operationId: importSplitwise
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportSplitwiseRequest" }
+      responses:
+        "200":
+          description: "Preview (when `dry_run: true`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
+        "201":
+          description: "Created (when `dry_run: false`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/imports/dothesplit:
+    post:
+      summary: Import a group from a dothesplit CSV export (2..32 members)
+      description: |
+        Parses a dothesplit-formatted CSV (the file produced by
+        `GET /v1/groups/{id}/export.csv`) and either previews the
+        result (`dry_run: true`) or commits it (`dry_run: false`).
+
+        Same shape as `/v1/imports/splitwise`: dry-run preview, then
+        commit, with the same email-resolution rules. The difference
+        is the parser. The dothesplit format keeps the strict
+        Splitwise prefix `Date,Description,Category,Cost,Currency` and
+        the per-member columns at the end, but adds an optional middle
+        block of named columns the exporter populates: `Time` (full
+        second-precision incurred-at), `Payer` (explicit payer name to
+        bypass sign-based inference), `Notes` (free-form per-expense
+        notes), `Created` and `CreatedBy` (provenance, informational).
+
+        On commit the importer prefers the explicit `Payer` column
+        when present, combines `Date` + `Time` into the new
+        `incurred_at`, and round-trips `Notes` into `expense.notes`.
+        `Created` / `CreatedBy` are surfaced in the preview but not
+        stored: the new group has fresh audit columns, with the
+        importing user as `created_by`.
+
+        Limits and error handling match `/v1/imports/splitwise`.
+      operationId: importDoTheSplit
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportSplitwiseRequest" }
+      responses:
+        "200":
+          description: "Preview (when `dry_run: true`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
+        "201":
+          description: "Created (when `dry_run: false`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
@@ -1806,6 +1982,131 @@ components:
         label: { type: string, description: "Human-readable name." }
         group_label: { type: string, description: "Section header for the picker (e.g. `Entertainment`, `No category`)." }
 
+    ImportSplitwiseRequest:
+      type: object
+      additionalProperties: false
+      required: [csv, group_name, default_currency, members]
+      properties:
+        csv:
+          type: string
+          maxLength: 262144
+          description: Raw CSV text exactly as exported by Splitwise. Hard cap 256 KiB.
+        group_name: { type: string, minLength: 1, maxLength: 80 }
+        default_currency: { type: string, minLength: 3, maxLength: 3 }
+        members:
+          type: array
+          minItems: 2
+          maxItems: 32
+          description: One entry per CSV user column, in column order. Must match the header exactly.
+          items: { $ref: "#/components/schemas/ImportSplitwiseMember" }
+        dry_run:
+          type: boolean
+          default: false
+          description: When true, parses the CSV and returns the preview without writing anything.
+      example:
+        csv: "Date,Description,Category,Cost,Currency,Alice,Bob\n2024-01-01,Coffee,Dining out,4.00,EUR,2.00,-2.00\n"
+        group_name: Prost
+        default_currency: EUR
+        members:
+          - csv_name: Alice
+            email: alice@example.com
+          - csv_name: Bob
+            email: bob@example.com
+        dry_run: true
+
+    ImportSplitwiseMember:
+      type: object
+      additionalProperties: false
+      required: [csv_name, email]
+      properties:
+        csv_name: { type: string, minLength: 1, maxLength: 80, description: Name as it appears in the CSV column header. }
+        email: { type: string, format: email }
+
+    ImportSplitwiseResponse:
+      type: object
+      required: [group_name, default_currency, members, expense_count, settlement_count, skipped_count, skipped, balances, preview, settlement_preview, csv_currencies]
+      properties:
+        group_id:
+          type: string
+          format: uuid
+          description: "Set only when the import was committed (`dry_run: false`)."
+        group_name: { type: string }
+        default_currency: { type: string, minLength: 3, maxLength: 3 }
+        members:
+          type: array
+          minItems: 2
+          maxItems: 32
+          items: { $ref: "#/components/schemas/ImportSplitwiseMember" }
+        expense_count:
+          type: integer
+          description: Number of valid expenses parsed from the CSV.
+        settlement_count:
+          type: integer
+          description: Number of valid settlements parsed from the CSV (rows whose Splitwise category is "Payment").
+        skipped_count:
+          type: integer
+          description: Number of rows skipped (malformed, structurally invalid, or the trailing "Total balance" row).
+        skipped:
+          type: array
+          maxItems: 50
+          description: Raw CSV records (rejoined with commas) for rows that were skipped, capped at 50 entries. Useful for surfacing why an import didn't include certain rows.
+          items: { type: string }
+        balances:
+          type: array
+          minItems: 2
+          maxItems: 32
+          description: Projected net balance per member after the import, derived from the expenses AND settlements that will actually be created (sign convention matches /v1/groups/{id}/balances).
+          items: { $ref: "#/components/schemas/ImportSplitwiseBalance" }
+        preview:
+          type: array
+          maxItems: 6
+          items: { $ref: "#/components/schemas/ImportSplitwisePreviewRow" }
+        settlement_preview:
+          type: array
+          maxItems: 6
+          items: { $ref: "#/components/schemas/ImportSplitwiseSettlementPreview" }
+        csv_currencies:
+          type: array
+          description: |
+            Distinct ISO currency codes seen in the CSV, in first-seen order.
+            DoTheSplit groups are single-currency, so a length > 1 means the
+            CSV mixes currencies and the imported values will be stored under
+            the chosen `default_currency` regardless of their original code.
+            UI clients should warn the user in that case.
+          items: { type: string, minLength: 3, maxLength: 3 }
+
+    ImportSplitwiseBalance:
+      type: object
+      required: [csv_name, net_cents]
+      properties:
+        csv_name: { type: string, description: Member name as it appears in the CSV header. }
+        net_cents:
+          type: integer
+          format: int64
+          description: Net cents; positive = member is owed, negative = member owes.
+
+    ImportSplitwisePreviewRow:
+      type: object
+      required: [description, incurred_at, amount_cents, currency, category_slug, payer_csv_name]
+      properties:
+        description: { type: string }
+        incurred_at: { type: string, format: date-time }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        category_slug: { type: string }
+        payer_csv_name: { type: string }
+
+    ImportSplitwiseSettlementPreview:
+      type: object
+      required: [note, settled_at, amount_cents, currency, from_csv_name, to_csv_name]
+      properties:
+        note: { type: string }
+        settled_at: { type: string, format: date-time }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        from_csv_name: { type: string, description: Member who paid (CSV column header). }
+        to_csv_name: { type: string, description: Member who received the payment (CSV column header). }
+
     ExpenseRevision:
       type: object
       required: [id, expense_id, edited_by, edited_at, field, old_value, new_value]
@@ -1853,6 +2154,24 @@ components:
       additionalProperties: false
       required: [to_user_id, amount_cents]
       properties:
+        from_user_id:
+          type: string
+          format: uuid
+          description: |
+            Member who is paying. Optional, defaults to the authenticated user
+            when omitted. Must be a current group member, and must differ from
+            `to_user_id`.
+        to_user_id: { type: string, format: uuid }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        note: { type: string, maxLength: 200 }
+        settled_at: { type: string, format: date-time }
+
+    UpdateSettlementRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        from_user_id: { type: string, format: uuid }
         to_user_id: { type: string, format: uuid }
         amount_cents: { type: integer, format: int64, minimum: 1 }
         note: { type: string, maxLength: 200 }

@@ -31,6 +31,8 @@ type Server struct {
 	Recurring   *service.RecurringService
 	Activity    *service.ActivityService
 	SearchSvc   *service.SearchService
+	Imports     *service.SplitwiseImporter
+	Exporter    *service.GroupCSVExporter
 	Admin         *service.AdminService
 	Smtp          *service.SmtpService
 	Setup         *service.SetupService

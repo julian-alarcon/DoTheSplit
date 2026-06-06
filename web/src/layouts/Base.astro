@@ -51,10 +51,13 @@ const tzOverride = user?.timezone ?? null;
     <script src="/src/scripts/dialog-scroll-lock.ts"></script>
     <script src="/src/scripts/user-menu.ts"></script>
   </head>
-  <body class="flex min-h-screen flex-col">
+  <body class="flex min-h-dvh flex-col">
     <header class="border-b border-border bg-card/70 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <a href={user ? "/groups" : "/"} class="text-lg font-semibold">DoTheSplit</a>
+        <a href={user ? "/groups" : "/"} class="flex items-center gap-2 text-lg font-semibold">
+          <img src="/logo.svg" alt="" aria-hidden="true" width="40" height="40" class="-my-1.5 h-10 w-10" />
+          <span>DoTheSplit</span>
+        </a>
         {user ? (
           <div class="flex items-center gap-2 sm:gap-3">
             {user.is_admin && (

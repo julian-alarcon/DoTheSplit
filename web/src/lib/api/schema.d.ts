@@ -394,6 +394,51 @@ export interface paths {
         patch: operations["updateGroup"];
         trace?: never;
     };
+    "/v1/groups/{id}/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the group's expenses and settlements as a CSV
+         * @description Streams a CSV file with every non-deleted expense and settlement
+         *     in the group, in chronological order, followed by a final
+         *     `Total balance` row that mirrors `/v1/groups/{id}/balances`.
+         *
+         *     The format is a superset of Splitwise's CSV export:
+         *
+         *     ```
+         *     Date,Time,Description,Category,Cost,Currency,Payer,Notes,Created,CreatedBy,<member1>,<member2>,...
+         *     ```
+         *
+         *     The first 5 columns and the trailing per-member columns match
+         *     Splitwise's format (so the file can be re-imported through
+         *     `/v1/imports/splitwise`). The middle columns carry the extra
+         *     data dothesplit stores so a re-import via
+         *     `/v1/imports/dothesplit` can rebuild the group faithfully:
+         *     `Time` keeps the second-precision incurred-at timestamp,
+         *     `Payer` makes the payer explicit (avoiding sign-based
+         *     inference), `Notes` round-trips the expense's free-form notes,
+         *     and `Created`/`CreatedBy` carry provenance. Settlements appear
+         *     as `Payment` rows.
+         *
+         *     Per-row member columns hold each member's signed `paid - share`
+         *     in the group's default currency, formatted with two fraction
+         *     digits. Members are listed in `joined_at` order. Soft-deleted
+         *     users render with their stored display name (a stable
+         *     non-identifying tombstone), so the column header is stable.
+         */
+        get: operations["exportGroupCSV"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups/{id}/members": {
         parameters: {
             query?: never;
@@ -564,7 +609,13 @@ export interface paths {
         delete: operations["deleteSettlement"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a settlement (any group member)
+         * @description Editable fields: `from_user_id`, `to_user_id`, `amount_cents`, `note`,
+         *     `settled_at`. Both parties must be current members of the settlement's
+         *     group, and must differ from each other. Any group member may edit.
+         */
+        patch: operations["updateSettlement"];
         trace?: never;
     };
     "/v1/groups/{id}/activity": {
@@ -606,6 +657,97 @@ export interface paths {
         get: operations["search"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/splitwise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a group from a Splitwise CSV export (2..32 members)
+         * @description Parses a Splitwise CSV export and either previews the result
+         *     (`dry_run: true`) or commits it (`dry_run: false`) by creating a new
+         *     group, resolving member emails, and creating one or more expenses per
+         *     valid row.
+         *
+         *     Splitwise convention: each row's per-user column is the user's signed
+         *     net balance change for the row (`share - paid`). Negative users are
+         *     creditors (paid more than they owe), positive users are debtors. A
+         *     well-formed row sums to zero (within rounding tolerance) and has at
+         *     least one user on each side. Rows that violate the invariant (all
+         *     zero, same sign, sum too far from zero, blank, or the trailing
+         *     "Total balance" row) are skipped silently and counted in
+         *     `skipped_count`. The strict header
+         *     `Date,Description,Category,Cost,Currency,<name1>,<name2>,...` is
+         *     enforced.
+         *
+         *     For rows where multiple users paid (multi-creditor rows), each
+         *     creditor becomes a separate expense; the description gets a `[k/K]`
+         *     suffix so the imported group is still browsable. The total imported
+         *     amount may be less than the row's nominal cost in this case (each
+         *     creditor's self-share is dropped because dothesplit only supports
+         *     one payer per expense). Net balances are preserved exactly.
+         *
+         *     Member emails are not validated against the user database to avoid
+         *     leaking which addresses are registered. Unknown emails get a
+         *     non-loginable placeholder account so foreign keys stay valid; the real
+         *     owner can claim the account in a future flow.
+         *
+         *     Hard limits: 256 KiB raw CSV; 5000 rows; 32 members; field length
+         *     256 chars. Categories are mapped case-insensitively against the
+         *     seeded label list, falling back to `other`.
+         */
+        post: operations["importSplitwise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/dothesplit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a group from a dothesplit CSV export (2..32 members)
+         * @description Parses a dothesplit-formatted CSV (the file produced by
+         *     `GET /v1/groups/{id}/export.csv`) and either previews the
+         *     result (`dry_run: true`) or commits it (`dry_run: false`).
+         *
+         *     Same shape as `/v1/imports/splitwise`: dry-run preview, then
+         *     commit, with the same email-resolution rules. The difference
+         *     is the parser. The dothesplit format keeps the strict
+         *     Splitwise prefix `Date,Description,Category,Cost,Currency` and
+         *     the per-member columns at the end, but adds an optional middle
+         *     block of named columns the exporter populates: `Time` (full
+         *     second-precision incurred-at), `Payer` (explicit payer name to
+         *     bypass sign-based inference), `Notes` (free-form per-expense
+         *     notes), `Created` and `CreatedBy` (provenance, informational).
+         *
+         *     On commit the importer prefers the explicit `Payer` column
+         *     when present, combines `Date` + `Time` into the new
+         *     `incurred_at`, and round-trips `Notes` into `expense.notes`.
+         *     `Created` / `CreatedBy` are surfaced in the preview but not
+         *     stored: the new group has fresh audit columns, with the
+         *     importing user as `created_by`.
+         *
+         *     Limits and error handling match `/v1/imports/splitwise`.
+         */
+        post: operations["importDoTheSplit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1212,6 +1354,104 @@ export interface components {
             /** @description Section header for the picker (e.g. `Entertainment`, `No category`). */
             group_label: string;
         };
+        /**
+         * @example {
+         *       "csv": "Date,Description,Category,Cost,Currency,Alice,Bob\n2024-01-01,Coffee,Dining out,4.00,EUR,2.00,-2.00\n",
+         *       "group_name": "Prost",
+         *       "default_currency": "EUR",
+         *       "members": [
+         *         {
+         *           "csv_name": "Alice",
+         *           "email": "alice@example.com"
+         *         },
+         *         {
+         *           "csv_name": "Bob",
+         *           "email": "bob@example.com"
+         *         }
+         *       ],
+         *       "dry_run": true
+         *     }
+         */
+        ImportSplitwiseRequest: {
+            /** @description Raw CSV text exactly as exported by Splitwise. Hard cap 256 KiB. */
+            csv: string;
+            group_name: string;
+            default_currency: string;
+            /** @description One entry per CSV user column, in column order. Must match the header exactly. */
+            members: components["schemas"]["ImportSplitwiseMember"][];
+            /**
+             * @description When true, parses the CSV and returns the preview without writing anything.
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        ImportSplitwiseMember: {
+            /** @description Name as it appears in the CSV column header. */
+            csv_name: string;
+            /** Format: email */
+            email: string;
+        };
+        ImportSplitwiseResponse: {
+            /**
+             * Format: uuid
+             * @description Set only when the import was committed (`dry_run: false`).
+             */
+            group_id?: string;
+            group_name: string;
+            default_currency: string;
+            members: components["schemas"]["ImportSplitwiseMember"][];
+            /** @description Number of valid expenses parsed from the CSV. */
+            expense_count: number;
+            /** @description Number of valid settlements parsed from the CSV (rows whose Splitwise category is "Payment"). */
+            settlement_count: number;
+            /** @description Number of rows skipped (malformed, structurally invalid, or the trailing "Total balance" row). */
+            skipped_count: number;
+            /** @description Raw CSV records (rejoined with commas) for rows that were skipped, capped at 50 entries. Useful for surfacing why an import didn't include certain rows. */
+            skipped: string[];
+            /** @description Projected net balance per member after the import, derived from the expenses AND settlements that will actually be created (sign convention matches /v1/groups/{id}/balances). */
+            balances: components["schemas"]["ImportSplitwiseBalance"][];
+            preview: components["schemas"]["ImportSplitwisePreviewRow"][];
+            settlement_preview: components["schemas"]["ImportSplitwiseSettlementPreview"][];
+            /**
+             * @description Distinct ISO currency codes seen in the CSV, in first-seen order.
+             *     DoTheSplit groups are single-currency, so a length > 1 means the
+             *     CSV mixes currencies and the imported values will be stored under
+             *     the chosen `default_currency` regardless of their original code.
+             *     UI clients should warn the user in that case.
+             */
+            csv_currencies: string[];
+        };
+        ImportSplitwiseBalance: {
+            /** @description Member name as it appears in the CSV header. */
+            csv_name: string;
+            /**
+             * Format: int64
+             * @description Net cents; positive = member is owed, negative = member owes.
+             */
+            net_cents: number;
+        };
+        ImportSplitwisePreviewRow: {
+            description: string;
+            /** Format: date-time */
+            incurred_at: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            category_slug: string;
+            payer_csv_name: string;
+        };
+        ImportSplitwiseSettlementPreview: {
+            note: string;
+            /** Format: date-time */
+            settled_at: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            /** @description Member who paid (CSV column header). */
+            from_csv_name: string;
+            /** @description Member who received the payment (CSV column header). */
+            to_csv_name: string;
+        };
         ExpenseRevision: {
             /** Format: uuid */
             id: string;
@@ -1254,10 +1494,28 @@ export interface components {
             simplified: components["schemas"]["SimplifiedDebt"][];
         };
         CreateSettlementRequest: {
+            /**
+             * Format: uuid
+             * @description Member who is paying. Optional, defaults to the authenticated user
+             *     when omitted. Must be a current group member, and must differ from
+             *     `to_user_id`.
+             */
+            from_user_id?: string;
             /** Format: uuid */
             to_user_id: string;
             /** Format: int64 */
             amount_cents: number;
+            note?: string;
+            /** Format: date-time */
+            settled_at?: string;
+        };
+        UpdateSettlementRequest: {
+            /** Format: uuid */
+            from_user_id?: string;
+            /** Format: uuid */
+            to_user_id?: string;
+            /** Format: int64 */
+            amount_cents?: number;
             note?: string;
             /** Format: date-time */
             settled_at?: string;
@@ -2296,6 +2554,31 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    exportGroupCSV: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     addGroupMember: {
         parameters: {
             query?: never;
@@ -2651,6 +2934,36 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    updateSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settlement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listActivity: {
         parameters: {
             query?: {
@@ -2709,6 +3022,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importSplitwise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSplitwiseRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview (when `dry_run: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            /** @description Created (when `dry_run: false`) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importDoTheSplit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSplitwiseRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview (when `dry_run: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            /** @description Created (when `dry_run: false`) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

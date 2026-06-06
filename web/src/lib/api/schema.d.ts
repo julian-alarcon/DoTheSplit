@@ -564,7 +564,13 @@ export interface paths {
         delete: operations["deleteSettlement"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a settlement (any group member)
+         * @description Editable fields: `from_user_id`, `to_user_id`, `amount_cents`, `note`,
+         *     `settled_at`. Both parties must be current members of the settlement's
+         *     group, and must differ from each other. Any group member may edit.
+         */
+        patch: operations["updateSettlement"];
         trace?: never;
     };
     "/v1/groups/{id}/activity": {
@@ -1402,10 +1408,28 @@ export interface components {
             simplified: components["schemas"]["SimplifiedDebt"][];
         };
         CreateSettlementRequest: {
+            /**
+             * Format: uuid
+             * @description Member who is paying. Optional, defaults to the authenticated user
+             *     when omitted. Must be a current group member, and must differ from
+             *     `to_user_id`.
+             */
+            from_user_id?: string;
             /** Format: uuid */
             to_user_id: string;
             /** Format: int64 */
             amount_cents: number;
+            note?: string;
+            /** Format: date-time */
+            settled_at?: string;
+        };
+        UpdateSettlementRequest: {
+            /** Format: uuid */
+            from_user_id?: string;
+            /** Format: uuid */
+            to_user_id?: string;
+            /** Format: int64 */
+            amount_cents?: number;
             note?: string;
             /** Format: date-time */
             settled_at?: string;
@@ -2794,6 +2818,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settlement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

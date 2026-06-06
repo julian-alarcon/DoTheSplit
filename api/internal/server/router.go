@@ -84,6 +84,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/groups/:id/settlements", s.ListSettlements)
 	auth.POST("/groups/:id/settlements", s.CreateSettlement)
 	auth.GET("/settlements/:id", s.GetSettlement)
+	auth.PATCH("/settlements/:id", s.UpdateSettlement)
 	auth.DELETE("/settlements/:id", s.DeleteSettlement)
 
 	auth.GET("/groups/:id/activity", s.ListActivity)

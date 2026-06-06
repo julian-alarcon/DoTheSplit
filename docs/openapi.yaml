@@ -827,6 +827,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      summary: Update a settlement (any group member)
+      description: |
+        Editable fields: `from_user_id`, `to_user_id`, `amount_cents`, `note`,
+        `settled_at`. Both parties must be current members of the settlement's
+        group, and must differ from each other. Any group member may edit.
+      operationId: updateSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/SettlementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSettlementRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       summary: Soft-delete a settlement (any group member)
       operationId: deleteSettlement
@@ -2036,6 +2061,24 @@ components:
       additionalProperties: false
       required: [to_user_id, amount_cents]
       properties:
+        from_user_id:
+          type: string
+          format: uuid
+          description: |
+            Member who is paying. Optional, defaults to the authenticated user
+            when omitted. Must be a current group member, and must differ from
+            `to_user_id`.
+        to_user_id: { type: string, format: uuid }
+        amount_cents: { type: integer, format: int64, minimum: 1 }
+        note: { type: string, maxLength: 200 }
+        settled_at: { type: string, format: date-time }
+
+    UpdateSettlementRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        from_user_id: { type: string, format: uuid }
         to_user_id: { type: string, format: uuid }
         amount_cents: { type: integer, format: int64, minimum: 1 }
         note: { type: string, maxLength: 200 }

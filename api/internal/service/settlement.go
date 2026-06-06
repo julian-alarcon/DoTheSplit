@@ -45,9 +45,13 @@ func (s *SettlementService) Create(ctx context.Context, actorID uuid.UUID, in Cr
 	if in.FromUserID == in.ToUserID {
 		return nil, errors.New("from and to must differ")
 	}
-	// Actor must be the payer (from_user).
-	if actorID != in.FromUserID {
-		return nil, ErrForbidden
+	// Actor must be a member of the group.
+	actorIsMember, err := s.groups.IsMember(ctx, in.GroupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if !actorIsMember {
+		return nil, ErrNotMember
 	}
 	// Both parties must be group members.
 	for _, uid := range []uuid.UUID{in.FromUserID, in.ToUserID} {
@@ -144,6 +148,67 @@ func (s *SettlementService) Get(ctx context.Context, actorID, id uuid.UUID) (*re
 	}
 	if !ok {
 		return nil, ErrNotMember
+	}
+	return st, nil
+}
+
+type UpdateSettlementInput struct {
+	FromUserID  *uuid.UUID
+	ToUserID    *uuid.UUID
+	AmountCents *int64
+	Note        *string
+	SettledAt   *time.Time
+}
+
+// Update edits an existing settlement. Any group member may edit. Both
+// from_user and to_user must remain current group members and must differ.
+func (s *SettlementService) Update(ctx context.Context, actorID, id uuid.UUID, in UpdateSettlementInput) (*repo.Settlement, error) {
+	st, err := s.settlements.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if st.DeletedAt != nil {
+		return nil, repo.ErrNotFound
+	}
+	ok, err := s.groups.IsMember(ctx, st.GroupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotMember
+	}
+	if in.FromUserID != nil {
+		st.FromUser = *in.FromUserID
+	}
+	if in.ToUserID != nil {
+		st.ToUser = *in.ToUserID
+	}
+	if in.AmountCents != nil {
+		if *in.AmountCents <= 0 {
+			return nil, errors.New("amount must be > 0")
+		}
+		st.AmountCents = *in.AmountCents
+	}
+	if in.Note != nil {
+		st.Note = *in.Note
+	}
+	if in.SettledAt != nil {
+		st.SettledAt = *in.SettledAt
+	}
+	if st.FromUser == st.ToUser {
+		return nil, errors.New("from and to must differ")
+	}
+	for _, uid := range []uuid.UUID{st.FromUser, st.ToUser} {
+		mem, err := s.groups.IsMember(ctx, st.GroupID, uid)
+		if err != nil {
+			return nil, err
+		}
+		if !mem {
+			return nil, ErrNotMember
+		}
+	}
+	if err := s.settlements.Update(ctx, st); err != nil {
+		return nil, err
 	}
 	return st, nil
 }

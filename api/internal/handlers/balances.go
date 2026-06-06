@@ -86,18 +86,19 @@ func (s *Server) CreateSettlement(c *gin.Context) {
 	if req.SettledAt != nil {
 		settledAt = *req.SettledAt
 	}
+	fromUserID := u.ID
+	if req.FromUserId != nil {
+		fromUserID = *req.FromUserId
+	}
 	out, err := s.Settlements.Create(c.Request.Context(), u.ID, service.CreateSettlementInput{
 		GroupID:     groupID,
-		FromUserID:  u.ID,
+		FromUserID:  fromUserID,
 		ToUserID:    req.ToUserId,
 		AmountCents: req.AmountCents,
 		Note:        note,
 		SettledAt:   settledAt,
 	})
 	switch {
-	case errors.Is(err, service.ErrForbidden):
-		writeErr(c, http.StatusForbidden, "forbidden", "can only settle on your own behalf")
-		return
 	case errors.Is(err, service.ErrNotMember):
 		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
 		return
@@ -127,6 +128,38 @@ func (s *Server) GetSettlement(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, toAPISettlement(st))
+}
+
+func (s *Server) UpdateSettlement(c *gin.Context) {
+	u := middleware.User(c)
+	id, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	var req apigen.UpdateSettlementRequest
+	if !bindStrictJSON(c, &req) {
+		return
+	}
+	in := service.UpdateSettlementInput{
+		FromUserID:  req.FromUserId,
+		ToUserID:    req.ToUserId,
+		AmountCents: req.AmountCents,
+		Note:        req.Note,
+		SettledAt:   req.SettledAt,
+	}
+	out, err := s.Settlements.Update(c.Request.Context(), u.ID, id, in)
+	switch {
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "settlement not found")
+		return
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case err != nil:
+		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, toAPISettlement(out))
 }
 
 func (s *Server) DeleteSettlement(c *gin.Context) {

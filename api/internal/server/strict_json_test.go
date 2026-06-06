@@ -59,6 +59,13 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode, expense)
 	expenseID := expense["id"].(string)
 
+	resp, settlement := request(t, "POST", base+"/v1/groups/"+groupID+"/settlements", map[string]any{
+		"to_user_id":   bob["id"],
+		"amount_cents": 100,
+	}, aCookie)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, settlement)
+	settlementID := settlement["id"].(string)
+
 	cases := []struct {
 		name       string
 		method     string
@@ -197,6 +204,16 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 				"amount_cents": 100,
 			},
 			extraField: "approved_by",
+		},
+		{
+			name:   "update_settlement",
+			method: "PATCH",
+			path:   "/v1/settlements/" + settlementID,
+			auth:   aCookie,
+			body: map[string]any{
+				"amount_cents": 250,
+			},
+			extraField: "group_id",
 		},
 		// Imports
 		{

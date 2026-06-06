@@ -54,6 +54,21 @@ func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*Settlemen
 	return &s, nil
 }
 
+func (r *SettlementRepo) Update(ctx context.Context, s *Settlement) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE settlements
+		SET from_user = $2, to_user = $3, amount_cents = $4, note = $5, settled_at = $6
+		WHERE id = $1 AND deleted_at IS NULL
+	`, s.ID, s.FromUser, s.ToUser, s.AmountCents, s.Note, s.SettledAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE settlements SET deleted_at = now()

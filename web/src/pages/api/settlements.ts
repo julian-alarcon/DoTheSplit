@@ -10,13 +10,16 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const form = await request.formData();
   const amountCents = Math.round(Number(form.get("amount_dollars") ?? "0") * 100);
   const toUserID = String(form.get("to_user_id") ?? "");
+  const fromUserID = String(form.get("from_user_id") ?? "");
+  const body: Record<string, unknown> = {
+    to_user_id: toUserID,
+    amount_cents: amountCents,
+  };
+  if (fromUserID) body.from_user_id = fromUserID;
   const res = await fetch(`${internalBase}/v1/groups/${groupID}/settlements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({
-      to_user_id: toUserID,
-      amount_cents: amountCents,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     // Bounce back to the settle page so the user can fix their input.

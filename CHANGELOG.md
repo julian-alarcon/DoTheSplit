@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.8.0...v0.9.0) (2026-06-06)
+
+
+### Features
+
+* **web,api:** add import from splitwise groups ([81f5039](https://github.com/julian-alarcon/DoTheSplit/commit/81f503972610e2289012d3423e2094ba23fd38c8))
+* **web,api:** allow editing settlements and choosing payer when settling up ([631f7e8](https://github.com/julian-alarcon/DoTheSplit/commit/631f7e80615297e0b854e67cd2a6aa7f10e752f2))
+* **web,api:** export and import groups via dothesplit CSV ([5d31e2f](https://github.com/julian-alarcon/DoTheSplit/commit/5d31e2f65559756cbabc432724972f3cccf1db0f))
+* **web:** add brand logo to header, groups background, and README ([6579548](https://github.com/julian-alarcon/DoTheSplit/commit/6579548929d1c1a443133cd890ae5ec39dc7b360))
+
 ## [0.8.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.7.0...v0.8.0) (2026-06-03)
 
 

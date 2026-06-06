@@ -135,6 +135,32 @@ func TestParse_SkipsBadAndTotalRows(t *testing.T) {
 	}
 }
 
+func TestParse_SkipsDoTheSplitExtraColumns(t *testing.T) {
+	// dothesplit's own export adds metadata columns between Currency and
+	// the per-member block. The Splitwise parser must skip them so a
+	// dothesplit CSV remains importable through this endpoint.
+	header := "Date,Description,Category,Cost,Currency,Time,Payer,Notes,Created,CreatedBy,Alice,Bob\n"
+	in := header +
+		"2024-01-01,Coffee,Dining out,4.00,EUR,12:00:00Z,Alice,extra shot,2024-01-01T12:00:00Z,Alice,2.00,-2.00\n" +
+		"2024-01-02,Hotel,Hotel,200.00,EUR,09:00:00Z,Bob,,2024-01-02T09:00:00Z,Bob,-100.00,100.00\n"
+	res, err := Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got, want := res.UserNames, []string{"Alice", "Bob"}; !equalStrings(got, want) {
+		t.Errorf("user names = %v, want %v", got, want)
+	}
+	if got, want := len(res.Rows), 2; got != want {
+		t.Fatalf("rows = %d, want %d", got, want)
+	}
+	if got, want := res.Rows[0].SignedCents, []int64{200, -200}; !equalInts(got, want) {
+		t.Errorf("row0 signed = %v, want %v", got, want)
+	}
+	if got, want := res.Rows[1].CostCents, int64(20000); got != want {
+		t.Errorf("row1 cost = %d, want %d", got, want)
+	}
+}
+
 func TestDecompose_TwoUsers_EvenSplit(t *testing.T) {
 	// Alice paid 10, both share 5 -> Alice +5 (creditor), Bob -5 (debtor).
 	row := Row{

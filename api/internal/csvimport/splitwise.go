@@ -43,10 +43,31 @@ var (
 	ErrCSVFieldLen  = errors.New("csv field exceeds length limit")
 )
 
-// expectedHeader is the fixed prefix; columns after these are user names.
+// expectedHeader is the fixed prefix; columns after these are either
+// user-name columns or part of dothesplitExtraColumns (a small whitelist
+// of optional metadata columns that dothesplit's own export emits, see
+// csvimport/dothesplit.go). The Splitwise parser silently skips them so
+// a dothesplit-shaped CSV can also be re-imported through this endpoint.
 var expectedHeader = []string{"Date", "Description", "Category", "Cost", "Currency"}
 
-// Row is a successfully parsed Splitwise expense row.
+// dothesplitExtraColumns lists the header names the dothesplit exporter
+// inserts between Currency and the per-member block. Order does not
+// matter; the parser consumes any contiguous run of these names after
+// the mandatory prefix and treats the rest of the columns as users.
+// Matched case-insensitively.
+var dothesplitExtraColumns = map[string]struct{}{
+	"time":      {},
+	"payer":     {},
+	"notes":     {},
+	"created":   {},
+	"createdby": {},
+}
+
+// Row is a successfully parsed expense row. The mandatory fields
+// (Date, Description, Category, Cost, Currency, SignedCents) come from
+// the Splitwise format. The optional fields are only populated by
+// ParseDoTheSplit, which reads the richer dothesplit-flavored header;
+// the legacy Parse leaves them zero/empty.
 type Row struct {
 	Date        time.Time
 	Description string
@@ -59,6 +80,18 @@ type Row struct {
 	// Raw is the original CSV record rejoined with commas. Surfaced back to
 	// the importer UI when downstream logic (e.g. Decompose) rejects the row.
 	Raw string
+
+	// IncurredAt is the full second-precision timestamp for the row when
+	// the source carried a Time column (dothesplit format). Zero when
+	// only a date was present; callers should fall back to Date.
+	IncurredAt time.Time
+	// PayerName, when non-empty, names the explicit payer for the row
+	// (matches one of Result.UserNames). Used to bypass the
+	// sign-based payer inference for ambiguous rows.
+	PayerName string
+	// Notes is the dothesplit-only "Notes" column. Empty when the source
+	// did not carry one (Splitwise has no equivalent).
+	Notes string
 }
 
 // Result is the full parse outcome.
@@ -186,7 +219,7 @@ func Parse(raw string) (Result, error) {
 	if err != nil {
 		return Result{}, ErrCSVBadHeader
 	}
-	if len(header) < len(expectedHeader)+MinUsers || len(header) > len(expectedHeader)+MaxUsers {
+	if len(header) < len(expectedHeader)+MinUsers {
 		return Result{}, ErrCSVBadHeader
 	}
 	for i, want := range expectedHeader {
@@ -194,9 +227,23 @@ func Parse(raw string) (Result, error) {
 			return Result{}, ErrCSVBadHeader
 		}
 	}
-	userNames := make([]string, 0, len(header)-len(expectedHeader))
+	// Skip any contiguous run of dothesplit-only optional columns
+	// directly after the mandatory header prefix. Anything else from
+	// that point on is a user name.
+	extrasEnd := len(expectedHeader)
+	for extrasEnd < len(header) {
+		key := strings.ToLower(strings.TrimSpace(header[extrasEnd]))
+		if _, ok := dothesplitExtraColumns[key]; !ok {
+			break
+		}
+		extrasEnd++
+	}
+	if len(header)-extrasEnd < MinUsers || len(header)-extrasEnd > MaxUsers {
+		return Result{}, ErrCSVBadHeader
+	}
+	userNames := make([]string, 0, len(header)-extrasEnd)
 	seen := make(map[string]struct{}, len(header))
-	for _, raw := range header[len(expectedHeader):] {
+	for _, raw := range header[extrasEnd:] {
 		name := strings.TrimSpace(raw)
 		if name == "" {
 			return Result{}, ErrCSVBadHeader
@@ -207,6 +254,7 @@ func Parse(raw string) (Result, error) {
 		seen[name] = struct{}{}
 		userNames = append(userNames, name)
 	}
+	userColStart := extrasEnd
 
 	res := Result{UserNames: userNames}
 	width := len(header)
@@ -242,7 +290,7 @@ func Parse(raw string) (Result, error) {
 				return Result{}, ErrCSVFieldLen
 			}
 		}
-		row, ok := parseRow(rec, len(userNames))
+		row, ok := parseRow(rec, len(userNames), userColStart)
 		if !ok {
 			recordSkip(rec)
 			continue
@@ -292,7 +340,7 @@ func isTotalBalanceRow(rec []string) bool {
 	return len(rec) > 1 && strings.EqualFold(strings.TrimSpace(rec[1]), "Total balance")
 }
 
-func parseRow(rec []string, n int) (Row, bool) {
+func parseRow(rec []string, n, userColStart int) (Row, bool) {
 	dateStr := strings.TrimSpace(rec[0])
 	desc := strings.TrimSpace(rec[1])
 	cat := strings.TrimSpace(rec[2])
@@ -316,7 +364,7 @@ func parseRow(rec []string, n int) (Row, bool) {
 
 	values := make([]int64, n)
 	for i := 0; i < n; i++ {
-		v, ok := parseDecimalToCents(strings.TrimSpace(rec[len(expectedHeader)+i]))
+		v, ok := parseDecimalToCents(strings.TrimSpace(rec[userColStart+i]))
 		if !ok {
 			return Row{}, false
 		}

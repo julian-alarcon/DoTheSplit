@@ -1,16 +1,11 @@
-// Two-phase Splitwise importer page glue.
-//
-// Phase 1: read the picked CSV, validate basic shape on the client, post the
-// raw text to /api/import-splitwise-preview. The Go service is the only place
-// the file is parsed; we just transport it. The preview response carries the
-// member list (one entry per CSV user column), so this script renders an
-// email input for each member dynamically.
-//
-// Phase 2: a regular HTML form posting to /api/import-splitwise. The CSV
-// text travels in a hidden input so the commit doesn't re-upload the file.
+// Two-phase dothesplit importer page glue. Same DOM contract as the
+// Splitwise importer; only the SSR preview endpoint differs (it
+// routes to /v1/imports/dothesplit so the richer parser handles the
+// extra columns). Phase 2 is a regular HTML form post to
+// /api/import-dothesplit declared inline on the page.
 
 // Force module scope so `const` declarations don't collide with the
-// sibling import-dothesplit.ts during type-checking.
+// sibling import-splitwise.ts during type-checking.
 export {};
 
 const MAX_BYTES = 256 * 1024;
@@ -106,7 +101,7 @@ if (
 
     const guessedName = guessGroupName(file.name);
 
-    const res = await fetch("/api/import-splitwise-preview", {
+    const res = await fetch("/api/import-dothesplit-preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ csv: raw, group_name_hint: guessedName }),

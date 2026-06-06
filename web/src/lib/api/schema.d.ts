@@ -394,6 +394,51 @@ export interface paths {
         patch: operations["updateGroup"];
         trace?: never;
     };
+    "/v1/groups/{id}/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the group's expenses and settlements as a CSV
+         * @description Streams a CSV file with every non-deleted expense and settlement
+         *     in the group, in chronological order, followed by a final
+         *     `Total balance` row that mirrors `/v1/groups/{id}/balances`.
+         *
+         *     The format is a superset of Splitwise's CSV export:
+         *
+         *     ```
+         *     Date,Time,Description,Category,Cost,Currency,Payer,Notes,Created,CreatedBy,<member1>,<member2>,...
+         *     ```
+         *
+         *     The first 5 columns and the trailing per-member columns match
+         *     Splitwise's format (so the file can be re-imported through
+         *     `/v1/imports/splitwise`). The middle columns carry the extra
+         *     data dothesplit stores so a re-import via
+         *     `/v1/imports/dothesplit` can rebuild the group faithfully:
+         *     `Time` keeps the second-precision incurred-at timestamp,
+         *     `Payer` makes the payer explicit (avoiding sign-based
+         *     inference), `Notes` round-trips the expense's free-form notes,
+         *     and `Created`/`CreatedBy` carry provenance. Settlements appear
+         *     as `Payment` rows.
+         *
+         *     Per-row member columns hold each member's signed `paid - share`
+         *     in the group's default currency, formatted with two fraction
+         *     digits. Members are listed in `joined_at` order. Soft-deleted
+         *     users render with their stored display name (a stable
+         *     non-identifying tombstone), so the column header is stable.
+         */
+        get: operations["exportGroupCSV"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups/{id}/members": {
         parameters: {
             query?: never;
@@ -662,6 +707,47 @@ export interface paths {
          *     seeded label list, falling back to `other`.
          */
         post: operations["importSplitwise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/dothesplit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a group from a dothesplit CSV export (2..32 members)
+         * @description Parses a dothesplit-formatted CSV (the file produced by
+         *     `GET /v1/groups/{id}/export.csv`) and either previews the
+         *     result (`dry_run: true`) or commits it (`dry_run: false`).
+         *
+         *     Same shape as `/v1/imports/splitwise`: dry-run preview, then
+         *     commit, with the same email-resolution rules. The difference
+         *     is the parser. The dothesplit format keeps the strict
+         *     Splitwise prefix `Date,Description,Category,Cost,Currency` and
+         *     the per-member columns at the end, but adds an optional middle
+         *     block of named columns the exporter populates: `Time` (full
+         *     second-precision incurred-at), `Payer` (explicit payer name to
+         *     bypass sign-based inference), `Notes` (free-form per-expense
+         *     notes), `Created` and `CreatedBy` (provenance, informational).
+         *
+         *     On commit the importer prefers the explicit `Payer` column
+         *     when present, combines `Date` + `Time` into the new
+         *     `incurred_at`, and round-trips `Notes` into `expense.notes`.
+         *     `Created` / `CreatedBy` are surfaced in the preview but not
+         *     stored: the new group has fresh audit columns, with the
+         *     importing user as `created_by`.
+         *
+         *     Limits and error handling match `/v1/imports/splitwise`.
+         */
+        post: operations["importDoTheSplit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2468,6 +2554,31 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    exportGroupCSV: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     addGroupMember: {
         parameters: {
             query?: never;
@@ -2918,6 +3029,41 @@ export interface operations {
         };
     };
     importSplitwise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSplitwiseRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview (when `dry_run: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            /** @description Created (when `dry_run: false`) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSplitwiseResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    importDoTheSplit: {
         parameters: {
             query?: never;
             header?: never;

@@ -247,6 +247,19 @@ const others = otherCurrencies();
     </fieldset>
   </section>
 
+  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <h2 class="mb-3 font-medium">Export</h2>
+    <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+      Download every expense and settlement in this group as a CSV file. The format is a superset of Splitwise's export, so you can re-import it into either tool.
+    </p>
+    <form method="POST" action={`/api/group-export-csv?id=${id}`} class="flex justify-end">
+      <button type="submit" class="btn-primary">
+        <FaIcon name="download" />
+        <span>Export CSV</span>
+      </button>
+    </form>
+  </section>
+
   {!isCreator && (
     <section class="mb-2 rounded-md border border-red-200 bg-white p-4 dark:border-red-900 dark:bg-neutral-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Leave group</h2>

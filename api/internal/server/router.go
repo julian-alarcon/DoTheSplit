@@ -67,6 +67,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.POST("/groups", s.CreateGroup)
 	auth.PATCH("/groups/:id", s.UpdateGroup)
 	auth.DELETE("/groups/:id", s.DeleteGroup)
+	auth.GET("/groups/:id/export.csv", s.ExportGroupCSV)
 	auth.POST("/groups/:id/members", s.AddGroupMember)
 	auth.DELETE("/groups/:id/members/:userId", s.RemoveGroupMember)
 
@@ -92,6 +93,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/search", s.Search)
 
 	auth.POST("/imports/splitwise", s.ImportSplitwise)
+	auth.POST("/imports/dothesplit", s.ImportDoTheSplit)
 
 	auth.GET("/groups/:id/recurring-expenses", s.ListRecurringExpenses)
 	auth.POST("/groups/:id/recurring-expenses", s.CreateRecurringExpense)

@@ -32,6 +32,7 @@ type Server struct {
 	Activity    *service.ActivityService
 	SearchSvc   *service.SearchService
 	Imports     *service.SplitwiseImporter
+	Exporter    *service.GroupCSVExporter
 	Admin         *service.AdminService
 	Smtp          *service.SmtpService
 	Setup         *service.SetupService

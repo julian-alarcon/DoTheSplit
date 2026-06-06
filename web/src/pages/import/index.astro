@@ -5,8 +5,7 @@ import Base from "@/layouts/Base.astro";
 <Base title="Import group" back={{ href: "/groups", label: "Groups" }}>
   <h1 class="mb-2 text-2xl font-semibold">Import a group</h1>
   <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
-    Bring an expense ledger over from another service. We currently support
-    Splitwise CSV exports of any group size; other importers will land here later.
+    Bring an expense ledger over from another service. Pick the source format below.
   </p>
 
   <ul class="flex flex-col gap-3">
@@ -25,16 +24,18 @@ import Base from "@/layouts/Base.astro";
       </a>
     </li>
     <li>
-      <span
-        class="flex cursor-not-allowed items-center justify-between gap-3 rounded-md border border-dashed border-neutral-200 bg-transparent px-4 py-3 text-neutral-500 dark:border-neutral-800 dark:text-neutral-500"
-        aria-disabled="true"
+      <a
+        href="/import/dothesplit"
+        class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
       >
         <span class="flex min-w-0 flex-col">
-          <span class="truncate font-medium">Other services</span>
-          <span class="truncate text-xs">More importers will appear here.</span>
+          <span class="truncate font-medium">DoTheSplit</span>
+          <span class="truncate text-xs text-neutral-600 dark:text-neutral-400">
+            Upload a CSV produced by Group settings → Export. Preserves time, payer and notes.
+          </span>
         </span>
-        <span class="shrink-0 text-xs uppercase tracking-wide">Soon</span>
-      </span>
+        <span class="shrink-0 text-sm text-neutral-600 dark:text-neutral-400">→</span>
+      </a>
     </li>
   </ul>
 </Base>

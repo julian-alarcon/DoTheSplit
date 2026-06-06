@@ -165,6 +165,7 @@ func setup(t *testing.T) *testStack {
 	recurringSvc.SetNotifications(users, notificationSvc)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
 	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, authSvc, email)
+	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
 	h := server.New(&handlers.Server{
 		Cfg:           cfg,
 		Pool:          pool,
@@ -179,6 +180,7 @@ func setup(t *testing.T) *testStack {
 		Activity:      service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
 		SearchSvc:     service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Imports:       importSvc,
+		Exporter:      exporterSvc,
 		Admin:         service.NewAdminService(pool, users, groups, sessionRepo, auditRepo, authSvc, email, cfg.PasswordPepper),
 		Smtp:          service.NewSmtpService(smtpRepo, email),
 		Setup:         setupSvc,

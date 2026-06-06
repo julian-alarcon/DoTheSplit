@@ -582,6 +582,52 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/groups/{id}/export.csv:
+    get:
+      summary: Export the group's expenses and settlements as a CSV
+      description: |
+        Streams a CSV file with every non-deleted expense and settlement
+        in the group, in chronological order, followed by a final
+        `Total balance` row that mirrors `/v1/groups/{id}/balances`.
+
+        The format is a superset of Splitwise's CSV export:
+
+        ```
+        Date,Time,Description,Category,Cost,Currency,Payer,Notes,Created,CreatedBy,<member1>,<member2>,...
+        ```
+
+        The first 5 columns and the trailing per-member columns match
+        Splitwise's format (so the file can be re-imported through
+        `/v1/imports/splitwise`). The middle columns carry the extra
+        data dothesplit stores so a re-import via
+        `/v1/imports/dothesplit` can rebuild the group faithfully:
+        `Time` keeps the second-precision incurred-at timestamp,
+        `Payer` makes the payer explicit (avoiding sign-based
+        inference), `Notes` round-trips the expense's free-form notes,
+        and `Created`/`CreatedBy` carry provenance. Settlements appear
+        as `Payment` rows.
+
+        Per-row member columns hold each member's signed `paid - share`
+        in the group's default currency, formatted with two fraction
+        digits. Members are listed in `joined_at` order. Soft-deleted
+        users render with their stored display name (a stable
+        non-identifying tombstone), so the column header is stable.
+      operationId: exportGroupCSV
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/groups/{id}/members:
     post:
       summary: Add a member to a group (invitee must be registered)
@@ -979,6 +1025,53 @@ paths:
         256 chars. Categories are mapped case-insensitively against the
         seeded label list, falling back to `other`.
       operationId: importSplitwise
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportSplitwiseRequest" }
+      responses:
+        "200":
+          description: "Preview (when `dry_run: true`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
+        "201":
+          description: "Created (when `dry_run: false`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportSplitwiseResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/imports/dothesplit:
+    post:
+      summary: Import a group from a dothesplit CSV export (2..32 members)
+      description: |
+        Parses a dothesplit-formatted CSV (the file produced by
+        `GET /v1/groups/{id}/export.csv`) and either previews the
+        result (`dry_run: true`) or commits it (`dry_run: false`).
+
+        Same shape as `/v1/imports/splitwise`: dry-run preview, then
+        commit, with the same email-resolution rules. The difference
+        is the parser. The dothesplit format keeps the strict
+        Splitwise prefix `Date,Description,Category,Cost,Currency` and
+        the per-member columns at the end, but adds an optional middle
+        block of named columns the exporter populates: `Time` (full
+        second-precision incurred-at), `Payer` (explicit payer name to
+        bypass sign-based inference), `Notes` (free-form per-expense
+        notes), `Created` and `CreatedBy` (provenance, informational).
+
+        On commit the importer prefers the explicit `Payer` column
+        when present, combines `Date` + `Time` into the new
+        `incurred_at`, and round-trips `Notes` into `expense.notes`.
+        `Created` / `CreatedBy` are surfaced in the preview but not
+        stored: the new group has fresh audit columns, with the
+        importing user as `created_by`.
+
+        Limits and error handling match `/v1/imports/splitwise`.
+      operationId: importDoTheSplit
       tags: [imports]
       requestBody:
         required: true

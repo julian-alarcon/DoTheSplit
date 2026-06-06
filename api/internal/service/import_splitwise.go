@@ -108,9 +108,25 @@ func NewSplitwiseImporter(pool *pgxpool.Pool, users *repo.UserRepo, groupRepo *r
 	}
 }
 
-// Run validates the input, parses the CSV, and either returns a preview
-// (DryRun=true) or creates the group + expenses (DryRun=false).
+// Run validates the input, parses the CSV with the Splitwise parser,
+// and either returns a preview (DryRun=true) or creates the group +
+// expenses (DryRun=false).
 func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in ImportSplitwiseInput) (ImportSplitwiseResult, error) {
+	return s.run(ctx, actorID, in, csvimport.Parse)
+}
+
+// RunDoTheSplit is the same flow as Run but uses ParseDoTheSplit, the
+// parser that understands the richer header dothesplit's own export
+// emits (Time, Payer, Notes, Created, CreatedBy). The post-parse
+// logic - email resolution, group/member creation, expense and
+// settlement creation - is identical, so we share the inner method.
+func (s *SplitwiseImporter) RunDoTheSplit(ctx context.Context, actorID uuid.UUID, in ImportSplitwiseInput) (ImportSplitwiseResult, error) {
+	return s.run(ctx, actorID, in, csvimport.ParseDoTheSplit)
+}
+
+// run is the shared implementation: it validates the input, calls
+// `parse` to read the CSV, then either previews or commits.
+func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in ImportSplitwiseInput, parse func(string) (csvimport.Result, error)) (ImportSplitwiseResult, error) {
 	groupName := strings.TrimSpace(in.GroupName)
 	if groupName == "" {
 		return ImportSplitwiseResult{}, errors.New("group_name is required")
@@ -145,7 +161,7 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 		emails[email] = struct{}{}
 	}
 
-	parsed, err := csvimport.Parse(in.CSV)
+	parsed, err := parse(in.CSV)
 	if err != nil {
 		return ImportSplitwiseResult{}, err
 	}
@@ -252,6 +268,13 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 	}
 
 	for _, row := range parsed.Rows {
+		// Prefer the second-precision IncurredAt the dothesplit
+		// parser populates; fall back to the date-only Date for
+		// Splitwise rows.
+		when := row.IncurredAt
+		if when.IsZero() {
+			when = row.Date
+		}
 		if csvimport.IsPaymentRow(row) {
 			st, ok := csvimport.DecomposeSettlement(row)
 			if !ok {
@@ -270,7 +293,7 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 				// group's default. Nothing to do here besides the comment.
 				AmountCents: st.AmountCents,
 				Note:        st.Note,
-				SettledAt:   row.Date,
+				SettledAt:   when,
 			}
 			if err := s.settlements.Create(ctx, settlement); err != nil {
 				return ImportSplitwiseResult{}, err
@@ -287,7 +310,16 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 		if err != nil {
 			return ImportSplitwiseResult{}, fmt.Errorf("internal: bad category id %q", catIDStr)
 		}
+		// If the row carries an explicit Payer (dothesplit format),
+		// honor it: the sign-based inference picks one creditor when
+		// there are several, but the explicit column is the
+		// load-bearing source of truth for the original group state.
+		explicitPayer := csvimport.PayerIdx(parsed.UserNames, row.PayerName)
 		for _, e := range derived {
+			payerIdx := e.PayerIdx
+			if explicitPayer != -1 && len(derived) == 1 {
+				payerIdx = explicitPayer
+			}
 			splits := make([]SplitInput, 0, len(e.Shares))
 			for i, share := range e.Shares {
 				if share == 0 {
@@ -297,9 +329,10 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 			}
 			input := CreateExpenseInput{
 				GroupID: g.ID,
-				PayerID: memberIDs[e.PayerIdx],
+				PayerID: memberIDs[payerIdx],
 				CategoryID:  &catUUID,
 				AmountCents: e.AmountCents,
+				Notes:       row.Notes,
 				// Always the group's currency. dothesplit groups are
 				// single-currency; for mixed-currency Splitwise CSVs we
 				// surface a warning in the response (CSVCurrencies) but the
@@ -308,7 +341,7 @@ func (s *SplitwiseImporter) Run(ctx context.Context, actorID uuid.UUID, in Impor
 				// balances still project to zero.
 				Currency:    cur,
 				Description: e.Description,
-				IncurredAt:  row.Date,
+				IncurredAt:  when,
 				Mode:        SplitExact,
 				Splits:      splits,
 			}
@@ -380,6 +413,10 @@ func (s *SplitwiseImporter) buildPreview(parsed csvimport.Result, members []Impo
 	}
 	netCents := make([]int64, len(members))
 	for _, row := range parsed.Rows {
+		when := row.IncurredAt
+		if when.IsZero() {
+			when = row.Date
+		}
 		if csvimport.IsPaymentRow(row) {
 			st, ok := csvimport.DecomposeSettlement(row)
 			if !ok {
@@ -396,7 +433,7 @@ func (s *SplitwiseImporter) buildPreview(parsed csvimport.Result, members []Impo
 			if len(out.settlements) < PreviewLimit {
 				out.settlements = append(out.settlements, ImportSplitwiseSettlementPreview{
 					Note:        st.Note,
-					SettledAt:   row.Date,
+					SettledAt:   when,
 					AmountCents: st.AmountCents,
 					Currency:    groupCurrency,
 					FromCSVName: members[st.FromIdx].CSVName,
@@ -411,7 +448,12 @@ func (s *SplitwiseImporter) buildPreview(parsed csvimport.Result, members []Impo
 			out.extraSkippedRaw = append(out.extraSkippedRaw, row.Raw)
 			continue
 		}
+		explicitPayer := csvimport.PayerIdx(parsed.UserNames, row.PayerName)
 		for _, e := range derived {
+			payerIdx := e.PayerIdx
+			if explicitPayer != -1 && len(derived) == 1 {
+				payerIdx = explicitPayer
+			}
 			out.expenseCount++
 			// Each derived expense contributes paid - share to its members'
 			// balances. Positive = creditor (the payer net of their own
@@ -419,15 +461,15 @@ func (s *SplitwiseImporter) buildPreview(parsed csvimport.Result, members []Impo
 			for i, share := range e.Shares {
 				netCents[i] -= share
 			}
-			netCents[e.PayerIdx] += e.AmountCents
+			netCents[payerIdx] += e.AmountCents
 			if len(out.expenses) < PreviewLimit {
 				out.expenses = append(out.expenses, ImportSplitwisePreviewRow{
 					Description:  e.Description,
-					IncurredAt:   row.Date,
+					IncurredAt:   when,
 					AmountCents:  e.AmountCents,
 					Currency:     groupCurrency,
 					CategorySlug: row.Category,
-					PayerCSVName: members[e.PayerIdx].CSVName,
+					PayerCSVName: members[payerIdx].CSVName,
 				})
 			}
 		}

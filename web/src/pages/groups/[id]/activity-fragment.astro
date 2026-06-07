@@ -40,8 +40,14 @@ const memberByID = new Map((group?.members ?? []).map((m) => [m.user_id, m]));
 const nameByUserID = new Map<string, string>();
 for (const m of group?.members ?? []) nameByUserID.set(m.user_id, m.display_name);
 
+const shortName = (name: string | undefined | null) => {
+  const s = name ?? "?";
+  return s.length > 15 ? s.slice(0, 14) + "…" : s;
+};
+
 const currency = group?.default_currency ?? "EUR";
-const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
+const dayFmt = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
 
 const activityRows = withMonthHeaders(
   activity,
@@ -70,27 +76,36 @@ const activityRows = withMonthHeaders(
       <li>
         <a
           href={`/groups/${id}/expenses/${e.id}`}
-          class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+          class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-3 py-1.5 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
         >
           <div class="flex min-w-0 items-center gap-3">
-            <span class="shrink-0 inline-flex items-center justify-center" title={cat?.label ?? ""}>
+            <span
+              class="shrink-0 inline-flex w-7 flex-col items-center justify-center leading-none"
+              title={cat?.label ?? ""}
+            >
               <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+              <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                {monthFmt.format(new Date(e.incurred_at))}
+              </span>
+              <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+                {dayFmt.format(new Date(e.incurred_at))}
+              </span>
             </span>
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-1.5 font-medium">
+            <div class="flex min-w-0 flex-col gap-y-0.5 lg:flex-row lg:flex-wrap lg:items-baseline lg:gap-x-2 lg:gap-y-0">
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                 <span class="truncate">{e.description}</span>
                 {cadence && (
                   <span
-                    class="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                    class="inline-flex items-center gap-0.5 rounded-full bg-neutral-100 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
                     title={`Repeats ${cadenceLabels[cadence] ?? cadence}`}
                   >
-                    <FaIcon name="arrows-rotate" size={11} />
+                    <FaIcon name="arrows-rotate" size={9} />
                     {cadenceLabels[cadence] ?? cadence}
                   </span>
                 )}
               </div>
-              <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
-                <span>{dateFmt.format(new Date(e.incurred_at))} · paid by</span>
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                <span>paid by</span>
                 <Avatar
                   userId={e.payer_id}
                   displayName={nameByUserID.get(e.payer_id) ?? "?"}
@@ -98,11 +113,11 @@ const activityRows = withMonthHeaders(
                   avatarUpdatedAt={memberByID.get(e.payer_id)?.avatar_updated_at}
                   size={16}
                 />
-                <span class="truncate">{nameByUserID.get(e.payer_id) ?? "?"}</span>
+                <span class="truncate">{shortName(nameByUserID.get(e.payer_id))}</span>
               </div>
             </div>
           </div>
-          <span class="shrink-0 font-mono text-xl tabular-nums">
+          <span class="shrink-0 font-mono text-lg tabular-nums">
             {new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" }).format(e.amount_cents / 100)}
           </span>
         </a>
@@ -117,14 +132,25 @@ const activityRows = withMonthHeaders(
     <li>
       <a
         href={`/groups/${id}/settlements/${s.id}`}
-        class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
+        class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
       >
         <div class="flex min-w-0 items-center gap-3">
-          <span class="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" title="Settlement">
-            <FaIcon name="arrow-right" size={14} />
+          <span
+            class="shrink-0 inline-flex w-7 flex-col items-center justify-center leading-none"
+            title="Settlement"
+          >
+            <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+              <FaIcon name="arrow-right" size={14} />
+            </span>
+            <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              {monthFmt.format(new Date(s.settled_at))}
+            </span>
+            <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+              {dayFmt.format(new Date(s.settled_at))}
+            </span>
           </span>
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-1.5 font-medium">
+          <div class="flex min-w-0 flex-col gap-y-0.5 lg:flex-row lg:flex-wrap lg:items-baseline lg:gap-x-2 lg:gap-y-0">
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
               <Avatar
                 userId={s.from_user_id}
                 displayName={from?.display_name ?? "?"}
@@ -132,7 +158,7 @@ const activityRows = withMonthHeaders(
                 avatarUpdatedAt={from?.avatar_updated_at}
                 size={18}
               />
-              <span class="truncate">{nameByUserID.get(s.from_user_id) ?? "?"}</span>
+              <span class="truncate">{shortName(nameByUserID.get(s.from_user_id))}</span>
               <span class="text-neutral-600 dark:text-neutral-400">paid</span>
               <Avatar
                 userId={s.to_user_id}
@@ -141,15 +167,15 @@ const activityRows = withMonthHeaders(
                 avatarUpdatedAt={to?.avatar_updated_at}
                 size={18}
               />
-              <span class="truncate">{nameByUserID.get(s.to_user_id) ?? "?"}</span>
+              <span class="truncate">{shortName(nameByUserID.get(s.to_user_id))}</span>
             </div>
-            <div class="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
-              <span>{dateFmt.format(new Date(s.settled_at))} · settlement</span>
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+              <span>settlement</span>
               {s.note && <span class="truncate">· {s.note}</span>}
             </div>
           </div>
         </div>
-        <span class="shrink-0 font-mono text-xl tabular-nums">
+        <span class="shrink-0 font-mono text-lg tabular-nums">
           {new Intl.NumberFormat(undefined, { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(s.amount_cents / 100)}
         </span>
       </a>

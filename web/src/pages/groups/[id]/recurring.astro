@@ -89,7 +89,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
                   <span class="text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
                     {monthFmt.format(new Date(t.next_run_at))}
                   </span>
-                  <span class="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+                  <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
                     {dayFmt.format(new Date(t.next_run_at))}
                   </span>
                 </span>
@@ -126,7 +126,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
                     class="btn-danger-outline btn-sm"
                   >
                     <FaIcon name="circle-stop" />
-                    <span>Stop recurring</span>
+                    <span>Stop</span>
                   </button>
                 </form>
                 <ConfirmDialog

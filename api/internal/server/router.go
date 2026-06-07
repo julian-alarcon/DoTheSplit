@@ -94,6 +94,7 @@ func New(s *handlers.Server) http.Handler {
 
 	auth.POST("/imports/splitwise", s.ImportSplitwise)
 	auth.POST("/imports/dothesplit", s.ImportDoTheSplit)
+	auth.POST("/groups/:id/imports/expenses", s.ImportGroupExpensesCSV)
 
 	auth.GET("/groups/:id/recurring-expenses", s.ListRecurringExpenses)
 	auth.POST("/groups/:id/recurring-expenses", s.CreateRecurringExpense)

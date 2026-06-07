@@ -55,7 +55,7 @@ tags:
   - name: search
     description: Cross-group full-text search over expense descriptions/notes and settlement notes (member-only rows).
   - name: imports
-    description: Bulk-import flows that hydrate a brand-new group from an external service's export. Currently Splitwise CSVs (2..32 members).
+    description: Bulk-import flows. Hydrate a brand-new group from a Splitwise or DoTheSplit CSV (2..32 members), or append expenses to an existing group from a DoTheSplit-shaped CSV.
   - name: health
     description: Liveness and readiness probes (unversioned).
   - name: admin
@@ -1092,6 +1092,63 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/groups/{id}/imports/expenses:
+    post:
+      summary: Import CSV expenses into an existing group
+      description: |
+        Appends expenses from a DoTheSplit-shaped CSV into an existing
+        group. Unlike `/v1/imports/dothesplit`, no group is created and
+        no member resolution happens: the actor must already be a
+        member, and every imported expense lives under the current
+        member roster.
+
+        Header rules match the dothesplit exporter: the mandatory
+        prefix `Date,Description,Category,Cost,Currency`, an optional
+        run of named columns (`Time, Payer, Notes, Created,
+        CreatedBy`) in any order, and any trailing per-member columns
+        which are accepted but ignored. The minimum a row needs to be
+        kept is `Date`, `Description`, and `Cost`; everything else is
+        optional. Empty cells fall back to the group's defaults.
+
+        Splits are derived from the group, not the CSV: a 2-member
+        group with a pinned `default_split` uses those basis points;
+        every other configuration falls back to an equal split across
+        all current members.
+
+        Payer resolution: the optional `Payer` cell is matched
+        case-insensitively against the current member display names. An
+        empty cell uses the importing user as the payer. An unknown
+        name causes the row to be skipped and reported in
+        `skipped`.
+
+        Errors and limits match `/v1/imports/dothesplit` (256 KiB raw
+        CSV, 5000 rows, 256-char fields). Categories are mapped against
+        the seeded label list with `other` as the fallback.
+      operationId: importGroupExpensesCSV
+      tags: [imports]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportGroupExpensesRequest" }
+      responses:
+        "200":
+          description: "Preview (when `dry_run: true`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+        "201":
+          description: "Created (when `dry_run: false`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/groups/{id}/recurring-expenses:
     get:
       summary: List recurring expense templates for a group
@@ -2106,6 +2163,62 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         from_csv_name: { type: string, description: Member who paid (CSV column header). }
         to_csv_name: { type: string, description: Member who received the payment (CSV column header). }
+
+    ImportGroupExpensesRequest:
+      type: object
+      additionalProperties: false
+      required: [csv]
+      properties:
+        csv:
+          type: string
+          maxLength: 262144
+          description: Raw CSV text. DoTheSplit-shaped header. Hard cap 256 KiB.
+        dry_run:
+          type: boolean
+          default: false
+          description: When true, parses the CSV and returns the preview without writing anything.
+      example:
+        csv: "Date,Description,Category,Cost,Currency,Payer,Notes\n2026-06-01,Pizza,Food,42.00,EUR,Alice,Friday night\n2026-06-03,Taxi,,18.50,,,\n"
+        dry_run: true
+
+    ImportGroupExpensesResponse:
+      type: object
+      required: [expense_count, skipped_count, skipped, preview, csv_currencies]
+      properties:
+        expense_count:
+          type: integer
+          description: Number of valid expenses parsed from the CSV.
+        skipped_count:
+          type: integer
+          description: Number of rows skipped (malformed, unknown payer, empty description, etc.).
+        skipped:
+          type: array
+          maxItems: 50
+          description: Raw CSV records (rejoined with commas) for skipped rows, capped at 50 entries.
+          items: { type: string }
+        preview:
+          type: array
+          maxItems: 6
+          items: { $ref: "#/components/schemas/ImportGroupExpensesPreviewRow" }
+        csv_currencies:
+          type: array
+          description: |
+            Distinct ISO currency codes seen in the CSV, in first-seen order.
+            DoTheSplit groups are single-currency; rows with a different
+            currency code (or none at all) are stored under the group's
+            `default_currency`. UI clients should warn when length > 1.
+          items: { type: string, minLength: 3, maxLength: 3 }
+
+    ImportGroupExpensesPreviewRow:
+      type: object
+      required: [description, incurred_at, amount_cents, currency, category_slug, payer_display_name]
+      properties:
+        description: { type: string }
+        incurred_at: { type: string, format: date-time }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        category_slug: { type: string }
+        payer_display_name: { type: string, description: Display name of the resolved member who paid this row. }
 
     ExpenseRevision:
       type: object

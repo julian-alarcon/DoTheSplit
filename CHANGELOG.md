@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.9.0...v0.10.0) (2026-06-07)
+
+
+### Features
+
+* **web,api:** import expenses in csv to existing group ([9258ad1](https://github.com/julian-alarcon/DoTheSplit/commit/9258ad1c28d1a67be85b52ef9f7591ed834ab9fa))
+* **web:** added favicon ([63c9666](https://github.com/julian-alarcon/DoTheSplit/commit/63c9666f4e40e1b50d09b2c708a0f4c1c1cc75e8))
+
 ## [0.9.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.8.0...v0.9.0) (2026-06-06)
 
 

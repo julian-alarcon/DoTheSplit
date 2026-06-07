@@ -42,7 +42,7 @@ for (const m of group?.members ?? []) nameByUserID.set(m.user_id, m.display_name
 
 const shortName = (name: string | undefined | null) => {
   const s = name ?? "?";
-  return s.length > 15 ? s.slice(0, 14) + "…" : s;
+  return s.length > 14 ? s.slice(0, 10) + "…" : s;
 };
 
 const currency = group?.default_currency ?? "EUR";

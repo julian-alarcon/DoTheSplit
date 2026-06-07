@@ -67,7 +67,7 @@ const others = otherCurrencies();
     </p>
   )}
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Rename &amp; currency</h2>
     <form method="POST" action={`/api/group-settings?id=${id}`} class="flex flex-col gap-3">
       <label class="field">
@@ -116,7 +116,7 @@ const others = otherCurrencies();
     </form>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Members</h2>
     <ul class="mb-3 flex flex-col gap-2 text-sm">
       {group.members.map((m) => {
@@ -193,7 +193,7 @@ const others = otherCurrencies();
     <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">The invitee must already be registered.</p>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Default split</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       {!isPair
@@ -247,7 +247,7 @@ const others = otherCurrencies();
     </fieldset>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Export</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       Download every expense and settlement in this group as a CSV file. The format is a superset of Splitwise's export, so you can re-import it into either tool.
@@ -260,7 +260,7 @@ const others = otherCurrencies();
     </form>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Import expenses</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       Bulk-add expenses from a DoTheSplit-shaped CSV. Splits use this group's default rule (pinned percentage for 2-member groups, equal otherwise). Empty cells fall back to the group currency, the importer as payer, and the <code>other</code> category.
@@ -315,7 +315,7 @@ const others = otherCurrencies();
   )}
 
   {isCreator && group.members.length > 1 && (
-    <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-2 font-medium">Transfer ownership</h2>
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
         Hand the group to another member. You stay in the group as a regular member, and the new owner takes over creator-only powers (transfer, delete, remove members).

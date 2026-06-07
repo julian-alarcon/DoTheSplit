@@ -126,6 +126,9 @@ func TestGroupAuthzNegativeMatrix(t *testing.T) {
 			"mode": "equal", "splits": []map[string]any{{"user_id": owner["id"]}},
 			"cadence": "monthly", "next_run_at": "2030-01-01T12:00:00Z",
 		}},
+		{"import_group_expenses_csv", "POST", "/v1/groups/" + groupID + "/imports/expenses", map[string]any{
+			"csv": "Date,Description,Category,Cost,Currency\n2026-06-01,x,,1.00,EUR\n",
+		}},
 
 		// Detail-level routes that resolve through to a group implicitly.
 		{"get_expense", "GET", "/v1/expenses/" + expenseID, nil},

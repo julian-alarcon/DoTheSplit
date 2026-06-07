@@ -248,6 +248,16 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 			},
 			extraField: "auto_apply",
 		},
+		{
+			name:   "import_group_expenses_csv",
+			method: "POST",
+			path:   "/v1/groups/" + groupID + "/imports/expenses",
+			auth:   aCookie,
+			body: map[string]any{
+				"csv": "Date,Description,Category,Cost,Currency\n2026-06-01,Pizza,Food,10.00,EUR\n",
+			},
+			extraField: "auto_apply",
+		},
 		// Recurring
 		{
 			name:   "create_recurring",

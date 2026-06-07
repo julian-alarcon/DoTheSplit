@@ -754,6 +754,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/groups/{id}/imports/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import CSV expenses into an existing group
+         * @description Appends expenses from a DoTheSplit-shaped CSV into an existing
+         *     group. Unlike `/v1/imports/dothesplit`, no group is created and
+         *     no member resolution happens: the actor must already be a
+         *     member, and every imported expense lives under the current
+         *     member roster.
+         *
+         *     Header rules match the dothesplit exporter: the mandatory
+         *     prefix `Date,Description,Category,Cost,Currency`, an optional
+         *     run of named columns (`Time, Payer, Notes, Created,
+         *     CreatedBy`) in any order, and any trailing per-member columns
+         *     which are accepted but ignored. The minimum a row needs to be
+         *     kept is `Date`, `Description`, and `Cost`; everything else is
+         *     optional. Empty cells fall back to the group's defaults.
+         *
+         *     Splits are derived from the group, not the CSV: a 2-member
+         *     group with a pinned `default_split` uses those basis points;
+         *     every other configuration falls back to an equal split across
+         *     all current members.
+         *
+         *     Payer resolution: the optional `Payer` cell is matched
+         *     case-insensitively against the current member display names. An
+         *     empty cell uses the importing user as the payer. An unknown
+         *     name causes the row to be skipped and reported in
+         *     `skipped`.
+         *
+         *     Errors and limits match `/v1/imports/dothesplit` (256 KiB raw
+         *     CSV, 5000 rows, 256-char fields). Categories are mapped against
+         *     the seeded label list with `other` as the fallback.
+         */
+        post: operations["importGroupExpensesCSV"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/groups/{id}/recurring-expenses": {
         parameters: {
             query?: never;
@@ -1451,6 +1498,48 @@ export interface components {
             from_csv_name: string;
             /** @description Member who received the payment (CSV column header). */
             to_csv_name: string;
+        };
+        /**
+         * @example {
+         *       "csv": "Date,Description,Category,Cost,Currency,Payer,Notes\n2026-06-01,Pizza,Food,42.00,EUR,Alice,Friday night\n2026-06-03,Taxi,,18.50,,,\n",
+         *       "dry_run": true
+         *     }
+         */
+        ImportGroupExpensesRequest: {
+            /** @description Raw CSV text. DoTheSplit-shaped header. Hard cap 256 KiB. */
+            csv: string;
+            /**
+             * @description When true, parses the CSV and returns the preview without writing anything.
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        ImportGroupExpensesResponse: {
+            /** @description Number of valid expenses parsed from the CSV. */
+            expense_count: number;
+            /** @description Number of rows skipped (malformed, unknown payer, empty description, etc.). */
+            skipped_count: number;
+            /** @description Raw CSV records (rejoined with commas) for skipped rows, capped at 50 entries. */
+            skipped: string[];
+            preview: components["schemas"]["ImportGroupExpensesPreviewRow"][];
+            /**
+             * @description Distinct ISO currency codes seen in the CSV, in first-seen order.
+             *     DoTheSplit groups are single-currency; rows with a different
+             *     currency code (or none at all) are stored under the group's
+             *     `default_currency`. UI clients should warn when length > 1.
+             */
+            csv_currencies: string[];
+        };
+        ImportGroupExpensesPreviewRow: {
+            description: string;
+            /** Format: date-time */
+            incurred_at: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            category_slug: string;
+            /** @description Display name of the resolved member who paid this row. */
+            payer_display_name: string;
         };
         ExpenseRevision: {
             /** Format: uuid */
@@ -3096,6 +3185,45 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    importGroupExpensesCSV: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportGroupExpensesRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview (when `dry_run: true`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportGroupExpensesResponse"];
+                };
+            };
+            /** @description Created (when `dry_run: false`) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportGroupExpensesResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRecurringExpenses: {

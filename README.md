@@ -33,7 +33,6 @@ docker compose up -d
 
 Open http://localhost:3000.
 
-
 ## Layout
 
 - `/api`: Go 1.25 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
@@ -59,8 +58,8 @@ first-run setup token from the API logs.
 Tagged releases publish multi-arch (`linux/amd64`, `linux/arm64`) OCI images to
 the GitHub Container Registry:
 
-| Image | Tags |
-|---|---|
+| Image                                   | Tags                                    |
+| --------------------------------------- | --------------------------------------- |
 | `ghcr.io/julian-alarcon/dothesplit-api` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
 | `ghcr.io/julian-alarcon/dothesplit-web` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
 
@@ -80,11 +79,11 @@ The running version is reported by `GET /healthz` (api) and the page footer
 
 Three values in `.env` are **the** load-bearing secrets for this app:
 
-| Variable | What it does | If you lose it | If it leaks |
-|---|---|---|---|
-| `EMAIL_ENC_KEY` | AES-GCM key that encrypts every email at rest | Existing emails are unrecoverable | Attacker can decrypt every email |
-| `EMAIL_HMAC_KEY` | HMAC key for email lookup hashes | Login by email stops working for existing users | Attacker can enumerate which emails are registered |
-| `PASSWORD_PEPPER` | Server-side pepper added before Argon2id | Existing passwords are unrecoverable | Attacker can crack stolen password hashes offline |
+| Variable          | What it does                                  | If you lose it                                  | If it leaks                                        |
+| ----------------- | --------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `EMAIL_ENC_KEY`   | AES-GCM key that encrypts every email at rest | Existing emails are unrecoverable               | Attacker can decrypt every email                   |
+| `EMAIL_HMAC_KEY`  | HMAC key for email lookup hashes              | Login by email stops working for existing users | Attacker can enumerate which emails are registered |
+| `PASSWORD_PEPPER` | Server-side pepper added before Argon2id      | Existing passwords are unrecoverable            | Attacker can crack stolen password hashes offline  |
 
 `POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database.
 

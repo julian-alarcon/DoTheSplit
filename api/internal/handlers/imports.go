@@ -13,6 +13,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/csvimport"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
@@ -31,6 +32,78 @@ func (s *Server) ImportSplitwise(c *gin.Context) {
 // produced by the export endpoint).
 func (s *Server) ImportDoTheSplit(c *gin.Context) {
 	s.importCSV(c, s.Imports.RunDoTheSplit)
+}
+
+// ImportGroupExpensesCSV appends expenses to an existing group from a
+// DoTheSplit-shaped CSV. Splits are derived from the group (pinned
+// 2-member percent or equal); the Payer column resolves by member
+// display name; everything else has a sensible default.
+func (s *Server) ImportGroupExpensesCSV(c *gin.Context) {
+	u := middleware.User(c)
+	gid, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		writeErr(c, http.StatusBadRequest, "bad_request", "invalid group id")
+		return
+	}
+	var req apigen.ImportGroupExpensesRequest
+	if !bindStrictJSON(c, &req) {
+		return
+	}
+	in := service.ImportGroupExpensesInput{CSV: req.Csv}
+	if req.DryRun != nil {
+		in.DryRun = *req.DryRun
+	}
+
+	res, err := s.GroupExpenseImps.Run(c.Request.Context(), u.ID, gid, in)
+	switch {
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a member of this group")
+		return
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		return
+	case errors.Is(err, csvimport.ErrCSVTooLarge),
+		errors.Is(err, csvimport.ErrCSVBadHeader),
+		errors.Is(err, csvimport.ErrCSVNoRows),
+		errors.Is(err, csvimport.ErrCSVTooMany),
+		errors.Is(err, csvimport.ErrCSVFieldLen):
+		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	case err != nil:
+		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+
+	skipped := res.Skipped
+	if skipped == nil {
+		skipped = []string{}
+	}
+	csvCurrencies := res.CSVCurrencies
+	if csvCurrencies == nil {
+		csvCurrencies = []string{}
+	}
+	out := apigen.ImportGroupExpensesResponse{
+		ExpenseCount:  res.ExpenseCount,
+		SkippedCount:  res.SkippedCount,
+		Skipped:       skipped,
+		CsvCurrencies: csvCurrencies,
+	}
+	out.Preview = make([]apigen.ImportGroupExpensesPreviewRow, 0, len(res.Preview))
+	for _, p := range res.Preview {
+		out.Preview = append(out.Preview, apigen.ImportGroupExpensesPreviewRow{
+			Description:      p.Description,
+			IncurredAt:       p.IncurredAt,
+			AmountCents:      p.AmountCents,
+			Currency:         p.Currency,
+			CategorySlug:     p.CategorySlug,
+			PayerDisplayName: p.PayerDisplayName,
+		})
+	}
+	if in.DryRun {
+		c.JSON(http.StatusOK, out)
+		return
+	}
+	c.JSON(http.StatusCreated, out)
 }
 
 // importCSV is the shared body of both import handlers; it differs only

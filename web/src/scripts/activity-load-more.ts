@@ -19,7 +19,7 @@ if (button && list) {
     try {
       const url = new URL(`/groups/${groupID}/activity-fragment`, window.location.origin);
       url.searchParams.set("cursor", cursor);
-      url.searchParams.set("limit", "25");
+      url.searchParams.set("limit", "75");
       const res = await fetch(url, { headers: { Accept: "text/html" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();

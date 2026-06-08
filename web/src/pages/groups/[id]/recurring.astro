@@ -83,13 +83,13 @@ const showError = Astro.url.searchParams.get("error") === "1";
                   title={cat?.label ?? ""}
                 >
                   <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
-                  <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-500">
+                  <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                     Next run
                   </span>
-                  <span class="text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                  <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                     {monthFmt.format(new Date(t.next_run_at))}
                   </span>
-                  <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+                  <span class="-mt-0.5 text-s font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
                     {dayFmt.format(new Date(t.next_run_at))}
                   </span>
                 </span>
@@ -110,7 +110,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
                       avatarUpdatedAt={memberByID.get(t.payer_id)?.avatar_updated_at}
                       size={16}
                     />
-                    <span>{nameByUserID.get(t.payer_id) ?? "?"}</span>
+                    <span class="-ml-1">{nameByUserID.get(t.payer_id) ?? "?"}</span>
                   </div>
                 </div>
               </div>

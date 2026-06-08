@@ -58,6 +58,29 @@ const shortName = (name: string | undefined | null) => {
   return s.length > 14 ? s.slice(0, 10) + "…" : s;
 };
 
+// Viewer's per-expense involvement: lent (paid more than their share),
+// owes (their share is not zero and they didn't pay), or not involved
+// (no split row for them). Derived purely from the expense's splits + payer.
+const viewerID = Astro.locals.user?.id ?? "";
+type ViewerStake =
+  | { kind: "lent"; cents: number }
+  | { kind: "owes"; cents: number }
+  | { kind: "none" };
+const viewerStake = (e: { payer_id: string; amount_cents: number; splits: Array<{ user_id: string; share_cents: number }> }): ViewerStake => {
+  if (!viewerID) return { kind: "none" };
+  const myShare = e.splits.find((s) => s.user_id === viewerID)?.share_cents ?? 0;
+  const iPaid = e.payer_id === viewerID;
+  const involved = iPaid || e.splits.some((s) => s.user_id === viewerID);
+  if (!involved) return { kind: "none" };
+  if (iPaid) {
+    const lent = e.amount_cents - myShare;
+    if (lent > 0) return { kind: "lent", cents: lent };
+    return { kind: "none" };
+  }
+  if (myShare > 0) return { kind: "owes", cents: myShare };
+  return { kind: "none" };
+};
+
 const moneyFmt = new Intl.NumberFormat(undefined, {
   style: "currency",
   currency,
@@ -340,11 +363,13 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
             const e = item.expense;
             const cat = categoryByID.get(e.category_id);
             const cadence = item.cadence;
+            const stake = viewerStake(e);
+            const moneyFmtRow = new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" });
             return (
               <li>
                 <a
                   href={`/groups/${id}/expenses/${e.id}`}
-                  class="flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-3 py-1.5 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+                  class="flex items-stretch justify-between gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
                 >
                   <div class="flex min-w-0 items-center gap-3">
                     <span
@@ -352,14 +377,14 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
                       title={cat?.label ?? ""}
                     >
                       <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
-                      <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                      <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                         {monthFmt.format(new Date(e.incurred_at))}
                       </span>
-                      <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+                      <span class="-mt-0.5 text-s font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
                         {dayFmt.format(new Date(e.incurred_at))}
                       </span>
                     </span>
-                    <div class="flex min-w-0 flex-col gap-y-0.5 lg:flex-row lg:flex-wrap lg:items-baseline lg:gap-x-2 lg:gap-y-0">
+                    <div class="flex min-w-0 flex-col gap-y-0.5">
                       <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                         <span class="truncate">{e.description}</span>
                         {cadence && (
@@ -372,22 +397,42 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
                           </span>
                         )}
                       </div>
-                      <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                      <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-500">
                         <span>paid by</span>
                         <Avatar
                           userId={e.payer_id}
                           displayName={nameByUserID.get(e.payer_id) ?? "?"}
                           hasAvatar={memberByID.get(e.payer_id)?.has_avatar}
                           avatarUpdatedAt={memberByID.get(e.payer_id)?.avatar_updated_at}
-                          size={16}
+                          size={12}
+                          class="opacity-60"
                         />
-                        <span class="truncate">{shortName(nameByUserID.get(e.payer_id))}</span>
+                        <span class="-ml-1 truncate">{shortName(nameByUserID.get(e.payer_id))}</span>
                       </div>
                     </div>
                   </div>
-                  <span class="shrink-0 font-mono text-lg tabular-nums">
-                    {new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" }).format(e.amount_cents / 100)}
-                  </span>
+                  <div class="flex shrink-0 flex-col items-end justify-between gap-1">
+                    <span class="text-[11px] tabular-nums">
+                      {stake.kind === "lent" && (
+                        <>
+                          <span class="text-[var(--color-emerald-900)] dark:text-[var(--color-emerald-200)]">you lent </span>
+                          <span class="font-mono text-neutral-700 dark:text-neutral-300">{moneyFmtRow.format(stake.cents / 100)}</span>
+                        </>
+                      )}
+                      {stake.kind === "owes" && (
+                        <>
+                          <span class="text-[var(--color-amber-700)] dark:text-[var(--color-amber-200)]">you owe </span>
+                          <span class="font-mono text-neutral-700 dark:text-neutral-300">{moneyFmtRow.format(stake.cents / 100)}</span>
+                        </>
+                      )}
+                      {stake.kind === "none" && (
+                        <span class="text-neutral-500 dark:text-neutral-500">not involved</span>
+                      )}
+                    </span>
+                    <span class="font-mono text-lg tabular-nums">
+                      {moneyFmtRow.format(e.amount_cents / 100)}
+                    </span>
+                  </div>
                 </a>
               </li>
             );
@@ -400,7 +445,7 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
             <li>
               <a
                 href={`/groups/${id}/settlements/${s.id}`}
-                class="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
+                class="flex items-center justify-between gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
               >
                 <div class="flex min-w-0 items-center gap-3">
                   <span
@@ -410,34 +455,36 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
                     <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
                       <FaIcon name="arrow-right" size={14} />
                     </span>
-                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                       {monthFmt.format(new Date(s.settled_at))}
                     </span>
-                    <span class="-mt-0.5 text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-300">
+                    <span class="-mt-0.5 text-s font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
                       {dayFmt.format(new Date(s.settled_at))}
                     </span>
                   </span>
-                  <div class="flex min-w-0 flex-col gap-y-0.5 lg:flex-row lg:flex-wrap lg:items-baseline lg:gap-x-2 lg:gap-y-0">
+                  <div class="flex min-w-0 flex-col gap-y-0.5">
                     <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                       <Avatar
                         userId={s.from_user_id}
                         displayName={from?.display_name ?? "?"}
                         hasAvatar={from?.has_avatar}
                         avatarUpdatedAt={from?.avatar_updated_at}
-                        size={18}
+                        size={16}
+                        class="opacity-60"
                       />
-                      <span class="truncate">{shortName(nameByUserID.get(s.from_user_id))}</span>
-                      <span class="text-neutral-600 dark:text-neutral-400">paid</span>
+                      <span class="-ml-1 truncate">{shortName(nameByUserID.get(s.from_user_id))}</span>
+                      <span class="text-neutral-500 dark:text-neutral-500">paid</span>
                       <Avatar
                         userId={s.to_user_id}
                         displayName={to?.display_name ?? "?"}
                         hasAvatar={to?.has_avatar}
                         avatarUpdatedAt={to?.avatar_updated_at}
-                        size={18}
+                        size={16}
+                        class="opacity-60"
                       />
-                      <span class="truncate">{shortName(nameByUserID.get(s.to_user_id))}</span>
+                      <span class="-ml-1 truncate">{shortName(nameByUserID.get(s.to_user_id))}</span>
                     </div>
-                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-neutral-500 dark:text-neutral-500">
                       <span>settlement</span>
                       {s.note && <span class="truncate">· {s.note}</span>}
                     </div>

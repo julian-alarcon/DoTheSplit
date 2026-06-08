@@ -687,6 +687,7 @@ svg[data-icon-slug="other"] {
   background: var(--muted);
   color: var(--muted-foreground);
 }
+.avatar-12 { width: 12px; height: 12px; font-size: 6px; }
 .avatar-16 { width: 16px; height: 16px; font-size: 8px; }
 .avatar-18 { width: 18px; height: 18px; font-size: 9px; }
 .avatar-20 { width: 20px; height: 20px; font-size: 9px; }

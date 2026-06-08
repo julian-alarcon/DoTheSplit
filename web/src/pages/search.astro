@@ -15,13 +15,13 @@ const requestedGroup = /^[0-9a-fA-F-]{36}$/.test(rawGroup) ? rawGroup : "";
 const rawCategory = Astro.url.searchParams.get("category_id") ?? "";
 const requestedCategory = /^[0-9a-fA-F-]{36}$/.test(rawCategory) ? rawCategory : "";
 
-// Categories drive both the per-row icon (like the Activity feed) and the
+// Categories drive both the per-row icon (like the Transactions feed) and the
 // category filter picker. Errors aren't fatal - rows degrade to a generic icon.
 const categoriesRes = await api.GET("/v1/categories");
 const categories = categoriesRes.data ?? [];
 const categoryByID = new Map(categories.map((c) => [c.id, c]));
 
-type SearchItem = components["schemas"]["ActivityItem"];
+type SearchItem = components["schemas"]["TransactionItem"];
 type SearchGroup = components["schemas"]["SearchGroupRef"];
 
 let items: SearchItem[] = [];

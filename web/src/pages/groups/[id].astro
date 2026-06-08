@@ -6,17 +6,17 @@ import DatePicker from "@/components/DatePicker.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
-import { withMonthHeaders } from "@/lib/activity-month";
+import { withMonthHeaders } from "@/lib/transaction-month";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
 
-const [groupsRes, balancesRes, categoriesRes, recurringRes, activityRes] = await Promise.all([
+const [groupsRes, balancesRes, categoriesRes, recurringRes, transactionsRes] = await Promise.all([
   api.GET("/v1/groups"),
   api.GET("/v1/groups/{id}/balances", { params: { path: { id } } }),
   api.GET("/v1/categories"),
   api.GET("/v1/groups/{id}/recurring-expenses", { params: { path: { id } } }),
-  api.GET("/v1/groups/{id}/activity", { params: { path: { id } } }),
+  api.GET("/v1/groups/{id}/transactions", { params: { path: { id } } }),
 ]);
 
 const group = groupsRes.data?.find((g) => g.id === id);
@@ -27,13 +27,13 @@ const net = balancesRes.data?.net ?? [];
 const simplified = balancesRes.data?.simplified ?? [];
 const recurringTemplates = recurringRes.data ?? [];
 const categories = categoriesRes.data ?? [];
-const activity = activityRes.data?.items ?? [];
-const nextCursor = activityRes.data?.next_cursor ?? "";
+const transactions = transactionsRes.data?.items ?? [];
+const nextCursor = transactionsRes.data?.next_cursor ?? "";
 
-// Unified activity feed: paginated server-side via /v1/groups/{id}/activity
+// Unified transaction feed: paginated server-side via /v1/groups/{id}/transactions
 // (50 items by default, with `next_cursor` driving the Load-more island).
 // Cadence (when an expense matches a recurring template) is now resolved
-// server-side and lives on each ActivityItem.
+// server-side and lives on each TransactionItem.
 const cadenceLabels: Record<string, string> = {
   daily: "daily",
   weekly: "weekly",
@@ -91,10 +91,10 @@ const format = (cents: number) => moneyFmt.format(cents / 100);
 const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
 const dayFmt = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
 
-// Wrap the activity feed with "Month YYYY" dividers. Each item's
+// Wrap the transaction feed with "Month YYYY" dividers. Each item's
 // occurred_at is the expense.incurred_at or settlement.settled_at.
-const activityRows = withMonthHeaders(
-  activity,
+const transactionRows = withMonthHeaders(
+  transactions,
   (item) => item.expense?.incurred_at ?? item.settlement?.settled_at ?? "",
   Astro.locals.locale,
 );
@@ -341,12 +341,12 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
   </section>
 
   <section class="lg:order-2">
-    <h2 class="mb-3 font-medium">Activity</h2>
-    {activity.length === 0 ? (
+    <h2 class="mb-3 font-medium">Transactions</h2>
+    {transactions.length === 0 ? (
       <p class="text-sm text-neutral-500">No expenses or settlements yet.</p>
     ) : (
-      <ul class="flex flex-col gap-1" data-activity-list>
-        {activityRows.map((row) => {
+      <ul class="flex flex-col gap-1" data-transactions-list>
+        {transactionRows.map((row) => {
           if (row.kind === "month-header") {
             return (
               <li
@@ -503,7 +503,7 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
       <div class="mt-3 flex justify-center">
         <button
           type="button"
-          data-activity-load-more
+          data-transactions-load-more
           data-group-id={id}
           data-cursor={nextCursor}
           class="btn-secondary btn-sm"
@@ -520,6 +520,6 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
     import "@/scripts/split-editor.ts";
     import "@/scripts/date-picker.ts";
     import "@/scripts/currency-input.ts";
-    import "@/scripts/activity-load-more.ts";
+    import "@/scripts/transactions-load-more.ts";
   </script>
 </Base>

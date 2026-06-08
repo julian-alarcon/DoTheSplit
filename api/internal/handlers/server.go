@@ -29,7 +29,7 @@ type Server struct {
 	Balances    *service.BalanceService
 	Settlements *service.SettlementService
 	Recurring   *service.RecurringService
-	Activity    *service.ActivityService
+	Transactions    *service.TransactionService
 	SearchSvc   *service.SearchService
 	Imports          *service.SplitwiseImporter
 	GroupExpenseImps *service.GroupExpenseImporter

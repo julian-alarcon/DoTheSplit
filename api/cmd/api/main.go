@@ -66,7 +66,7 @@ func main() {
 	balances := repo.NewBalanceRepo(pool)
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
-	activityRepo := repo.NewActivityRepo(pool)
+	transactionRepo := repo.NewTransactionRepo(pool)
 	searchRepo := repo.NewSearchRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
@@ -85,7 +85,7 @@ func main() {
 	balanceSvc := service.NewBalanceService(balances, groups)
 	settlementSvc := service.NewSettlementService(settlements, groups)
 	recurringSvc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
-	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
+	transactionSvc := service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring)
 	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
 	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, auth, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
@@ -126,7 +126,7 @@ func main() {
 		Balances:      balanceSvc,
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
-		Activity:      activitySvc,
+		Transactions:      transactionSvc,
 		SearchSvc:     searchSvc,
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,

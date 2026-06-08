@@ -1,10 +1,10 @@
-// Activity feed Load-more island. Fetches the next page of activity items as
-// an HTML fragment from /groups/{id}/activity-fragment?cursor=... and appends
+// Transaction feed Load-more island. Fetches the next page of transaction items as
+// an HTML fragment from /groups/{id}/transactions-fragment?cursor=... and appends
 // the rendered <li> rows into the existing list. Updates the button's
 // data-cursor in place; hides it when the server returns no next_cursor.
 
-const button = document.querySelector<HTMLButtonElement>("[data-activity-load-more]");
-const list = document.querySelector<HTMLUListElement>("[data-activity-list]");
+const button = document.querySelector<HTMLButtonElement>("[data-transactions-load-more]");
+const list = document.querySelector<HTMLUListElement>("[data-transactions-list]");
 
 if (button && list) {
   const groupID = button.dataset.groupId ?? "";
@@ -17,7 +17,7 @@ if (button && list) {
     const original = button.textContent;
     button.textContent = "Loading…";
     try {
-      const url = new URL(`/groups/${groupID}/activity-fragment`, window.location.origin);
+      const url = new URL(`/groups/${groupID}/transactions-fragment`, window.location.origin);
       url.searchParams.set("cursor", cursor);
       url.searchParams.set("limit", "75");
       const res = await fetch(url, { headers: { Accept: "text/html" } });
@@ -25,11 +25,11 @@ if (button && list) {
       const html = await res.text();
       // Parse the returned fragment in a detached <template> so unrelated
       // page state isn't disturbed. The endpoint emits <li>... items plus a
-      // hidden <div data-activity-next-cursor=...> trailer.
+      // hidden <div data-transactions-next-cursor=...> trailer.
       const tpl = document.createElement("template");
       tpl.innerHTML = html;
-      const trailer = tpl.content.querySelector<HTMLElement>("[data-activity-next-cursor]");
-      const nextCursor = trailer?.dataset.activityNextCursor ?? "";
+      const trailer = tpl.content.querySelector<HTMLElement>("[data-transactions-next-cursor]");
+      const nextCursor = trailer?.dataset.transactionsNextCursor ?? "";
       trailer?.remove();
       // Drop the fragment's leading month header if it duplicates the last
       // header already on the page - happens when the next page starts
@@ -49,7 +49,7 @@ if (button && list) {
         button.remove();
       }
     } catch (err) {
-      console.error("activity load-more failed", err);
+      console.error("transactions load-more failed", err);
       button.textContent = "Try again";
       button.disabled = false;
     }

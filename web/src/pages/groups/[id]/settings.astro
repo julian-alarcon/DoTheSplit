@@ -9,10 +9,10 @@ import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currenc
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
 
-const [groupsRes, balancesRes, activityRes] = await Promise.all([
+const [groupsRes, balancesRes, transactionsRes] = await Promise.all([
   api.GET("/v1/groups"),
   api.GET("/v1/groups/{id}/balances", { params: { path: { id } } }),
-  api.GET("/v1/groups/{id}/activity", { params: { path: { id }, query: { limit: 1 } } }),
+  api.GET("/v1/groups/{id}/transactions", { params: { path: { id }, query: { limit: 1 } } }),
 ]);
 const group = groupsRes.data?.find((g) => g.id === id);
 if (!group) {
@@ -20,7 +20,7 @@ if (!group) {
 }
 // The currency is locked once the ledger has any expense or settlement -
 // changing it after that would silently reinterpret stored amount_cents.
-const currencyLocked = (activityRes.data?.items?.length ?? 0) > 0;
+const currencyLocked = (transactionsRes.data?.items?.length ?? 0) > 0;
 
 const currency = group.default_currency;
 const isCreator = group.created_by === Astro.locals.user?.id;
@@ -105,7 +105,7 @@ const others = otherCurrencies();
       </label>
       {currencyLocked ? (
         <p id="currency-lock-hint" class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-          Currency is fixed after the first expense or settlement. To change it, delete all activity or create a new group.
+          Currency is fixed after the first expense or settlement. To change it, delete all transactions or create a new group.
         </p>
       ) : (
         <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">

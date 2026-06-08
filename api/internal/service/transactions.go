@@ -16,56 +16,56 @@ import (
 var ErrBadCursor = errors.New("invalid cursor")
 
 const (
-	activityDefaultLimit = 50
-	activityMaxLimit     = 100
+	transactionDefaultLimit = 50
+	transactionMaxLimit     = 100
 )
 
-type ActivityService struct {
+type TransactionService struct {
 	groups      *GroupService
-	activity    *repo.ActivityRepo
+	transaction    *repo.TransactionRepo
 	expenses    *repo.ExpenseRepo
 	settlements *repo.SettlementRepo
 	recurring   *repo.RecurringRepo
 }
 
-func NewActivityService(g *GroupService, a *repo.ActivityRepo, e *repo.ExpenseRepo, s *repo.SettlementRepo, r *repo.RecurringRepo) *ActivityService {
-	return &ActivityService{groups: g, activity: a, expenses: e, settlements: s, recurring: r}
+func NewTransactionService(g *GroupService, a *repo.TransactionRepo, e *repo.ExpenseRepo, s *repo.SettlementRepo, r *repo.RecurringRepo) *TransactionService {
+	return &TransactionService{groups: g, transaction: a, expenses: e, settlements: s, recurring: r}
 }
 
-// ActivityItem mirrors the OpenAPI schema: exactly one of Expense / Settlement
+// TransactionItem mirrors the OpenAPI schema: exactly one of Expense / Settlement
 // is set, with the discriminator in Kind. Cadence is non-empty only when the
 // item is an expense whose content matches a recurring template.
-type ActivityItem struct {
-	Kind       repo.ActivityKind
+type TransactionItem struct {
+	Kind       repo.TransactionKind
 	OccurredAt time.Time
 	Cadence    string // empty when not applicable
 	Expense    *repo.Expense
 	Settlement *repo.Settlement
 }
 
-type ActivityPage struct {
-	Items      []ActivityItem
+type TransactionPage struct {
+	Items      []TransactionItem
 	NextCursor string // empty when there are no more items
 }
 
-// List returns one page of the merged activity feed for the group. It enforces
+// List returns one page of the merged transaction feed for the group. It enforces
 // membership, hydrates expense/settlement payloads in batched queries, and
 // emits an opaque cursor that continues strictly after the last returned row.
-func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, limit int, cursor string) (*ActivityPage, error) {
+func (s *TransactionService) List(ctx context.Context, actorID, groupID uuid.UUID, limit int, cursor string) (*TransactionPage, error) {
 	if err := s.groups.RequireMember(ctx, groupID, actorID); err != nil {
 		return nil, err
 	}
-	after, err := decodeActivityCursor(cursor)
+	after, err := decodeTransactionCursor(cursor)
 	if err != nil {
 		return nil, ErrBadCursor
 	}
 	if limit <= 0 {
-		limit = activityDefaultLimit
+		limit = transactionDefaultLimit
 	}
-	if limit > activityMaxLimit {
-		limit = activityMaxLimit
+	if limit > transactionMaxLimit {
+		limit = transactionMaxLimit
 	}
-	rows, err := s.activity.ListByGroup(ctx, groupID, limit+1, after)
+	rows, err := s.transaction.ListByGroup(ctx, groupID, limit+1, after)
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +77,9 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 	var expenseIDs, settlementIDs []uuid.UUID
 	for _, r := range rows {
 		switch r.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			expenseIDs = append(expenseIDs, r.ID)
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			settlementIDs = append(settlementIDs, r.ID)
 		}
 	}
@@ -117,11 +117,11 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 			}
 		}
 	}
-	items := make([]ActivityItem, 0, len(rows))
+	items := make([]TransactionItem, 0, len(rows))
 	for _, row := range rows {
-		item := ActivityItem{Kind: row.Kind, OccurredAt: row.OccurredAt}
+		item := TransactionItem{Kind: row.Kind, OccurredAt: row.OccurredAt}
 		switch row.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			e, ok := expenses[row.ID]
 			if !ok {
 				// The row was soft-deleted between the index query and the
@@ -132,7 +132,7 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 			if c, ok := cadenceByExpense[row.ID]; ok {
 				item.Cadence = c
 			}
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			st, ok := settlements[row.ID]
 			if !ok {
 				continue
@@ -141,10 +141,10 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 		}
 		items = append(items, item)
 	}
-	page := &ActivityPage{Items: items}
+	page := &TransactionPage{Items: items}
 	if hasMore && len(rows) > 0 {
 		last := rows[len(rows)-1]
-		page.NextCursor = encodeActivityCursor(last)
+		page.NextCursor = encodeTransactionCursor(last)
 	}
 	return page, nil
 }
@@ -153,14 +153,14 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 // time RFC3339Nano. Pipes are safe because RFC3339 doesn't use them and our
 // kinds don't either. created_at is the secondary sort key; kind is kept in
 // the payload for forward compatibility but is not used in the WHERE clause.
-func encodeActivityCursor(r repo.ActivityRow) string {
+func encodeTransactionCursor(r repo.TransactionRow) string {
 	raw := r.OccurredAt.UTC().Format(time.RFC3339Nano) + "|" +
 		r.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" +
 		string(r.Kind) + "|" + r.ID.String()
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
-func decodeActivityCursor(s string) (*repo.ActivityRow, error) {
+func decodeTransactionCursor(s string) (*repo.TransactionRow, error) {
 	if s == "" {
 		return nil, nil
 	}
@@ -180,13 +180,13 @@ func decodeActivityCursor(s string) (*repo.ActivityRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind := repo.ActivityKind(parts[2])
-	if kind != repo.ActivityExpense && kind != repo.ActivitySettlement {
+	kind := repo.TransactionKind(parts[2])
+	if kind != repo.TransactionExpense && kind != repo.TransactionSettlement {
 		return nil, errors.New("malformed cursor kind")
 	}
 	id, err := uuid.Parse(parts[3])
 	if err != nil {
 		return nil, err
 	}
-	return &repo.ActivityRow{Kind: kind, OccurredAt: occurredAt, CreatedAt: createdAt, ID: id}, nil
+	return &repo.TransactionRow{Kind: kind, OccurredAt: occurredAt, CreatedAt: createdAt, ID: id}, nil
 }

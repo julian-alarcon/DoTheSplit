@@ -15,7 +15,7 @@ import (
 // substring (case-insensitive). The service hydrates full payloads via the
 // existing FindByIDs helpers.
 type SearchRow struct {
-	Kind       ActivityKind
+	Kind       TransactionKind
 	GroupID    uuid.UUID
 	OccurredAt time.Time
 	CreatedAt  time.Time
@@ -28,7 +28,7 @@ type SearchRepo struct {
 
 func NewSearchRepo(p *pgxpool.Pool) *SearchRepo { return &SearchRepo{pool: p} }
 
-// SearchActivity returns up to `limit` non-deleted expense+settlement rows in
+// SearchTransactions returns up to `limit` non-deleted expense+settlement rows in
 // `groupIDs` whose description/notes (expense) or note (settlement) contain
 // `q` as a case-insensitive substring. Caller is responsible for restricting
 // `groupIDs` to groups the actor belongs to.
@@ -40,7 +40,7 @@ func NewSearchRepo(p *pgxpool.Pool) *SearchRepo { return &SearchRepo{pool: p} }
 // When `categoryID` is non-nil, the result is restricted to expenses with that
 // category id, and settlements are excluded entirely (settlements have no
 // category).
-func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q string, categoryID *uuid.UUID, limit int) ([]SearchRow, error) {
+func (r *SearchRepo) SearchTransactions(ctx context.Context, groupIDs []uuid.UUID, q string, categoryID *uuid.UUID, limit int) ([]SearchRow, error) {
 	if len(groupIDs) == 0 || strings.TrimSpace(q) == "" {
 		return nil, nil
 	}
@@ -83,7 +83,7 @@ func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q
 	}
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("search activity: %w", err)
+		return nil, fmt.Errorf("search transaction: %w", err)
 	}
 	defer rows.Close()
 	var out []SearchRow
@@ -93,7 +93,7 @@ func (r *SearchRepo) SearchActivity(ctx context.Context, groupIDs []uuid.UUID, q
 		if err := rows.Scan(&kind, &row.GroupID, &row.OccurredAt, &row.CreatedAt, &row.ID); err != nil {
 			return nil, err
 		}
-		row.Kind = ActivityKind(kind)
+		row.Kind = TransactionKind(kind)
 		out = append(out, row)
 	}
 	return out, rows.Err()

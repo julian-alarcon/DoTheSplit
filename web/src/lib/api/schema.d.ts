@@ -618,15 +618,15 @@ export interface paths {
         patch: operations["updateSettlement"];
         trace?: never;
     };
-    "/v1/groups/{id}/activity": {
+    "/v1/groups/{id}/transactions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List the merged activity feed for a group (newest first, paginated) */
-        get: operations["listActivity"];
+        /** List the merged transaction feed for a group (newest first, paginated) */
+        get: operations["listTransactions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1626,7 +1626,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        ActivityItem: {
+        TransactionItem: {
             /** @enum {string} */
             kind: "expense" | "settlement";
             /** Format: date-time */
@@ -1638,8 +1638,8 @@ export interface components {
             /** @description Present iff kind=settlement. */
             settlement?: components["schemas"]["Settlement"];
         };
-        ActivityPage: {
-            items: components["schemas"]["ActivityItem"][];
+        TransactionPage: {
+            items: components["schemas"]["TransactionItem"][];
             /** @description Pass to the next request as `cursor`. Absent when there are no more items. */
             next_cursor?: string;
         };
@@ -1668,7 +1668,7 @@ export interface components {
          */
         SearchResponse: {
             query: string;
-            items: components["schemas"]["ActivityItem"][];
+            items: components["schemas"]["TransactionItem"][];
             groups: components["schemas"]["SearchGroupRef"][];
             /**
              * @description Distinct expense categories matching `q` + `group_id`, ignoring
@@ -3053,7 +3053,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    listActivity: {
+    listTransactions: {
         parameters: {
             query?: {
                 /** @description Max items to return. Defaults to 50. */
@@ -3075,7 +3075,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActivityPage"];
+                    "application/json": components["schemas"]["TransactionPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

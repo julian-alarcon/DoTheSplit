@@ -10,35 +10,35 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type ActivityKind string
+type TransactionKind string
 
 const (
-	ActivityExpense    ActivityKind = "expense"
-	ActivitySettlement ActivityKind = "settlement"
+	TransactionExpense    TransactionKind = "expense"
+	TransactionSettlement TransactionKind = "settlement"
 )
 
-// ActivityRow is a single (kind, occurred_at, created_at, id) tuple - just
+// TransactionRow is a single (kind, occurred_at, created_at, id) tuple - just
 // enough to drive keyset pagination. The service hydrates the full payloads
 // in batch. created_at is the tiebreaker when two rows share occurred_at
 // (e.g. multiple expenses dated the same day with no time component).
-type ActivityRow struct {
-	Kind       ActivityKind
+type TransactionRow struct {
+	Kind       TransactionKind
 	OccurredAt time.Time
 	CreatedAt  time.Time
 	ID         uuid.UUID
 }
 
-type ActivityRepo struct {
+type TransactionRepo struct {
 	pool *pgxpool.Pool
 }
 
-func NewActivityRepo(p *pgxpool.Pool) *ActivityRepo { return &ActivityRepo{pool: p} }
+func NewTransactionRepo(p *pgxpool.Pool) *TransactionRepo { return &TransactionRepo{pool: p} }
 
 // ListByGroup returns up to `limit` (occurred_at DESC, created_at DESC, id DESC)
 // rows from the merged expenses + settlements feed for the group, optionally
 // continuing strictly after the given cursor row. Soft-deleted rows are
 // excluded. Caller passes `limit + 1` if it wants to detect a next page.
-func (r *ActivityRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit int, after *ActivityRow) ([]ActivityRow, error) {
+func (r *TransactionRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit int, after *TransactionRow) ([]TransactionRow, error) {
 	args := []any{groupID}
 	cursorPredicate := ""
 	if after != nil {
@@ -69,14 +69,14 @@ func (r *ActivityRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ActivityRow
+	var out []TransactionRow
 	for rows.Next() {
-		var row ActivityRow
+		var row TransactionRow
 		var kind string
 		if err := rows.Scan(&kind, &row.OccurredAt, &row.CreatedAt, &row.ID); err != nil {
 			return nil, err
 		}
-		row.Kind = ActivityKind(kind)
+		row.Kind = TransactionKind(kind)
 		out = append(out, row)
 	}
 	return out, rows.Err()

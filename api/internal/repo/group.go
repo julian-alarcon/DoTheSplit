@@ -279,11 +279,11 @@ func (r *GroupRepo) IsMember(ctx context.Context, groupID, userID uuid.UUID) (bo
 	return exists, err
 }
 
-// HasActivity reports whether the group has at least one non-deleted expense
+// HasTransactions reports whether the group has at least one non-deleted expense
 // or settlement. Used to lock the default_currency once a ledger exists - the
 // money columns store amounts in that currency, so swapping it would silently
 // reinterpret historical totals.
-func (r *GroupRepo) HasActivity(ctx context.Context, groupID uuid.UUID) (bool, error) {
+func (r *GroupRepo) HasTransactions(ctx context.Context, groupID uuid.UUID) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS (

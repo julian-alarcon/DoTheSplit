@@ -79,7 +79,7 @@ The complete contract lives in [docs/openapi.yaml](docs/openapi.yaml) - that's t
 - **Expenses**: CRUD per group, edit-history (revisions), three split modes (equal/exact/percent).
 - **Balances & settlements**: net balances, simplified "X owes Y", settlement CRUD.
 - **Recurring**: CRUD per group, materialized by the worker on each cadence tick.
-- **Activity**: paginated merged feed of expenses + settlements per group.
+- **Transactions**: paginated merged feed of expenses + settlements per group.
 - **Categories**: read-only seeded list.
 - **Admin**: users (list, create, role, password reset, soft-delete), groups oversight, SMTP config + send-test, audit log.
 

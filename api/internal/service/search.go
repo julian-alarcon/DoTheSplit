@@ -41,7 +41,7 @@ func NewSearchService(g *GroupService, gr *repo.GroupRepo, s *repo.SearchRepo, e
 // client needs to render section headers and the per-group filter chip row.
 type SearchResult struct {
 	Query                string
-	Items                []ActivityItem
+	Items                []TransactionItem
 	Groups               []SearchGroupInfo
 	AvailableCategoryIDs []uuid.UUID
 }
@@ -120,7 +120,7 @@ func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string,
 		return result, nil
 	}
 
-	rows, err := s.search.SearchActivity(ctx, groupIDs, q, categoryID, limit)
+	rows, err := s.search.SearchTransactions(ctx, groupIDs, q, categoryID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -137,9 +137,9 @@ func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string,
 	var expenseIDs, settlementIDs []uuid.UUID
 	for _, r := range rows {
 		switch r.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			expenseIDs = append(expenseIDs, r.ID)
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			settlementIDs = append(settlementIDs, r.ID)
 		}
 	}
@@ -152,17 +152,17 @@ func (s *SearchService) Search(ctx context.Context, actorID uuid.UUID, q string,
 		return nil, err
 	}
 
-	items := make([]ActivityItem, 0, len(rows))
+	items := make([]TransactionItem, 0, len(rows))
 	for _, row := range rows {
-		item := ActivityItem{Kind: row.Kind, OccurredAt: row.OccurredAt}
+		item := TransactionItem{Kind: row.Kind, OccurredAt: row.OccurredAt}
 		switch row.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			e, ok := expenses[row.ID]
 			if !ok {
 				continue
 			}
 			item.Expense = e
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			st, ok := settlements[row.ID]
 			if !ok {
 				continue

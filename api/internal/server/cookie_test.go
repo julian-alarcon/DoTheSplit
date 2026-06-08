@@ -122,7 +122,7 @@ func bootStackWithCookieSecure(t *testing.T, cookieSecure bool) (*httptest.Serve
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
 	categorySvc := service.NewCategoryService(categories)
-	activityRepo := repo.NewActivityRepo(pool)
+	transactionRepo := repo.NewTransactionRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
 	setupRepo := repo.NewSetupRepo(pool)
@@ -150,7 +150,7 @@ func bootStackWithCookieSecure(t *testing.T, cookieSecure bool) (*httptest.Serve
 		Balances:    service.NewBalanceService(balances, groups),
 		Settlements: settlementSvc,
 		Recurring:   recurringSvc,
-		Activity:    service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
+		Transactions:    service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
 		SearchSvc:   service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Admin:       service.NewAdminService(pool, users, groups, sessions, auditRepo, authSvc, emailC, cfg.PasswordPepper),
 		Smtp:        service.NewSmtpService(smtpRepo, emailC),

@@ -1,5 +1,5 @@
 // NotificationService manages per-user email opt-ins and is the single
-// entry point services use to enqueue activity notifications. Centralising
+// entry point services use to enqueue transaction notifications. Centralising
 // the pref check + outbox enqueue keeps call sites tiny.
 package service
 

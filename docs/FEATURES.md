@@ -77,7 +77,7 @@ when / field / old → new, including per-member split diffs.
 
 Net-balance computation over all expenses + settlements, plus a simplified "X
 owes Y" view. Settlements are recorded directly from the group page, appear in
-the same paginated activity feed as expenses, and have their own detail page.
+the same paginated transaction feed as expenses, and have their own detail page.
 The settle-up form lets the actor pick **who is paying** (defaults to
 themselves), so a member can record a settlement on someone else's behalf
 without impersonating. Any group member can later edit a settlement
@@ -91,7 +91,7 @@ Templates with daily / weekly / biweekly / monthly / yearly cadence. A
 separate Go worker materializes a real expense on each cadence tick. Both the
 API and the UI (`/groups/{id}/recurring`) are shipped.
 
-## Activity feed
+## Transaction feed
 
 Paginated, time-ordered feed of expenses + settlements per group. Months are
 labelled, ordering matches the underlying timestamps regardless of insertion

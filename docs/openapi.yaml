@@ -50,7 +50,7 @@ tags:
     description: "`X paid Y` records that offset balances."
   - name: recurring
     description: Templates materialized into real expenses by the background worker.
-  - name: activity
+  - name: transactions
     description: Merged, paginated feed of expenses and settlements for a group, newest first.
   - name: search
     description: Cross-group full-text search over expense descriptions/notes and settlement notes (member-only rows).
@@ -911,11 +911,11 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /v1/groups/{id}/activity:
+  /v1/groups/{id}/transactions:
     get:
-      summary: List the merged activity feed for a group (newest first, paginated)
-      operationId: listActivity
-      tags: [activity]
+      summary: List the merged transaction feed for a group (newest first, paginated)
+      operationId: listTransactions
+      tags: [transactions]
       parameters:
         - $ref: "#/components/parameters/GroupId"
         - in: query
@@ -933,7 +933,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ActivityPage" }
+              schema: { $ref: "#/components/schemas/TransactionPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2303,7 +2303,7 @@ components:
         settled_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
 
-    ActivityItem:
+    TransactionItem:
       type: object
       required: [kind, occurred_at]
       properties:
@@ -2321,13 +2321,13 @@ components:
           allOf: [{ $ref: "#/components/schemas/Settlement" }]
           description: "Present iff kind=settlement."
 
-    ActivityPage:
+    TransactionPage:
       type: object
       required: [items]
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/ActivityItem" }
+          items: { $ref: "#/components/schemas/TransactionItem" }
         next_cursor:
           type: string
           description: "Pass to the next request as `cursor`. Absent when there are no more items."
@@ -2364,7 +2364,7 @@ components:
         query: { type: string }
         items:
           type: array
-          items: { $ref: "#/components/schemas/ActivityItem" }
+          items: { $ref: "#/components/schemas/TransactionItem" }
         groups:
           type: array
           items: { $ref: "#/components/schemas/SearchGroupRef" }

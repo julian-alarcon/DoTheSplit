@@ -104,7 +104,7 @@ func TestGroupAuthzNegativeMatrix(t *testing.T) {
 		// Group-scoped reads
 		{"list_expenses", "GET", "/v1/groups/" + groupID + "/expenses", nil},
 		{"list_settlements", "GET", "/v1/groups/" + groupID + "/settlements", nil},
-		{"list_activity", "GET", "/v1/groups/" + groupID + "/activity", nil},
+		{"list_transactions", "GET", "/v1/groups/" + groupID + "/transactions", nil},
 		{"list_recurring", "GET", "/v1/groups/" + groupID + "/recurring-expenses", nil},
 		{"get_balances", "GET", "/v1/groups/" + groupID + "/balances", nil},
 		{"export_csv", "GET", "/v1/groups/" + groupID + "/export.csv", nil},

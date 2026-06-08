@@ -12,7 +12,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
-func (s *Server) ListActivity(c *gin.Context) {
+func (s *Server) ListTransactions(c *gin.Context) {
 	u := middleware.User(c)
 	groupID, ok := parseUUID(c, "id")
 	if !ok {
@@ -28,7 +28,7 @@ func (s *Server) ListActivity(c *gin.Context) {
 		limit = n
 	}
 	cursor := c.Query("cursor")
-	page, err := s.Activity.List(c.Request.Context(), u.ID, groupID, limit, cursor)
+	page, err := s.Transactions.List(c.Request.Context(), u.ID, groupID, limit, cursor)
 	switch {
 	case errors.Is(err, service.ErrNotMember):
 		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
@@ -40,16 +40,16 @@ func (s *Server) ListActivity(c *gin.Context) {
 		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIActivityPage(page))
+	c.JSON(http.StatusOK, toAPITransactionPage(page))
 }
 
-func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {
-	out := apigen.ActivityPage{
-		Items: make([]apigen.ActivityItem, 0, len(p.Items)),
+func toAPITransactionPage(p *service.TransactionPage) apigen.TransactionPage {
+	out := apigen.TransactionPage{
+		Items: make([]apigen.TransactionItem, 0, len(p.Items)),
 	}
 	for _, item := range p.Items {
-		ai := apigen.ActivityItem{
-			Kind:       apigen.ActivityItemKind(item.Kind),
+		ai := apigen.TransactionItem{
+			Kind:       apigen.TransactionItemKind(item.Kind),
 			OccurredAt: item.OccurredAt,
 		}
 		if item.Cadence != "" {
@@ -57,12 +57,12 @@ func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {
 			ai.Cadence = &c
 		}
 		switch item.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			if item.Expense != nil {
 				e := toAPIExpense(item.Expense)
 				ai.Expense = &e
 			}
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			if item.Settlement != nil {
 				st := toAPISettlement(item.Settlement)
 				ai.Settlement = &st

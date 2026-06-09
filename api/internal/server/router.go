@@ -89,6 +89,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.DELETE("/settlements/:id", s.DeleteSettlement)
 
 	auth.GET("/groups/:id/transactions", s.ListTransactions)
+	auth.GET("/groups/:id/activity", s.ListActivity)
 
 	auth.GET("/search", s.Search)
 

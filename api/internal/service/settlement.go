@@ -74,7 +74,7 @@ func (s *SettlementService) Create(ctx context.Context, actorID uuid.UUID, in Cr
 		Note:        in.Note,
 		SettledAt:   in.SettledAt,
 	}
-	if err := s.settlements.Create(ctx, st); err != nil {
+	if err := s.settlements.Create(ctx, st, actorID); err != nil {
 		return nil, err
 	}
 
@@ -207,7 +207,7 @@ func (s *SettlementService) Update(ctx context.Context, actorID, id uuid.UUID, i
 			return nil, ErrNotMember
 		}
 	}
-	if err := s.settlements.Update(ctx, st); err != nil {
+	if err := s.settlements.Update(ctx, st, actorID); err != nil {
 		return nil, err
 	}
 	return st, nil
@@ -233,7 +233,7 @@ func (s *SettlementService) Delete(ctx context.Context, actorID, settlementID uu
 	if !ok {
 		return ErrNotMember
 	}
-	return s.settlements.SoftDelete(ctx, settlementID)
+	return s.settlements.SoftDelete(ctx, settlementID, actorID)
 }
 
 func (s *SettlementService) List(ctx context.Context, actorID, groupID uuid.UUID) ([]repo.Settlement, error) {

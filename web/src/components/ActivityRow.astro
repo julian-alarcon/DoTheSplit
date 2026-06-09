@@ -1,0 +1,106 @@
+---
+// One row in the group activity feed. Layout:
+//   [category icon | settlement arrow]  <Avatar> Who verb "Description".   Value
+//                                        change date
+// Links to the expense/settlement detail page. Used by the activity page and
+// its Load-more fragment so both render identically.
+import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import CategoryIcon from "@/components/CategoryIcon.astro";
+import type { components } from "@/lib/api/schema";
+
+type ActivityItem = components["schemas"]["ActivityItem"];
+
+interface Props {
+  item: ActivityItem;
+  groupId: string;
+  viewerId: string;
+  locale?: string;
+}
+
+const { item, groupId, viewerId, locale } = Astro.props as Props;
+
+const isSettlement = item.target_kind === "settlement";
+const href = isSettlement
+  ? `/groups/${groupId}/settlements/${item.target_id}`
+  : `/groups/${groupId}/expenses/${item.target_id}`;
+
+// Who: "You" for the viewer, the actor's name otherwise, or a system label
+// when there is no actor (worker-generated recurring expenses).
+let who: string;
+if (!item.actor) {
+  who = item.recurring ? "Recurring" : "System";
+} else if (item.actor.user_id === viewerId) {
+  who = "You";
+} else {
+  who = item.actor.display_name;
+}
+
+const verb = item.action.endsWith(".created")
+  ? "added"
+  : item.action.endsWith(".updated")
+    ? "updated"
+    : "deleted";
+
+const recurringPrefix = item.recurring && item.action === "expense.created";
+
+const moneyFmt = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: item.currency,
+  currencyDisplay: "narrowSymbol",
+});
+const dateFmt = new Intl.DateTimeFormat(locale, {
+  year: "numeric",
+  month: "short",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+---
+
+<li>
+  <a
+    href={href}
+    class="flex items-center justify-between gap-3 px-1 py-2.5 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:hover:bg-neutral-800/50 dark:focus-visible:ring-neutral-500"
+  >
+    <div class="flex min-w-0 items-center gap-3">
+      {isSettlement ? (
+        <span class="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" title="Settlement">
+          <FaIcon name="arrow-right" size={16} />
+        </span>
+      ) : (
+        <span class="shrink-0 inline-flex h-8 w-8 items-center justify-center" title={item.category_slug ?? ""}>
+          <CategoryIcon slug={item.category_slug} groupLabel={item.category_group_label} size={32} />
+        </span>
+      )}
+      <div class="flex min-w-0 flex-col gap-y-0.5">
+        <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
+          {item.actor && (
+            <Avatar
+              userId={item.actor.user_id}
+              displayName={item.actor.display_name}
+              hasAvatar={item.actor.has_avatar}
+              avatarUpdatedAt={item.actor.avatar_updated_at}
+              size={16}
+              class="opacity-70"
+            />
+          )}
+          <span class="min-w-0">
+            {recurringPrefix && (
+              <span class="font-medium text-neutral-500 dark:text-neutral-400">New recurring expense: </span>
+            )}
+            <span class="font-medium">{who}</span>
+            <span class="text-neutral-500 dark:text-neutral-400"> {verb} </span>
+            <span class="font-medium">&ldquo;{item.description}&rdquo;</span>
+          </span>
+        </div>
+        <span class="text-[11px] tabular-nums text-neutral-500 dark:text-neutral-500">
+          {dateFmt.format(new Date(item.occurred_at))}
+        </span>
+      </div>
+    </div>
+    <span class="shrink-0 font-mono text-base tabular-nums">
+      {moneyFmt.format(item.amount_cents / 100)}
+    </span>
+  </a>
+</li>

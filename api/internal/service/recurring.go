@@ -136,16 +136,18 @@ func (s *RecurringService) Tick(ctx context.Context) (int, error) {
 		// The recurring template doesn't track who set it up, so attribute
 		// materialized expenses to the payer. Good enough - it's the same
 		// user the template "belongs to" - and avoids leaving a NULL behind.
+		rID := r.ID
 		e := &repo.Expense{
-			GroupID:     r.GroupID,
-			PayerID:     r.PayerID,
-			CreatedBy:   r.PayerID,
-			CategoryID:  r.CategoryID,
-			AmountCents: r.AmountCents,
-			Currency:    r.Currency,
-			Description: r.Description,
-			IncurredAt:  r.NextRunAt,
-			Splits:      shares,
+			GroupID:            r.GroupID,
+			PayerID:            r.PayerID,
+			CreatedBy:          r.PayerID,
+			CategoryID:         r.CategoryID,
+			AmountCents:        r.AmountCents,
+			Currency:           r.Currency,
+			Description:        r.Description,
+			IncurredAt:         r.NextRunAt,
+			RecurringExpenseID: &rID,
+			Splits:             shares,
 		}
 		// Inserts use their own short-lived transaction; the outer tx only holds
 		// the FOR UPDATE lock on the recurring rows while we schedule them.

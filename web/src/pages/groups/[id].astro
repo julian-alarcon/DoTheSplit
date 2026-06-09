@@ -341,7 +341,15 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
   </section>
 
   <section class="lg:order-2">
-    <h2 class="mb-3 font-medium">Transactions</h2>
+    <div class="mb-3 flex items-center justify-end">
+      <a
+        href={`/groups/${id}/activity`}
+        class="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+      >
+        <FaIcon name="clock-rotate-left" size={12} />
+        <span>See activity</span>
+      </a>
+    </div>
     {transactions.length === 0 ? (
       <p class="text-sm text-neutral-500">No expenses or settlements yet.</p>
     ) : (

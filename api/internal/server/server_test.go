@@ -179,6 +179,7 @@ func setup(t *testing.T) *testStack {
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
 		Transactions:      service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
+		Activity:      service.NewActivityService(groupSvc, repo.NewActivityRepo(pool)),
 		SearchSvc:     service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,

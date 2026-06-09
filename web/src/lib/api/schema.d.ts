@@ -635,6 +635,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/groups/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the group activity feed (newest first, paginated) */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/search": {
         parameters: {
             query?: never;
@@ -1640,6 +1657,51 @@ export interface components {
         };
         TransactionPage: {
             items: components["schemas"]["TransactionItem"][];
+            /** @description Pass to the next request as `cursor`. Absent when there are no more items. */
+            next_cursor?: string;
+        };
+        /** @description The member who performed the action. Omitted for system/recurring rows. */
+        ActivityActor: {
+            /** Format: uuid */
+            user_id: string;
+            display_name: string;
+            has_avatar: boolean;
+            /** Format: date-time */
+            avatar_updated_at?: string;
+        };
+        ActivityItem: {
+            /**
+             * Format: uuid
+             * @description Activity event id; also the cursor tiebreaker.
+             */
+            id: string;
+            /** @enum {string} */
+            action: "expense.created" | "expense.updated" | "expense.deleted" | "settlement.created" | "settlement.updated" | "settlement.deleted";
+            /**
+             * Format: date-time
+             * @description When the action happened (the event timestamp, not the expense/settlement date).
+             */
+            occurred_at: string;
+            /** @description The member who performed the action. Omitted for system/recurring rows. */
+            actor?: components["schemas"]["ActivityActor"];
+            /** Format: uuid */
+            target_id: string;
+            /** @enum {string} */
+            target_kind: "expense" | "settlement";
+            /** @description Expense description, or settlement note/label. Survives soft-delete. */
+            description: string;
+            /** Format: int64 */
+            amount_cents: number;
+            currency: string;
+            /** @description Category slug at the time of the action (the new slug on a category change). Expenses only. */
+            category_slug?: string;
+            /** @description Category group label, used for the icon fallback. Expenses only. */
+            category_group_label?: string;
+            /** @description True when the expense was generated from a recurring template; the client prefixes "New recurring expense:". */
+            recurring: boolean;
+        };
+        ActivityPage: {
+            items: components["schemas"]["ActivityItem"][];
             /** @description Pass to the next request as `cursor`. Absent when there are no more items. */
             next_cursor?: string;
         };
@@ -3076,6 +3138,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                /** @description Max items to return. Defaults to 50. */
+                limit?: number;
+                /** @description Opaque cursor returned by a previous response; omit for the first page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

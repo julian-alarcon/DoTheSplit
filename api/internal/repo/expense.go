@@ -14,19 +14,20 @@ import (
 )
 
 type Expense struct {
-	ID          uuid.UUID
-	GroupID     uuid.UUID
-	PayerID     uuid.UUID
-	CreatedBy   uuid.UUID
-	CategoryID  uuid.UUID
-	AmountCents int64
-	Currency    string
-	Description string
-	Notes       string
-	IncurredAt  time.Time
-	CreatedAt   time.Time
-	DeletedAt   *time.Time
-	Splits      []Split
+	ID                 uuid.UUID
+	GroupID            uuid.UUID
+	PayerID            uuid.UUID
+	CreatedBy          uuid.UUID
+	CategoryID         uuid.UUID
+	AmountCents        int64
+	Currency           string
+	Description        string
+	Notes              string
+	IncurredAt         time.Time
+	CreatedAt          time.Time
+	DeletedAt          *time.Time
+	RecurringExpenseID *uuid.UUID
+	Splits             []Split
 }
 
 type Split struct {
@@ -50,10 +51,10 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	err = tx.QueryRow(ctx, `
-		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at
-	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.Notes, e.IncurredAt).
+	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.Notes, e.IncurredAt, e.RecurringExpenseID).
 		Scan(&e.ID, &e.CreatedAt)
 	if err != nil {
 		return err
@@ -66,13 +67,37 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 			return err
 		}
 	}
+	meta, err := expenseEventMeta(ctx, tx, e.ID)
+	if err != nil {
+		return err
+	}
+	if e.RecurringExpenseID != nil {
+		meta["recurring_expense_id"] = e.RecurringExpenseID.String()
+	}
+	var actor *uuid.UUID
+	if e.CreatedBy != uuid.Nil {
+		actor = &e.CreatedBy
+	}
+	if e.RecurringExpenseID != nil {
+		// Worker-generated: system actor (NULL) so the feed shows "Recurring".
+		actor = nil
+	}
+	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+		GroupID:   e.GroupID,
+		ActorID:   actor,
+		Action:    ActionExpenseCreated,
+		ExpenseID: &e.ID,
+		Metadata:  meta,
+	}); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 // ListByGroup returns non-deleted expenses with their splits, newest first.
 func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Expense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id
 		FROM expenses
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY incurred_at DESC, created_at DESC
@@ -85,7 +110,7 @@ func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Exp
 	for rows.Next() {
 		var e Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
-			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt); err != nil {
+			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.RecurringExpenseID); err != nil {
 			return nil, err
 		}
 		exps = append(exps, e)
@@ -129,7 +154,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		return map[uuid.UUID]*Expense{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id
 		FROM expenses
 		WHERE id = ANY($1) AND deleted_at IS NULL
 	`, ids)
@@ -141,7 +166,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 	for rows.Next() {
 		var e Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
-			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt); err != nil {
+			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.RecurringExpenseID); err != nil {
 			return nil, err
 		}
 		out[e.ID] = &e
@@ -174,10 +199,10 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, error) {
 	var e Expense
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id
 		FROM expenses WHERE id = $1
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
-		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
+		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -201,8 +226,15 @@ func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, err
 	return &e, srows.Err()
 }
 
-func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	tag, err := r.pool.Exec(ctx, `
+func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var groupID uuid.UUID
+	tag, err := tx.Exec(ctx, `
 		UPDATE expenses SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL
 	`, id)
 	if err != nil {
@@ -211,7 +243,28 @@ func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err := tx.QueryRow(ctx, `SELECT group_id FROM expenses WHERE id = $1`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	// Category metadata still resolves: the row is soft-deleted, not removed.
+	meta, err := expenseEventMeta(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	var actor *uuid.UUID
+	if actorID != uuid.Nil {
+		actor = &actorID
+	}
+	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+		GroupID:   groupID,
+		ActorID:   actor,
+		Action:    ActionExpenseDeleted,
+		ExpenseID: &id,
+		Metadata:  meta,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Update applies description / amount / category / payer / splits changes in one tx.
@@ -240,10 +293,10 @@ func (r *ExpenseRepo) Update(
 
 	var e Expense
 	err = tx.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at
+		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id
 		FROM expenses WHERE id = $1 FOR UPDATE
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
-		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt)
+		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -367,6 +420,27 @@ func (r *ExpenseRepo) Update(
 			return nil, err
 		}
 	}
+
+	// Emit the activity event reflecting the post-update category (so a
+	// category change shows the new icon). Only reached when something changed.
+	meta, err := expenseEventMeta(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	var actor *uuid.UUID
+	if editorID != uuid.Nil {
+		actor = &editorID
+	}
+	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+		GroupID:   e.GroupID,
+		ActorID:   actor,
+		Action:    ActionExpenseUpdated,
+		ExpenseID: &id,
+		Metadata:  meta,
+	}); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}

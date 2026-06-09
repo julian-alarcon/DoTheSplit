@@ -249,7 +249,7 @@ func (s *ExpenseService) Delete(ctx context.Context, actorID, expenseID uuid.UUI
 	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
 		return err
 	}
-	return s.exps.SoftDelete(ctx, expenseID)
+	return s.exps.SoftDelete(ctx, expenseID, actorID)
 }
 
 func (s *ExpenseService) requireMember(ctx context.Context, groupID, userID uuid.UUID) error {

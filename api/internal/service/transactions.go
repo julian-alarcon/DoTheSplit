@@ -91,29 +91,33 @@ func (s *TransactionService) List(ctx context.Context, actorID, groupID uuid.UUI
 	if err != nil {
 		return nil, err
 	}
-	// Cadence match: same content-equality heuristic the dashboard used to do
-	// client-side. Only worth running when the page contains any expenses.
+	// Cadence comes straight from the recurring_expense_id FK stamped on the
+	// expense at materialization time. Batch-load the cadence for the distinct
+	// templates referenced on this page.
 	var cadenceByExpense map[uuid.UUID]string
 	if len(expenseIDs) > 0 {
-		templates, err := s.recurring.ListByGroup(ctx, groupID)
+		var templateIDs []uuid.UUID
+		seen := map[uuid.UUID]bool{}
+		expenseToTemplate := map[uuid.UUID]uuid.UUID{}
+		for _, id := range expenseIDs {
+			e, ok := expenses[id]
+			if !ok || e.RecurringExpenseID == nil {
+				continue
+			}
+			expenseToTemplate[id] = *e.RecurringExpenseID
+			if !seen[*e.RecurringExpenseID] {
+				seen[*e.RecurringExpenseID] = true
+				templateIDs = append(templateIDs, *e.RecurringExpenseID)
+			}
+		}
+		cadenceByTemplate, err := s.recurring.CadenceByIDs(ctx, templateIDs)
 		if err != nil {
 			return nil, err
 		}
-		cadenceByExpense = make(map[uuid.UUID]string, len(expenseIDs))
-		for _, id := range expenseIDs {
-			e, ok := expenses[id]
-			if !ok {
-				continue
-			}
-			for _, t := range templates {
-				if t.Description == e.Description &&
-					t.AmountCents == e.AmountCents &&
-					t.PayerID == e.PayerID &&
-					t.Currency == e.Currency &&
-					t.CategoryID == e.CategoryID {
-					cadenceByExpense[id] = t.Cadence
-					break
-				}
+		cadenceByExpense = make(map[uuid.UUID]string, len(expenseToTemplate))
+		for expID, tmplID := range expenseToTemplate {
+			if c, ok := cadenceByTemplate[tmplID]; ok {
+				cadenceByExpense[expID] = c
 			}
 		}
 	}

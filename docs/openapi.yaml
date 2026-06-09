@@ -52,6 +52,8 @@ tags:
     description: Templates materialized into real expenses by the background worker.
   - name: transactions
     description: Merged, paginated feed of expenses and settlements for a group, newest first.
+  - name: activity
+    description: Append-only feed of group actions (expense/settlement created, updated, deleted), newest first.
   - name: search
     description: Cross-group full-text search over expense descriptions/notes and settlement notes (member-only rows).
   - name: imports
@@ -934,6 +936,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TransactionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /v1/groups/{id}/activity:
+    get:
+      summary: List the group activity feed (newest first, paginated)
+      operationId: listActivity
+      tags: [activity]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+          description: Max items to return. Defaults to 50.
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+          description: Opaque cursor returned by a previous response; omit for the first page.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -2328,6 +2357,70 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/TransactionItem" }
+        next_cursor:
+          type: string
+          description: "Pass to the next request as `cursor`. Absent when there are no more items."
+
+    ActivityActor:
+      type: object
+      required: [user_id, display_name, has_avatar]
+      description: The member who performed the action. Omitted for system/recurring rows.
+      properties:
+        user_id: { type: string, format: uuid }
+        display_name: { type: string }
+        has_avatar: { type: boolean }
+        avatar_updated_at: { type: string, format: date-time }
+
+    ActivityItem:
+      type: object
+      required: [id, action, occurred_at, target_id, target_kind, description, amount_cents, currency, recurring]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Activity event id; also the cursor tiebreaker.
+        action:
+          type: string
+          enum:
+            - expense.created
+            - expense.updated
+            - expense.deleted
+            - settlement.created
+            - settlement.updated
+            - settlement.deleted
+        occurred_at:
+          type: string
+          format: date-time
+          description: When the action happened (the event timestamp, not the expense/settlement date).
+        actor:
+          allOf: [{ $ref: "#/components/schemas/ActivityActor" }]
+          description: The member who performed the action. Omitted for system/recurring rows.
+        target_id: { type: string, format: uuid }
+        target_kind:
+          type: string
+          enum: [expense, settlement]
+        description:
+          type: string
+          description: Expense description, or settlement note/label. Survives soft-delete.
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        category_slug:
+          type: string
+          description: "Category slug at the time of the action (the new slug on a category change). Expenses only."
+        category_group_label:
+          type: string
+          description: "Category group label, used for the icon fallback. Expenses only."
+        recurring:
+          type: boolean
+          description: "True when the expense was generated from a recurring template; the client prefixes \"New recurring expense:\"."
+
+    ActivityPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityItem" }
         next_cursor:
           type: string
           description: "Pass to the next request as `cursor`. Absent when there are no more items."

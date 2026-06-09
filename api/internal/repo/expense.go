@@ -42,6 +42,11 @@ type ExpenseRepo struct {
 
 func NewExpenseRepo(p *pgxpool.Pool) *ExpenseRepo { return &ExpenseRepo{pool: p} }
 
+const (
+	expenseCols            = `id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id`
+	expenseColsWithDeleted = `id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id`
+)
+
 // CreateWithSplits inserts an expense and its splits atomically.
 func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	tx, err := r.pool.Begin(ctx)
@@ -97,7 +102,7 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 // ListByGroup returns non-deleted expenses with their splits, newest first.
 func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Expense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id
+		SELECT `+expenseCols+`
 		FROM expenses
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY incurred_at DESC, created_at DESC
@@ -154,7 +159,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		return map[uuid.UUID]*Expense{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id
+		SELECT `+expenseCols+`
 		FROM expenses
 		WHERE id = ANY($1) AND deleted_at IS NULL
 	`, ids)
@@ -199,7 +204,7 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, error) {
 	var e Expense
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id
+		SELECT `+expenseColsWithDeleted+`
 		FROM expenses WHERE id = $1
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)
@@ -293,7 +298,7 @@ func (r *ExpenseRepo) Update(
 
 	var e Expense
 	err = tx.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id
+		SELECT `+expenseColsWithDeleted+`
 		FROM expenses WHERE id = $1 FOR UPDATE
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)

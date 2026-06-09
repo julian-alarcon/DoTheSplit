@@ -28,6 +28,11 @@ type SettlementRepo struct {
 
 func NewSettlementRepo(p *pgxpool.Pool) *SettlementRepo { return &SettlementRepo{pool: p} }
 
+const (
+	settlementCols            = `id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at`
+	settlementColsWithDeleted = settlementCols + `, deleted_at`
+)
+
 func (r *SettlementRepo) Create(ctx context.Context, s *Settlement, actorID uuid.UUID) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -68,7 +73,7 @@ func insertSettlementEvent(ctx context.Context, tx pgx.Tx, groupID, settlementID
 func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*Settlement, error) {
 	var s Settlement
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at, deleted_at
+		SELECT `+settlementColsWithDeleted+`
 		FROM settlements
 		WHERE id = $1
 	`, id).Scan(&s.ID, &s.GroupID, &s.FromUser, &s.ToUser,
@@ -140,7 +145,7 @@ func (r *SettlementRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uu
 		return map[uuid.UUID]Settlement{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at
+		SELECT `+settlementCols+`
 		FROM settlements
 		WHERE id = ANY($1) AND deleted_at IS NULL
 	`, ids)
@@ -162,7 +167,7 @@ func (r *SettlementRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uu
 
 func (r *SettlementRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Settlement, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at
+		SELECT `+settlementCols+`
 		FROM settlements
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY settled_at DESC, created_at DESC

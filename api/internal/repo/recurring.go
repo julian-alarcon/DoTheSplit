@@ -39,6 +39,8 @@ type RecurringRepo struct {
 
 func NewRecurringRepo(p *pgxpool.Pool) *RecurringRepo { return &RecurringRepo{pool: p} }
 
+const recurringCols = `id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at`
+
 func (r *RecurringRepo) Create(ctx context.Context, e *RecurringExpense) error {
 	tmpl, err := json.Marshal(e.SplitTemplate)
 	if err != nil {
@@ -55,7 +57,7 @@ func (r *RecurringRepo) Create(ctx context.Context, e *RecurringExpense) error {
 
 func (r *RecurringRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]RecurringExpense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY next_run_at
@@ -98,7 +100,7 @@ func (r *RecurringRepo) FindByID(ctx context.Context, id uuid.UUID) (*RecurringE
 	var e RecurringExpense
 	var tmpl []byte
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Mode, &tmpl, &e.Cadence, &e.NextRunAt, &e.CreatedAt)
@@ -157,7 +159,7 @@ func (r *RecurringRepo) ClaimDue(ctx context.Context, limit int) (pgx.Tx, []Recu
 	// (outer tick tx vs. inner CreateWithSplits tx). SKIP LOCKED still keeps
 	// concurrent workers from claiming the same rows.
 	rows, err := tx.Query(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses
 		WHERE deleted_at IS NULL AND next_run_at <= now()
 		ORDER BY next_run_at

@@ -229,7 +229,7 @@ func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email,
 	if err := s.users.CreateWithRole(ctx, tx, u, role); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, u.ID); err != nil {
+	if err := s.users.MarkEmailVerified(ctx, tx, u.ID); err != nil {
 		return nil, err
 	}
 	if err := s.auth.EnqueuePasswordResetTx(ctx, tx, u, email); err != nil {

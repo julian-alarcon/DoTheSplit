@@ -182,7 +182,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 		// fresh install before SMTP is configured (and on every register
 		// while SMTP stays unconfigured); recorded in audit so an admin can
 		// see retroactively that the gate was open.
-		if _, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, out.ID); err != nil {
+		if err := s.users.MarkEmailVerified(ctx, tx, out.ID); err != nil {
 			return nil, err
 		}
 		meta, _ := json.Marshal(map[string]any{"reason": "smtp_unconfigured"})

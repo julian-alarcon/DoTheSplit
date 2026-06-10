@@ -5,6 +5,7 @@ import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
+import { moneyFormatter, formatMoney } from "@/lib/currencies";
 
 const api = apiFor(Astro.locals.cookie);
 
@@ -399,7 +400,7 @@ const visibleCategories = hasSearched
           const cat = categoryByID.get(e.category_id);
           const payer = memberByID.get(e.payer_id);
           const stake = viewerStake(e);
-          const moneyFmtRow = new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" });
+          const moneyFmtRow = moneyFormatter(e.currency);
           return (
             <li>
               <a
@@ -521,11 +522,7 @@ const visibleCategories = hasSearched
                 </div>
               </div>
               <span class="shrink-0 font-mono text-lg tabular-nums">
-                {new Intl.NumberFormat(undefined, {
-                  style: "currency",
-                  currency: g.default_currency,
-                  currencyDisplay: "narrowSymbol",
-                }).format(s.amount_cents / 100)}
+                {formatMoney(s.amount_cents, g.default_currency)}
               </span>
             </a>
           </li>

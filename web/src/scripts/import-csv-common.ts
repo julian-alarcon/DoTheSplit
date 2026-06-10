@@ -6,18 +6,12 @@
 // form post. The Go service is the source of truth - these helpers only
 // transport the file and render the dry-run preview the server returns.
 
+import { moneyFormatter } from "@/lib/currencies";
+
 export const MAX_BYTES = 256 * 1024;
 
 export function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
-}
-
-export function moneyFormatter(currency: string): Intl.NumberFormat {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency || "EUR",
-    currencyDisplay: "narrowSymbol",
-  });
 }
 
 // Validates the picked file (presence, size, .csv extension, non-empty) and

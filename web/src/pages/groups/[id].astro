@@ -7,6 +7,7 @@ import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import { withMonthHeaders } from "@/lib/transaction-month";
+import { moneyFormatter, formatMoney } from "@/lib/currencies";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
@@ -81,11 +82,7 @@ const viewerStake = (e: { payer_id: string; amount_cents: number; splits: Array<
   return { kind: "none" };
 };
 
-const moneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency,
-  currencyDisplay: "narrowSymbol",
-});
+const moneyFmt = moneyFormatter(currency);
 const format = (cents: number) => moneyFmt.format(cents / 100);
 
 const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
@@ -372,7 +369,7 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
             const cat = categoryByID.get(e.category_id);
             const cadence = item.cadence;
             const stake = viewerStake(e);
-            const moneyFmtRow = new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" });
+            const moneyFmtRow = moneyFormatter(e.currency);
             return (
               <li>
                 <a
@@ -499,7 +496,7 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
                   </div>
                 </div>
                 <span class="shrink-0 font-mono text-lg tabular-nums">
-                  {new Intl.NumberFormat(undefined, { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(s.amount_cents / 100)}
+                  {formatMoney(s.amount_cents, currency)}
                 </span>
               </a>
             </li>

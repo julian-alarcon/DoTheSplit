@@ -8,6 +8,23 @@ export const COMMON_CURRENCIES = [
   "COP", "MXN", "BRL", "INR", "CNY", "ILS",
 ] as const;
 
+// Single source of truth for money formatting. `narrowSymbol` is load-bearing
+// (CLAUDE.md): it keeps "$5.00" instead of "US$5.00" and matches the symbol
+// the rest of the UI uses. Pass the group's default_currency, or an expense's
+// own currency for per-row display. `undefined` locale follows the runtime.
+export function moneyFormatter(currency: string): Intl.NumberFormat {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency || "EUR",
+    currencyDisplay: "narrowSymbol",
+  });
+}
+
+// Convenience for one-off formatting of an integer-cents amount.
+export function formatMoney(cents: number, currency: string): string {
+  return moneyFormatter(currency).format(cents / 100);
+}
+
 const supportedFn = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
 
 export function allCurrencies(): string[] {

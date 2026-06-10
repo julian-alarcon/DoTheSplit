@@ -10,6 +10,7 @@ import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import { withMonthHeaders } from "@/lib/transaction-month";
+import { moneyFormatter, formatMoney } from "@/lib/currencies";
 
 const { id } = Astro.params as { id: string };
 const cursor = Astro.url.searchParams.get("cursor") ?? "";
@@ -93,7 +94,7 @@ const transactionRows = withMonthHeaders(
     const cat = categoryByID.get(e.category_id);
     const cadence = item.cadence;
     const stake = viewerStake(e);
-    const moneyFmtRow = new Intl.NumberFormat(undefined, { style: "currency", currency: e.currency, currencyDisplay: "narrowSymbol" });
+    const moneyFmtRow = moneyFormatter(e.currency);
     return (
       <li>
         <a
@@ -220,7 +221,7 @@ const transactionRows = withMonthHeaders(
           </div>
         </div>
         <span class="shrink-0 font-mono text-lg tabular-nums">
-          {new Intl.NumberFormat(undefined, { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(s.amount_cents / 100)}
+          {formatMoney(s.amount_cents, currency)}
         </span>
       </a>
     </li>

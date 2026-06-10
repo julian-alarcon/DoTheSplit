@@ -8,6 +8,7 @@ import Avatar from "@/components/Avatar.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import type { components } from "@/lib/api/schema";
+import { formatMoney } from "@/lib/currencies";
 
 type ActivityItem = components["schemas"]["ActivityItem"];
 
@@ -44,11 +45,6 @@ const verb = item.action.endsWith(".created")
 
 const recurringPrefix = item.recurring && item.action === "expense.created";
 
-const moneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency: item.currency,
-  currencyDisplay: "narrowSymbol",
-});
 const dateFmt = new Intl.DateTimeFormat(locale, {
   year: "numeric",
   month: "short",
@@ -100,7 +96,7 @@ const dateFmt = new Intl.DateTimeFormat(locale, {
       </div>
     </div>
     <span class="shrink-0 font-mono text-base tabular-nums">
-      {moneyFmt.format(item.amount_cents / 100)}
+      {formatMoney(item.amount_cents, item.currency)}
     </span>
   </a>
 </li>

@@ -4,7 +4,7 @@ import Avatar from "@/components/Avatar.astro";
 import ConfirmDialog from "@/components/ConfirmDialog.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
-import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currencies";
+import { COMMON_CURRENCIES, otherCurrencies, currencyLabel, formatMoney } from "@/lib/currencies";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
@@ -28,11 +28,6 @@ const isCreator = group.created_by === Astro.locals.user?.id;
 const myID = Astro.locals.user?.id ?? "";
 const myNetCents =
   balancesRes.data?.net?.find((b) => b.user_id === myID)?.net_cents ?? 0;
-const myMoneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency,
-  currencyDisplay: "narrowSymbol",
-});
 
 const isPair = group.members.length === 2;
 const pairMembers = isPair ? group.members : [];
@@ -281,7 +276,7 @@ const others = otherCurrencies();
       </p>
       {myNetCents !== 0 && (
         <p class="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          You have a non-zero balance of <span class="font-mono">{myMoneyFmt.format(myNetCents / 100)}</span> in this group. Leaving without settling up means
+          You have a non-zero balance of <span class="font-mono">{formatMoney(myNetCents, currency)}</span> in this group. Leaving without settling up means
           {myNetCents > 0
             ? " others won't be reminded to pay you back."
             : " you won't be reminded to pay your share."}

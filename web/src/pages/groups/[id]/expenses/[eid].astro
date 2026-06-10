@@ -7,6 +7,7 @@ import ConfirmDialog from "@/components/ConfirmDialog.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
+import { moneyFormatter } from "@/lib/currencies";
 
 const { id, eid } = Astro.params as { id: string; eid: string };
 const api = apiFor(Astro.locals.cookie);
@@ -29,11 +30,7 @@ const revisions = revisionsRes.data ?? [];
 const categoryByID = new Map(categories.map((c) => [c.id, c]));
 
 const currency = expense.currency;
-const moneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency,
-  currencyDisplay: "narrowSymbol",
-});
+const moneyFmt = moneyFormatter(currency);
 const formatMoney = (cents: number) => moneyFmt.format(cents / 100);
 const formatCents = (cents: number) => (cents / 100).toFixed(2);
 const tz = Astro.locals.timezone;

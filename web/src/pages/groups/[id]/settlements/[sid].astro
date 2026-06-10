@@ -5,6 +5,7 @@ import ConfirmDialog from "@/components/ConfirmDialog.astro";
 import DatePicker from "@/components/DatePicker.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
+import { moneyFormatter } from "@/lib/currencies";
 
 const { id, sid } = Astro.params as { id: string; sid: string };
 const api = apiFor(Astro.locals.cookie);
@@ -21,11 +22,7 @@ if (!group || !settlement || settlement.group_id !== id) {
 }
 
 const currency = group.default_currency;
-const moneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency,
-  currencyDisplay: "narrowSymbol",
-});
+const moneyFmt = moneyFormatter(currency);
 const tz = Astro.locals.timezone;
 const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: tz });
 const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });

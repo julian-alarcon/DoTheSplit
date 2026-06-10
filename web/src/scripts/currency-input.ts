@@ -7,6 +7,8 @@
 // formatted localized string (e.g. "1,234.50 €") using the field's currency.
 // The hidden input always carries the canonical "1234.50" form.
 
+import { moneyFormatter } from "@/lib/currencies";
+
 interface SetupOptions {
   visible: HTMLInputElement;
   hidden: HTMLInputElement;
@@ -38,11 +40,7 @@ function parse(raw: string): number | null {
 }
 
 function format(n: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    currencyDisplay: "narrowSymbol",
-  }).format(n);
+  return moneyFormatter(currency).format(n);
 }
 
 function rawForEdit(n: number): string {

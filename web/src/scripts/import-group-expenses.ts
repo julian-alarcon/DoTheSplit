@@ -7,7 +7,6 @@ import {
   dateOnly,
   el,
   makeShowError,
-  moneyFormatter,
   readCsvFile,
   renderCounts,
   renderCurrencyMixed,
@@ -15,6 +14,7 @@ import {
   renderSkipped,
   showReviewPhase,
 } from "./import-csv-common";
+import { moneyFormatter } from "@/lib/currencies";
 
 type PreviewRow = {
   description: string;

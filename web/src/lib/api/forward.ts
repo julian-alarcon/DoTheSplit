@@ -20,6 +20,12 @@ type ApiFetchOptions = {
 };
 
 export function apiFetch(path: string, opts: ApiFetchOptions = {}): Promise<Response> {
+  // Reject path traversal. Callers interpolate user-supplied UUIDs into fixed
+  // /v1/... templates; UUIDs never contain dots, so a ".." segment can only be
+  // a crafted attempt to reach a different internal path.
+  if (path.includes("..")) {
+    return Promise.resolve(new Response("bad path", { status: 400 }));
+  }
   const headers: Record<string, string> = {};
   if (opts.cookie) headers.cookie = opts.cookie;
   let body: string | undefined;
@@ -31,6 +37,8 @@ export function apiFetch(path: string, opts: ApiFetchOptions = {}): Promise<Resp
     method: opts.method ?? "GET",
     headers,
     body,
+    // Bound the request so a hung Go backend can't tie up the Astro worker.
+    signal: AbortSignal.timeout(15000),
   });
 }
 

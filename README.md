@@ -127,7 +127,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 - Extend search filters with date range and member.
 - Add **Filter** to expenses transaction list by category, member, date range.
-- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled).
+- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled). (Mind the strict CSP: self-host the service worker at `/sw.js` and register it via an imported module so Astro hashes it, rather than an inline `<script>` block that would need a hand-maintained hash in `astro.config.mjs`; add `manifest-src`/`worker-src` only if a `default-src` is ever introduced.)
 
 ### Medium term
 

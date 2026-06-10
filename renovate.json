@@ -9,6 +9,7 @@
   "labels": ["dependencies"],
   "minimumReleaseAge": "5 days",
   "internalChecksFilter": "strict",
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "matchManagers": ["github-actions"],

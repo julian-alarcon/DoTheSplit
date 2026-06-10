@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -22,8 +23,12 @@ func (s *Server) Healthz(c *gin.Context) {
 
 func (s *Server) Readyz(c *gin.Context) {
 	if err := s.Pool.Ping(c.Request.Context()); err != nil {
+		// Don't echo the raw driver error to the client: it can leak
+		// connection-string fragments and infrastructure detail. Log it
+		// server-side and return a static message.
+		slog.Error("readyz: database ping failed", slog.String("err", err.Error()))
 		c.JSON(http.StatusServiceUnavailable, apigen.Error{
-			Code: "not_ready", Message: err.Error(),
+			Code: "not_ready", Message: "database unreachable",
 		})
 		return
 	}

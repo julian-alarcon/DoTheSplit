@@ -14,7 +14,14 @@ import (
 func New(s *handlers.Server) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	// Gin trusts all proxies by default, which would let any client forge
+	// X-Forwarded-For and spoof their IP for rate limiting + audit logs. Pin
+	// the trust to the configured proxies (empty = trust none, use RemoteAddr).
+	if err := r.SetTrustedProxies(s.Cfg.TrustedProxies); err != nil {
+		panic("server: set trusted proxies: " + err.Error())
+	}
 	r.Use(gin.Recovery())
+	r.Use(mw.MaxBodyBytes(mw.DefaultMaxBodyBytes))
 	r.Use(requestID())
 	r.Use(mw.Logger(slog.Default()))
 	r.Use(mw.SecurityHeaders(s.Cfg.CookieSecure))

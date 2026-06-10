@@ -7,6 +7,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// DefaultMaxBodyBytes caps request bodies at 1 MiB. The largest legitimate
+// body is a 256 KiB CSV base64-wrapped in JSON (~360 KiB) plus a small members
+// array, so 1 MiB is comfortable headroom while still blocking a memory-DoS
+// from an unbounded POST.
+const DefaultMaxBodyBytes int64 = 1 << 20
+
+// MaxBodyBytes caps the size of every request body. Over-limit reads fail in
+// the handler's JSON decoder (or body read), which the existing bad-request
+// path already translates to a 400.
+func MaxBodyBytes(limit int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		c.Next()
+	}
+}
+
 // SecurityHeaders sets conservative browser-protection headers on every response.
 // HSTS is only emitted when cookieSecure is true (otherwise it's useless under HTTP).
 func SecurityHeaders(cookieSecure bool) gin.HandlerFunc {

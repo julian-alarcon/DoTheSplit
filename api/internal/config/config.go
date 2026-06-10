@@ -21,6 +21,12 @@ type Config struct {
 	CookieDomain  string `envconfig:"SESSION_COOKIE_DOMAIN" default:""`
 	SessionTTLDay int    `envconfig:"SESSION_TTL_DAYS"      default:"30"`
 
+	// TrustedProxies is the set of proxy IPs/CIDRs whose X-Forwarded-For we
+	// honor. Empty (the default) means trust no proxy: the client IP used for
+	// rate limiting and audit logs is the direct connection's RemoteAddr, so a
+	// forged X-Forwarded-For can't bypass the limiter or poison the audit log.
+	TrustedProxies []string
+
 	// Base64-encoded 32-byte keys.
 	EmailEncKey    []byte
 	EmailHMACKey   []byte
@@ -36,12 +42,13 @@ type Config struct {
 // when both are set so a Docker secret always wins over an inherited env var.
 func Load() (*Config, error) {
 	var raw struct {
-		HTTPAddr      string `envconfig:"API_HTTP_ADDR"        default:":8080"`
-		WebOrigin     string `envconfig:"WEB_ORIGIN"           default:"http://localhost:3000"`
-		LogLevel      string `envconfig:"LOG_LEVEL"            default:"info"`
-		CookieSecure  bool   `envconfig:"COOKIE_SECURE"         default:"false"`
-		CookieDomain  string `envconfig:"SESSION_COOKIE_DOMAIN" default:""`
-		SessionTTLDay int    `envconfig:"SESSION_TTL_DAYS"      default:"30"`
+		HTTPAddr       string `envconfig:"API_HTTP_ADDR"        default:":8080"`
+		WebOrigin      string `envconfig:"WEB_ORIGIN"           default:"http://localhost:3000"`
+		LogLevel       string `envconfig:"LOG_LEVEL"            default:"info"`
+		CookieSecure   bool   `envconfig:"COOKIE_SECURE"         default:"false"`
+		CookieDomain   string `envconfig:"SESSION_COOKIE_DOMAIN" default:""`
+		SessionTTLDay  int    `envconfig:"SESSION_TTL_DAYS"      default:"30"`
+		TrustedProxies string `envconfig:"TRUSTED_PROXIES"       default:""`
 	}
 	if err := envconfig.Process("", &raw); err != nil {
 		return nil, fmt.Errorf("envconfig: %w", err)
@@ -87,6 +94,7 @@ func Load() (*Config, error) {
 		CookieSecure:   raw.CookieSecure,
 		CookieDomain:   raw.CookieDomain,
 		SessionTTLDay:  raw.SessionTTLDay,
+		TrustedProxies: splitList(raw.TrustedProxies),
 		EmailEncKey:    enc,
 		EmailHMACKey:   mac,
 		PasswordPepper: pep,
@@ -119,6 +127,20 @@ func decodeKey(s, name string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: must decode to 32 bytes, got %d", name, len(b))
 	}
 	return b, nil
+}
+
+// splitList parses a comma-separated env value into a trimmed, non-empty
+// slice. Returns nil for an empty input so callers can treat "unset" and
+// "empty list" identically.
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ErrMissing is returned by callers when a required key is absent.

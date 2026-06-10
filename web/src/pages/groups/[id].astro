@@ -104,6 +104,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
 // (unregistered emails). Parse defensively so a tampered URL can't break render.
 const inviteFailedRaw = Astro.url.searchParams.get("invite_failed");
 const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Number(inviteFailedRaw) : 0;
+
+// Per-action failure messages. The SSR forwarders that create/delete from this
+// dashboard redirect back with ?error=<code> when the API rejects the action,
+// so the user isn't left thinking it succeeded. Unknown codes render nothing.
+const ERROR_MESSAGES: Record<string, string> = {
+  expense_create: "Could not add the expense. Please check your input and try again.",
+  expense_delete: "Could not delete the expense. Please try again.",
+  settlement_delete: "Could not delete the settlement. Please try again.",
+  recurring_create: "The expense was saved, but the recurring template could not be created.",
+};
+const errorMessage = ERROR_MESSAGES[Astro.url.searchParams.get("error") ?? ""];
 ---
 
 <Base title={group.name} wide back={{ href: "/groups", label: "Groups" }}>
@@ -136,6 +147,16 @@ const inviteFailedCount = inviteFailedRaw && /^\d+$/.test(inviteFailedRaw) ? Num
   <p class="mb-6 text-sm text-neutral-600 dark:text-neutral-400">
     {group.members.length} member{group.members.length === 1 ? "" : "s"} · default currency {currency}
   </p>
+
+  {errorMessage && (
+    <p
+      role="status"
+      aria-live="polite"
+      class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+    >
+      {errorMessage}
+    </p>
+  )}
 
   {inviteFailedCount > 0 && (
     <p

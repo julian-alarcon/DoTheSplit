@@ -34,11 +34,14 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     body.incurred_at = incurredAtISO;
   }
 
-  await apiFetch(`/v1/groups/${groupID}/expenses`, {
+  const res = await apiFetch(`/v1/groups/${groupID}/expenses`, {
     method: "POST",
     cookie,
     json: body,
   });
+  if (!res.ok) {
+    return redirect(`/groups/${groupID}?error=expense_create`, 302);
+  }
 
   // If a cadence was selected, also create a recurring template anchored at
   // the next occurrence (so the worker materializes the *second* one on its
@@ -55,11 +58,16 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
       next_run_at: nextRunAt,
     };
     if (categoryID) recurringBody.category_id = categoryID;
-    await apiFetch(`/v1/groups/${groupID}/recurring-expenses`, {
+    const recurringRes = await apiFetch(`/v1/groups/${groupID}/recurring-expenses`, {
       method: "POST",
       cookie,
       json: recurringBody,
     });
+    // Partial success: the expense is in, but the template failed. Tell the
+    // user so they know the schedule didn't take.
+    if (!recurringRes.ok) {
+      return redirect(`/groups/${groupID}?error=recurring_create`, 302);
+    }
   }
 
   return redirect(`/groups/${groupID}`, 302);

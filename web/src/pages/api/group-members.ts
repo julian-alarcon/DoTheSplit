@@ -6,10 +6,13 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   if (!groupID) return new Response("missing id", { status: 400 });
   const cookie = cookieFrom(request);
   const form = await request.formData();
-  await apiFetch(`/v1/groups/${groupID}/members`, {
+  const res = await apiFetch(`/v1/groups/${groupID}/members`, {
     method: "POST",
     cookie,
     json: { email: form.get("email") },
   });
+  if (!res.ok) {
+    return redirect(`/groups/${groupID}/settings?error=1`, 302);
+  }
   return redirect(`/groups/${groupID}/settings`, 302);
 };

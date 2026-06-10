@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 // PUT-equivalent: POST /api/admin/smtp updates the SMTP config and immediately
 // runs a connection test on the just-saved values, so the admin always sees
@@ -10,7 +8,7 @@ const internalBase =
 // at submit time genuinely means "wipe the stored password".
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
 
   const body: Record<string, unknown> = {
     host: (form.get("host") ?? "").toString().trim(),
@@ -28,18 +26,18 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     smtp_password: (form.get("smtp_password") ?? "").toString(),
   };
 
-  const saveRes = await fetch(`${internalBase}/v1/admin/smtp`, {
+  const saveRes = await apiFetch("/v1/admin/smtp", {
     method: "PUT",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify(body),
+    cookie,
+    json: body,
   });
   if (!saveRes.ok) return redirect("/admin/smtp?error=1", 302);
 
   // Save succeeded; chase it with a connection test so the admin sees one
   // banner per outcome (green Saved + green/red test result).
-  const testRes = await fetch(`${internalBase}/v1/admin/smtp/test`, {
+  const testRes = await apiFetch("/v1/admin/smtp/test", {
     method: "POST",
-    headers: { cookie },
+    cookie,
   });
   if (testRes.status === 404) {
     return redirect("/admin/smtp?saved=1&test=not_configured", 302);

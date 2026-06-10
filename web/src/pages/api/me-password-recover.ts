@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 // POST /api/me-password-recover: invoked by the "Recover password by email"
 // button on /settings/password. Looks up the caller's own email, fires the
@@ -9,9 +7,9 @@ const internalBase =
 // (so the user lands in the same /reset code-paste flow as a logged-out
 // user would), then redirects to /reset with the email pre-filled.
 export const POST: APIRoute = async ({ request, redirect }) => {
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
 
-  const meRes = await fetch(`${internalBase}/v1/me`, { headers: { cookie } });
+  const meRes = await apiFetch("/v1/me", { cookie });
   if (!meRes.ok) {
     return redirect("/login", 302);
   }
@@ -22,10 +20,10 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   }
 
   // Fire-and-forget: backend always returns 204 to avoid enumeration.
-  await fetch(`${internalBase}/v1/auth/password-reset/request`, {
+  await apiFetch("/v1/auth/password-reset/request", {
     method: "POST",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({ email }),
+    cookie,
+    json: { email },
   });
 
   return redirect(`/reset?email=${encodeURIComponent(email)}&from=settings`, 302);

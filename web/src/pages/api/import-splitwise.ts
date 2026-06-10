@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 // Phase-2 endpoint. Submitted as a regular HTML form, so we read formData()
 // and forward a JSON commit (dry_run=false) to the Go API. On success we
@@ -9,7 +7,7 @@ const internalBase =
 // importer with an error code in the query string.
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
 
   const csv = (form.get("csv") ?? "").toString();
   const groupName = (form.get("group_name") ?? "").toString().trim();
@@ -33,16 +31,16 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect("/import/splitwise?error=missing_fields", 302);
   }
 
-  const res = await fetch(`${internalBase}/v1/imports/splitwise`, {
+  const res = await apiFetch("/v1/imports/splitwise", {
     method: "POST",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({
+    cookie,
+    json: {
       csv,
       group_name: groupName,
       default_currency: currency || "EUR",
       members,
       dry_run: false,
-    }),
+    },
   });
   if (!res.ok) {
     let code = "import_failed";

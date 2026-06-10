@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch } from "@/lib/api/forward";
 
 // POST /api/forgot: fires the password-reset request and redirects to
 // /reset. Always redirects to /reset whether or not the email is known
@@ -12,10 +10,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const email = (form.get("email") ?? "").toString().trim();
   if (!email) return redirect("/forgot?error=1", 302);
 
-  await fetch(`${internalBase}/v1/auth/password-reset/request`, {
+  await apiFetch("/v1/auth/password-reset/request", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    json: { email },
   });
 
   return redirect(`/reset?email=${encodeURIComponent(email)}`, 302);

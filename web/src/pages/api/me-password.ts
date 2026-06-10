@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom, redirectWithCookies } from "@/lib/api/forward";
 
 // POST /api/me-password: handles the change-password form on
 // /settings/password. Validates that `password_confirmation` matches
@@ -9,7 +7,7 @@ const internalBase =
 // forwards to the Go API which enforces the current-password gate.
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
   const old_password = (form.get("old_password") ?? "").toString();
   const new_password = (form.get("new_password") ?? "").toString();
   const password_confirmation = (form.get("password_confirmation") ?? "").toString();
@@ -24,10 +22,10 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect("/settings/password?error=mismatch", 302);
   }
 
-  const res = await fetch(`${internalBase}/v1/me/password`, {
+  const res = await apiFetch("/v1/me/password", {
     method: "POST",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({ old_password, new_password }),
+    cookie,
+    json: { old_password, new_password },
   });
   if (res.status === 401) {
     return redirect("/settings/password?error=wrong_current", 302);
@@ -38,7 +36,5 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   // Backend revoked every session and issued a fresh cookie; forward it so
   // the user stays logged in on the same browser.
-  const headers = new Headers({ location: "/settings?ok=password" });
-  for (const c of res.headers.getSetCookie?.() ?? []) headers.append("set-cookie", c);
-  return new Response(null, { status: 302, headers });
+  return redirectWithCookies(res, "/settings?ok=password");
 };

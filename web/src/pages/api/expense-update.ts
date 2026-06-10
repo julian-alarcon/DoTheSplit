@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 type SplitPayload = { user_id: string; value?: number };
 
@@ -31,7 +29,7 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const groupID = url.searchParams.get("group");
   if (!expenseID || !groupID) return new Response("missing id", { status: 400 });
 
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
   const form = await request.formData();
 
   const body: Record<string, unknown> = {};
@@ -66,10 +64,10 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     return redirect(`/groups/${groupID}/expenses/${expenseID}`, 302);
   }
 
-  const res = await fetch(`${internalBase}/v1/expenses/${expenseID}`, {
+  const res = await apiFetch(`/v1/expenses/${expenseID}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify(body),
+    cookie,
+    json: body,
   });
   if (!res.ok) {
     return redirect(`/groups/${groupID}/expenses/${expenseID}?error=1`, 302);

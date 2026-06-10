@@ -1,14 +1,12 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 export const POST: APIRoute = async ({ request, url, redirect }) => {
   const groupID = url.searchParams.get("id");
   if (!groupID) return new Response("missing id", { status: 400 });
 
   const form = await request.formData();
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
 
   const body: Record<string, unknown> = {};
   const name = (form.get("name") ?? "").toString().trim();
@@ -20,10 +18,10 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
     return redirect(`/groups/${groupID}/settings`, 302);
   }
 
-  const res = await fetch(`${internalBase}/v1/groups/${groupID}`, {
+  const res = await apiFetch(`/v1/groups/${groupID}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify(body),
+    cookie,
+    json: body,
   });
   if (!res.ok) {
     if (res.status === 409) {

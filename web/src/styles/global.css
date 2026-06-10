@@ -429,6 +429,11 @@ svg[data-icon-slug="other"] {
 .field-category-trigger:hover {
   background: var(--muted);
 }
+/* See .btn-secondary: --muted == --card in dark themes, so lift to --accent. */
+:root[data-theme="dark"] .field-category-trigger:hover,
+:root[data-theme="high-contrast"] .field-category-trigger:hover {
+  background: var(--accent);
+}
 
 /* Single row inside the category dialog list. Reads as a tappable list item:
    emoji + label, full-width hit target, hover/focus tint. */
@@ -487,6 +492,14 @@ svg[data-icon-slug="other"] {
 .btn-secondary:hover:not(:disabled) {
   background: var(--muted);
 }
+/* In dark themes --muted equals --card (both neutral-900), so a muted hover
+   is invisible. Lift to --accent (one step brighter) for a perceptible
+   highlight - same treatment as .user-menu-item below. */
+:root[data-theme="dark"] .btn-secondary:hover:not(:disabled),
+:root[data-theme="high-contrast"] .btn-secondary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
 
 .btn-danger {
   background: var(--destructive);
@@ -523,6 +536,12 @@ svg[data-icon-slug="other"] {
 }
 .btn-icon:hover:not(:disabled) {
   background: var(--muted);
+}
+/* See .btn-secondary: --muted == --card in dark themes, so lift to --accent. */
+:root[data-theme="dark"] .btn-icon:hover:not(:disabled),
+:root[data-theme="high-contrast"] .btn-icon:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /* Switch: a styled native checkbox rendered as a horizontal toggle. The real

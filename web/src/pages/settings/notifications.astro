@@ -1,30 +1,15 @@
 ---
 import Base from "@/layouts/Base.astro";
+import { apiFor } from "@/lib/api/client";
 
 const user = Astro.locals.user;
 if (!user) return Astro.redirect("/login");
 
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
-
-// Server-render the current values by calling the API with the same cookie.
-const cookie = Astro.request.headers.get("cookie") ?? "";
-type Prefs = {
-  notify_recurring_run?: boolean;
-  notify_settlement?: boolean;
-  notify_group_added?: boolean;
-};
-let prefs: Prefs = {};
-try {
-  const res = await fetch(`${internalBase}/v1/me/notifications`, {
-    headers: { cookie },
-  });
-  if (res.ok) {
-    prefs = (await res.json()) as Prefs;
-  }
-} catch {
-  // Soft-fail - the form still renders with defaults.
-}
+// Server-render the current values via the typed client. Soft-fail: when the
+// API errors, `data` is undefined and the form renders with defaults.
+const api = apiFor(Astro.locals.cookie);
+const { data } = await api.GET("/v1/me/notifications");
+const prefs = data ?? {};
 
 const ok = Astro.url.searchParams.get("ok");
 ---

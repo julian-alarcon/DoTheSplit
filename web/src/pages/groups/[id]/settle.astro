@@ -1,18 +1,28 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
+import { moneyFormatter } from "@/lib/currencies";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
 
-const { data: groups } = await api.GET("/v1/groups");
-const group = groups?.find((g) => g.id === id);
+const [groupsRes, balancesRes] = await Promise.all([
+  api.GET("/v1/groups"),
+  api.GET("/v1/groups/{id}/balances", { params: { path: { id } } }),
+]);
+const group = groupsRes.data?.find((g) => g.id === id);
 if (!group) return Astro.redirect("/groups");
 
 const currency = group.default_currency;
 const me = Astro.locals.user;
 const members = group.members;
+const simplified = balancesRes.data?.simplified ?? [];
+const memberByID = new Map(members.map((m) => [m.user_id, m]));
+const nameByUserID = new Map(members.map((m) => [m.user_id, m.display_name]));
+const moneyFmt = moneyFormatter(currency);
+const format = (cents: number) => moneyFmt.format(cents / 100);
 const showError = Astro.url.searchParams.get("error") === "1";
 ---
 
@@ -86,26 +96,80 @@ const showError = Astro.url.searchParams.get("error") === "1";
       </form>
     )}
 
-    <section class="rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
-      <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">Group members</h2>
-      <ul class="flex flex-col gap-2 text-sm">
-        {members.map((m) => (
-          <li class="flex items-center gap-2">
-            <Avatar
-              userId={m.user_id}
-              displayName={m.display_name}
-              hasAvatar={m.has_avatar}
-              avatarUpdatedAt={m.avatar_updated_at}
-              size={20}
-            />
-            <span>{m.display_name}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    {simplified.length > 0 && (
+      <section class="rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+        <h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">Suggested transfers</h2>
+        <p class="mb-3 text-xs text-neutral-500 dark:text-neutral-400">Tap one to prefill the form above.</p>
+        <ul class="flex flex-col gap-2 text-sm">
+          {simplified.map((d) => {
+            const from = memberByID.get(d.from_user_id);
+            const to = memberByID.get(d.to_user_id);
+            return (
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-neutral-200 px-2 py-1.5 text-left transition-colors hover:border-neutral-300 hover:bg-neutral-100 focus-visible:border-neutral-300 focus-visible:bg-neutral-100 dark:border-neutral-700 dark:hover:border-neutral-600 dark:hover:bg-neutral-800 dark:focus-visible:border-neutral-600 dark:focus-visible:bg-neutral-800"
+                  data-suggest
+                  data-from={d.from_user_id}
+                  data-to={d.to_user_id}
+                  data-amount={(d.amount_cents / 100).toFixed(2)}
+                  title="Use this transfer in the form above"
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <Avatar
+                      userId={d.from_user_id}
+                      displayName={from?.display_name ?? "?"}
+                      hasAvatar={from?.has_avatar}
+                      avatarUpdatedAt={from?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{nameByUserID.get(d.from_user_id)}</span>
+                    <span class="text-neutral-600 dark:text-neutral-400">
+                      <FaIcon name="arrow-right" size={12} />
+                    </span>
+                    <Avatar
+                      userId={d.to_user_id}
+                      displayName={to?.display_name ?? "?"}
+                      hasAvatar={to?.has_avatar}
+                      avatarUpdatedAt={to?.avatar_updated_at}
+                      size={18}
+                    />
+                    <span class="truncate">{nameByUserID.get(d.to_user_id)}</span>
+                  </span>
+                  <span class="shrink-0 font-mono">{format(d.amount_cents)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    )}
   </div>
 
   <script>
     import "@/scripts/currency-input.ts";
+
+    // Clicking a suggested transfer prefills the settle form above: payer,
+    // recipient, and amount. The amount is written to the visible currency
+    // input, then an "input"/"blur" pair lets currency-input.ts commit the
+    // hidden value and render the formatted display, same as manual entry.
+    const form = document.querySelector<HTMLFormElement>('form[action^="/api/settlements"]');
+    if (form) {
+      const fromSel = form.querySelector<HTMLSelectElement>('select[name="from_user_id"]');
+      const toSel = form.querySelector<HTMLSelectElement>('select[name="to_user_id"]');
+      const amount = form.querySelector<HTMLInputElement>("[data-currency-input]");
+      document.querySelectorAll<HTMLButtonElement>("[data-suggest]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (fromSel) fromSel.value = btn.dataset.from ?? "";
+          if (toSel) toSel.value = btn.dataset.to ?? "";
+          if (amount) {
+            amount.value = btn.dataset.amount ?? "";
+            amount.dispatchEvent(new Event("input", { bubbles: true }));
+            amount.dispatchEvent(new Event("blur", { bubbles: true }));
+          }
+          form.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+    }
   </script>
 </Base>

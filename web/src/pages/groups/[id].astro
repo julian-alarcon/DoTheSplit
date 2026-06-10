@@ -8,6 +8,7 @@ import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import { withMonthHeaders } from "@/lib/transaction-month";
 import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { shortName } from "@/lib/short-name";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
@@ -24,7 +25,6 @@ const group = groupsRes.data?.find((g) => g.id === id);
 if (!group) {
   return Astro.redirect("/groups");
 }
-const net = balancesRes.data?.net ?? [];
 const simplified = balancesRes.data?.simplified ?? [];
 const recurringTemplates = recurringRes.data ?? [];
 const categories = categoriesRes.data ?? [];
@@ -54,10 +54,6 @@ const nameByUserID = new Map<string, string>();
 const memberByID = new Map(group.members.map((m) => [m.user_id, m]));
 for (const m of group.members) nameByUserID.set(m.user_id, m.display_name);
 
-const shortName = (name: string | undefined | null) => {
-  const s = name ?? "?";
-  return s.length > 14 ? s.slice(0, 10) + "…" : s;
-};
 
 // Viewer's per-expense involvement: lent (paid more than their share),
 // owes (their share is not zero and they didn't pay), or not involved
@@ -81,6 +77,46 @@ const viewerStake = (e: { payer_id: string; amount_cents: number; splits: Array<
   if (myShare > 0) return { kind: "owes", cents: myShare };
   return { kind: "none" };
 };
+
+// Balances are shown from the viewer's perspective: only debts that involve
+// them. A `simplified` entry means from_user owes to_user.
+type ViewerDebt = { otherID: string; amountCents: number; theyOweMe: boolean };
+const myDebts: ViewerDebt[] = simplified
+  .filter((d) => d.from_user_id === viewerID || d.to_user_id === viewerID)
+  .map((d) => ({
+    otherID: d.from_user_id === viewerID ? d.to_user_id : d.from_user_id,
+    amountCents: d.amount_cents,
+    theyOweMe: d.to_user_id === viewerID,
+  }));
+
+// A random cheerful line for the fully-settled state. Picked per render so it
+// varies between page loads without any client JS.
+const settledMessages = [
+  "All settled up. Nice!",
+  "Squeaky clean. No debts here!",
+  "You're square with everyone!",
+  "Zero balances, zero worries.",
+  "Debt-free and loving it!",
+  "Everyone's even. High five!",
+  "Nothing owed, nothing owing.",
+  "Balances at zero. Treat yourself!",
+  "All paid up. Smooth sailing!",
+  "Perfectly balanced, as all things should be.",
+];
+const settledMessage = settledMessages[Math.floor(Math.random() * settledMessages.length)];
+const settledIcons = [
+  "champagne-glasses",
+  "face-smile",
+  "thumbs-up",
+  "star",
+  "heart",
+  "trophy",
+  "hand-peace",
+  "mug-hot",
+  "check-double",
+  "face-grin-stars",
+];
+const settledIcon = settledIcons[Math.floor(Math.random() * settledIcons.length)];
 
 const moneyFmt = moneyFormatter(currency);
 const format = (cents: number) => moneyFmt.format(cents / 100);
@@ -175,70 +211,79 @@ const errorMessage = ERROR_MESSAGES[Astro.url.searchParams.get("error") ?? ""];
 
   <div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]">
   <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900 lg:order-1">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <h2 class="font-medium">Balances</h2>
-      <a href={`/groups/${id}/settle`} class="btn-secondary btn-sm">Settle up</a>
-    </div>
-    <div class="flex flex-col gap-6">
-      <ul class="flex flex-col gap-2 text-sm">
-        {net.map((b) => {
-          const m = memberByID.get(b.user_id);
-          return (
-            <li class="flex items-center justify-between gap-2">
-              <span class="flex min-w-0 items-center gap-2">
-                <Avatar
-                  userId={b.user_id}
-                  displayName={b.display_name}
-                  hasAvatar={m?.has_avatar}
-                  avatarUpdatedAt={m?.avatar_updated_at}
-                  size={20}
-                />
-                <span class="truncate">{b.display_name}</span>
-              </span>
-              <span class={`shrink-0 font-mono ${b.net_cents >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                {format(b.net_cents)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {simplified.length > 0 && (
-        <div>
-          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">Suggested transfers</h3>
-          <ul class="flex flex-col gap-2 text-sm">
-            {simplified.map((d) => {
-              const from = memberByID.get(d.from_user_id);
-              const to = memberByID.get(d.to_user_id);
-              return (
-                <li class="flex items-center justify-between gap-2">
-                  <span class="flex min-w-0 items-center gap-2">
-                    <Avatar
-                      userId={d.from_user_id}
-                      displayName={from?.display_name ?? "?"}
-                      hasAvatar={from?.has_avatar}
-                      avatarUpdatedAt={from?.avatar_updated_at}
-                      size={18}
-                    />
-                    <span class="truncate">{nameByUserID.get(d.from_user_id)}</span>
-                    <span class="text-neutral-600 dark:text-neutral-400">
-                      <FaIcon name="arrow-right" size={12} />
-                    </span>
-                    <Avatar
-                      userId={d.to_user_id}
-                      displayName={to?.display_name ?? "?"}
-                      hasAvatar={to?.has_avatar}
-                      avatarUpdatedAt={to?.avatar_updated_at}
-                      size={18}
-                    />
-                    <span class="truncate">{nameByUserID.get(d.to_user_id)}</span>
-                  </span>
-                  <span class="shrink-0 font-mono">{format(d.amount_cents)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+    <div class="flex flex-col gap-2 text-sm">
+      {myDebts.length === 0 ? (
+        <p class="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+          <FaIcon name={settledIcon} size={16} />
+          <span class="font-medium">{settledMessage}</span>
+        </p>
+      ) : (
+        <ul class="flex flex-col gap-2">
+          {myDebts.map((d) => {
+            const other = memberByID.get(d.otherID);
+            const otherName = nameByUserID.get(d.otherID) ?? "?";
+            const me = memberByID.get(viewerID);
+            return (
+              <li class="flex items-center justify-between gap-2">
+                <span class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                  {d.theyOweMe ? (
+                    <>
+                      <span class="flex min-w-0 items-center gap-1.5">
+                        <Avatar
+                          userId={d.otherID}
+                          displayName={otherName}
+                          hasAvatar={other?.has_avatar}
+                          avatarUpdatedAt={other?.avatar_updated_at}
+                          size={18}
+                        />
+                        <span class="truncate">{shortName(otherName)}</span>
+                      </span>
+                      <span class="text-neutral-600 dark:text-neutral-400">owes</span>
+                      <span class="flex items-center gap-1.5">
+                        <Avatar
+                          userId={viewerID}
+                          displayName={me?.display_name ?? "you"}
+                          hasAvatar={me?.has_avatar}
+                          avatarUpdatedAt={me?.avatar_updated_at}
+                          size={18}
+                        />
+                        <span>you</span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span class="flex items-center gap-1.5">
+                        <Avatar
+                          userId={viewerID}
+                          displayName={me?.display_name ?? "you"}
+                          hasAvatar={me?.has_avatar}
+                          avatarUpdatedAt={me?.avatar_updated_at}
+                          size={18}
+                        />
+                        <span>You owe</span>
+                      </span>
+                      <span class="flex min-w-0 items-center gap-1.5">
+                        <Avatar
+                          userId={d.otherID}
+                          displayName={otherName}
+                          hasAvatar={other?.has_avatar}
+                          avatarUpdatedAt={other?.avatar_updated_at}
+                          size={18}
+                        />
+                        <span class="truncate">{shortName(otherName)}</span>
+                      </span>
+                    </>
+                  )}
+                </span>
+                <span class={`shrink-0 font-mono ${d.theyOweMe ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                  {format(d.amountCents)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
+      <a href={`/groups/${id}/settle`} class="btn-secondary btn-sm mt-1 self-end">Settle up</a>
     </div>
   </section>
 

@@ -6,6 +6,7 @@ import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
 import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { shortName } from "@/lib/short-name";
 
 const api = apiFor(Astro.locals.cookie);
 
@@ -75,10 +76,6 @@ function groupForItem(item: SearchItem): SearchGroup | undefined {
   return gid ? groupByID.get(gid) : undefined;
 }
 
-const shortName = (name: string | undefined | null) => {
-  const s = name ?? "?";
-  return s.length > 14 ? s.slice(0, 10) + "…" : s;
-};
 
 const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
 const dayFmt = new Intl.DateTimeFormat(undefined, { day: "2-digit" });

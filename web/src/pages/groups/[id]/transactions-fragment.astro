@@ -11,6 +11,7 @@ import CategoryIcon from "@/components/CategoryIcon.astro";
 import { apiFor } from "@/lib/api/client";
 import { withMonthHeaders } from "@/lib/transaction-month";
 import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { shortName } from "@/lib/short-name";
 
 const { id } = Astro.params as { id: string };
 const cursor = Astro.url.searchParams.get("cursor") ?? "";
@@ -41,10 +42,6 @@ const memberByID = new Map((group?.members ?? []).map((m) => [m.user_id, m]));
 const nameByUserID = new Map<string, string>();
 for (const m of group?.members ?? []) nameByUserID.set(m.user_id, m.display_name);
 
-const shortName = (name: string | undefined | null) => {
-  const s = name ?? "?";
-  return s.length > 14 ? s.slice(0, 10) + "…" : s;
-};
 
 const viewerID = Astro.locals.user?.id ?? "";
 type ViewerStake =

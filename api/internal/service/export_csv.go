@@ -170,7 +170,7 @@ func (s *GroupCSVExporter) Export(ctx context.Context, w io.Writer, actorID, gro
 
 	header := []string{"Date", "Description", "Category", "Cost", "Currency", "Time", "Payer", "Notes", "Created", "CreatedBy"}
 	for _, m := range members {
-		header = append(header, m.DisplayName)
+		header = append(header, neutralizeCSVField(m.DisplayName))
 	}
 	if err := cw.Write(header); err != nil {
 		return ExportResult{}, err
@@ -182,15 +182,15 @@ func (s *GroupCSVExporter) Export(ctx context.Context, w io.Writer, actorID, gro
 		c := r.Created.UTC()
 		rec := []string{
 			t.Format("2006-01-02"),
-			r.Description,
-			r.Category,
+			neutralizeCSVField(r.Description),
+			neutralizeCSVField(r.Category),
 			centsToDecimal(r.CostCents),
 			r.Currency,
 			t.Format("15:04:05Z"),
-			r.PayerName,
-			r.Notes,
+			neutralizeCSVField(r.PayerName),
+			neutralizeCSVField(r.Notes),
 			c.Format(time.RFC3339),
-			r.CreatedBy,
+			neutralizeCSVField(r.CreatedBy),
 		}
 		for i, v := range r.Signed {
 			rec = append(rec, centsToDecimal(v))
@@ -250,5 +250,22 @@ func twoDigits(v int64) string {
 		return "0" + strconv.FormatInt(v, 10)
 	}
 	return strconv.FormatInt(v, 10)
+}
+
+// neutralizeCSVField defuses spreadsheet formula injection. A cell whose first
+// character is one of = + - @ (or a leading TAB/CR, which some parsers strip
+// before re-evaluating the next char) is treated as a live formula by Excel,
+// LibreOffice, and Google Sheets when the export is opened. Prefixing such a
+// value with a single quote forces the spreadsheet to render it as literal
+// text. Empty cells are left untouched.
+func neutralizeCSVField(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
 }
 

@@ -587,6 +587,49 @@ svg[data-icon-slug="other"] {
   @apply cursor-not-allowed opacity-50;
 }
 
+/* Segmented switch: a native radio group rendered as a 3-state pill. The real
+   <input type="radio"> stays in the DOM (visually hidden but focusable) so the
+   label-for, keyboard activation (arrow keys), and screen reader announcement
+   all work without JavaScript. The selected segment lifts to --primary; the
+   rest sit on the track background like the toggle's off state. */
+.theme-seg {
+  @apply inline-flex items-center rounded-full p-0.5;
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+:root[data-theme="dark"] .theme-seg,
+:root[data-theme="high-contrast"] .theme-seg {
+  background: var(--secondary);
+}
+
+.theme-seg-opt {
+  @apply cursor-pointer select-none;
+}
+
+.theme-seg-opt input {
+  @apply sr-only;
+}
+
+.theme-seg-icon {
+  @apply inline-flex items-center justify-center rounded-full px-2 py-1 leading-none transition-colors;
+  color: var(--muted-foreground);
+}
+
+.theme-seg-opt:hover .theme-seg-icon {
+  color: var(--foreground);
+}
+
+.theme-seg-opt input:checked + .theme-seg-icon {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.theme-seg-opt input:focus-visible + .theme-seg-icon {
+  @apply ring-2;
+  --tw-ring-color: var(--ring);
+}
+
 /* Header user menu. Click-to-toggle, native theme tokens (--popover, --border).
    The trigger collapses to icon-only at <640px (display name + chevron's text
    neighbour both get `sm:inline`). The panel sits absolutely under the

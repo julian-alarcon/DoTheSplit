@@ -93,9 +93,9 @@
   "frontend": [
     {
       "name": "@astrojs/check",
-      "version": "0.9.2",
+      "version": "0.9.9",
       "license": "MIT",
-      "url": "https://github.com/withastro/language-tools"
+      "url": "https://github.com/withastro/astro"
     },
     {
       "name": "@astrojs/node",

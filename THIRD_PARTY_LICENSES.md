@@ -81,7 +81,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | @asamuzakjp/dom-selector@7.1.1 | MIT | https://github.com/asamuzaK/domSelector |
 | @asamuzakjp/generational-cache@1.0.1 | MIT | https://github.com/asamuzaK/generationalCache |
 | @asamuzakjp/nwsapi@2.3.9 | MIT | https://github.com/dperini/nwsapi |
-| @astrojs/check@0.9.2 | MIT | https://github.com/withastro/language-tools |
+| @astrojs/check@0.9.9 | MIT | https://github.com/withastro/astro |
 | @astrojs/compiler@2.13.1 | MIT | https://github.com/withastro/compiler |
 | @astrojs/compiler@4.0.0 | MIT | https://github.com/withastro/compiler |
 | @astrojs/internal-helpers@0.10.0 | MIT | https://github.com/withastro/astro |
@@ -128,9 +128,6 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | @jridgewell/resolve-uri@3.1.2 | MIT | https://github.com/jridgewell/resolve-uri |
 | @jridgewell/sourcemap-codec@1.5.5 | MIT | https://github.com/jridgewell/sourcemaps |
 | @jridgewell/trace-mapping@0.3.31 | MIT | https://github.com/jridgewell/sourcemaps |
-| @nodelib/fs.scandir@2.1.5 | MIT | https://github.com/nodelib/nodelib.git#master |
-| @nodelib/fs.stat@2.0.5 | MIT | https://github.com/nodelib/nodelib.git#master |
-| @nodelib/fs.walk@1.2.8 | MIT | https://github.com/nodelib/nodelib.git#master |
 | @oslojs/encoding@1.1.0 | MIT | https://github.com/oslo-project/encoding |
 | @playwright/test@1.60.0 | Apache-2.0 | https://github.com/microsoft/playwright |
 | @redocly/ajv@8.11.2 | MIT | https://github.com/ajv-validator/ajv |
@@ -195,10 +192,8 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | bail@2.0.2 | MIT | https://github.com/wooorm/bail |
 | balanced-match@1.0.2 | MIT | https://github.com/juliangruber/balanced-match |
 | bidi-js@1.0.3 | MIT | https://github.com/lojjic/bidi-js |
-| binary-extensions@2.3.0 | MIT | https://github.com/sindresorhus/binary-extensions |
 | boolbase@1.0.0 | ISC | https://github.com/fb55/boolbase |
 | brace-expansion@2.1.1 | MIT | https://github.com/juliangruber/brace-expansion |
-| braces@3.0.3 | MIT | https://github.com/micromatch/braces |
 | buffer-crc32@0.2.13 | MIT | https://github.com/brianloveswords/buffer-crc32 |
 | cac@6.7.14 | MIT | https://github.com/egoist/cac |
 | ccount@2.0.1 | MIT | https://github.com/wooorm/ccount |
@@ -210,7 +205,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | check-error@2.1.3 | MIT | https://github.com/chaijs/check-error |
 | cheerio-select@2.1.0 | BSD-2-Clause | https://github.com/cheeriojs/cheerio-select |
 | cheerio@1.2.0 | MIT | https://github.com/cheeriojs/cheerio |
-| chokidar@3.6.0 | MIT | https://github.com/paulmillr/chokidar |
+| chokidar@4.0.3 | MIT | https://github.com/paulmillr/chokidar |
 | chokidar@5.0.0 | MIT | https://github.com/paulmillr/chokidar |
 | chownr@3.0.0 | BlueOak-1.0.0 | https://github.com/isaacs/chownr |
 | ci-info@4.4.0 | MIT | https://github.com/watson/ci-info |
@@ -258,7 +253,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | encodeurl@2.0.0 | MIT | https://github.com/pillarjs/encodeurl |
 | encoding-sniffer@0.2.1 | MIT | https://github.com/fb55/encoding-sniffer |
 | end-of-stream@1.4.5 | MIT | https://github.com/mafintosh/end-of-stream |
-| enhanced-resolve@5.23.0 | MIT | https://github.com/webpack/enhanced-resolve |
+| enhanced-resolve@5.24.0 | MIT | https://github.com/webpack/enhanced-resolve |
 | entities@4.5.0 | BSD-2-Clause | https://github.com/fb55/entities |
 | entities@6.0.1 | BSD-2-Clause | https://github.com/fb55/entities |
 | entities@7.0.1 | BSD-2-Clause | https://github.com/fb55/entities |
@@ -278,15 +273,12 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | extend@3.0.2 | MIT | https://github.com/justmoon/node-extend |
 | extract-zip@2.0.1 | BSD-2-Clause | https://github.com/maxogden/extract-zip |
 | fast-deep-equal@3.1.3 | MIT | https://github.com/epoberezkin/fast-deep-equal |
-| fast-glob@3.3.3 | MIT | https://github.com/mrmlnc/fast-glob |
 | fast-string-truncated-width@3.0.3 | MIT | https://github.com/fabiospampinato/fast-string-truncated-width |
 | fast-string-width@3.0.2 | MIT | https://github.com/fabiospampinato/fast-string-width |
 | fast-uri@3.1.2 | BSD-3-Clause | https://github.com/fastify/fast-uri |
 | fast-wrap-ansi@0.2.2 | MIT | https://github.com/43081j/fast-wrap-ansi |
-| fastq@1.20.1 | ISC | https://github.com/mcollina/fastq |
 | fd-slicer@1.1.0 | MIT | https://github.com/andrewrk/node-fd-slicer |
 | fdir@6.5.0 | MIT | https://github.com/thecodrr/fdir |
-| fill-range@7.1.1 | MIT | https://github.com/jonschlinkert/fill-range |
 | flattie@1.1.1 | MIT | https://github.com/lukeed/flattie |
 | fontace@0.4.1 | MIT | https://github.com/delucis/fontace |
 | fontkitten@1.0.3 | MIT | https://github.com/delucis/fontkitten |
@@ -295,7 +287,6 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | get-stream@5.2.0 | MIT | https://github.com/sindresorhus/get-stream |
 | get-tsconfig@5.0.0-beta.4 | MIT | https://github.com/privatenumber/get-tsconfig |
 | github-slugger@2.0.0 | ISC | https://github.com/Flet/github-slugger |
-| glob-parent@5.1.2 | ISC | https://github.com/gulpjs/glob-parent |
 | globals@15.15.0 | MIT | https://github.com/sindresorhus/globals |
 | graceful-fs@4.2.11 | ISC | https://github.com/isaacs/node-graceful-fs |
 | h3@1.15.11 | MIT | https://github.com/h3js/h3 |
@@ -320,14 +311,10 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | index-to-position@1.2.0 | MIT | https://github.com/sindresorhus/index-to-position |
 | inherits@2.0.4 | ISC | https://github.com/isaacs/inherits |
 | iron-webcrypto@1.2.1 | MIT | https://github.com/brc-dd/iron-webcrypto |
-| is-binary-path@2.1.0 | MIT | https://github.com/sindresorhus/is-binary-path |
 | is-docker@3.0.0 | MIT | https://github.com/sindresorhus/is-docker |
 | is-docker@4.0.0 | MIT | https://github.com/sindresorhus/is-docker |
-| is-extglob@2.1.1 | MIT | https://github.com/jonschlinkert/is-extglob |
 | is-fullwidth-code-point@3.0.0 | MIT | https://github.com/sindresorhus/is-fullwidth-code-point |
-| is-glob@4.0.3 | MIT | https://github.com/micromatch/is-glob |
 | is-inside-container@1.0.0 | MIT | https://github.com/sindresorhus/is-inside-container |
-| is-number@7.0.0 | MIT | https://github.com/jonschlinkert/is-number |
 | is-plain-obj@4.1.0 | MIT | https://github.com/sindresorhus/is-plain-obj |
 | is-potential-custom-element-name@1.0.1 | MIT | https://github.com/mathiasbynens/is-potential-custom-element-name |
 | is-wsl@3.1.1 | MIT | https://github.com/sindresorhus/is-wsl |
@@ -368,7 +355,6 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | mdn-data@2.0.28 | CC0-1.0 | https://github.com/mdn/data |
 | mdn-data@2.0.30 | CC0-1.0 | https://github.com/mdn/data |
 | mdn-data@2.27.1 | CC0-1.0 | https://github.com/mdn/data |
-| merge2@1.4.1 | MIT | https://github.com/teambition/merge2 |
 | micromark-core-commonmark@2.0.3 | MIT | https://github.com/micromark/micromark.git#main |
 | micromark-extension-gfm-autolink-literal@2.1.0 | MIT | https://github.com/micromark/micromark-extension-gfm-autolink-literal |
 | micromark-extension-gfm-footnote@2.1.0 | MIT | https://github.com/micromark/micromark-extension-gfm-footnote |
@@ -397,7 +383,6 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | micromark-util-symbol@2.0.1 | MIT | https://github.com/micromark/micromark.git#main |
 | micromark-util-types@2.0.2 | MIT | https://github.com/micromark/micromark.git#main |
 | micromark@4.0.2 | MIT | https://github.com/micromark/micromark.git#main |
-| micromatch@4.0.8 | MIT | https://github.com/micromatch/micromatch |
 | mime-db@1.54.0 | MIT | https://github.com/jshttp/mime-db |
 | mime-types@3.0.2 | MIT | https://github.com/jshttp/mime-types |
 | minimatch@5.1.9 | ISC | https://github.com/isaacs/minimatch |
@@ -454,10 +439,9 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | pump@3.0.4 | MIT | https://github.com/mafintosh/pump |
 | punycode@2.3.1 | MIT | https://github.com/mathiasbynens/punycode.js |
 | quansync@0.2.11 | MIT | https://github.com/quansync-dev/quansync |
-| queue-microtask@1.2.3 | MIT | https://github.com/feross/queue-microtask |
 | radix3@1.1.2 | MIT | https://github.com/unjs/radix3 |
 | range-parser@1.2.1 | MIT | https://github.com/jshttp/range-parser |
-| readdirp@3.6.0 | MIT | https://github.com/paulmillr/readdirp |
+| readdirp@4.1.2 | MIT | https://github.com/paulmillr/readdirp |
 | readdirp@5.0.0 | MIT | https://github.com/paulmillr/readdirp |
 | regex-recursion@6.0.2 | MIT | https://github.com/slevithan/regex-recursion |
 | regex-utilities@2.3.0 | MIT | https://github.com/slevithan/regex-utilities |
@@ -480,9 +464,7 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | retext-smartypants@6.2.0 | MIT | https://github.com/retextjs/retext-smartypants |
 | retext-stringify@4.0.0 | MIT | https://github.com/retextjs/retext.git#main |
 | retext@9.0.0 | MIT | https://github.com/retextjs/retext.git#main |
-| reusify@1.1.0 | MIT | https://github.com/mcollina/reusify |
 | rollup@4.61.1 | MIT | https://github.com/rollup/rollup |
-| run-parallel@1.2.0 | MIT | https://github.com/feross/run-parallel |
 | safer-buffer@2.1.2 | MIT | https://github.com/ChALkeR/safer-buffer |
 | sax@1.6.0 | BlueOak-1.0.0 | https://github.com/isaacs/sax-js |
 | saxes@6.0.0 | ISC | https://github.com/lddubeau/saxes |
@@ -522,7 +504,6 @@ Generated from `license-checker-rseidelsohn --json` against [web/package.json](w
 | tinyspy@4.0.4 | MIT | https://github.com/tinylibs/tinyspy |
 | tldts-core@7.4.2 | MIT | https://github.com/remusao/tldts |
 | tldts@7.4.2 | MIT | https://github.com/remusao/tldts |
-| to-regex-range@5.0.1 | MIT | https://github.com/micromatch/to-regex-range |
 | toidentifier@1.0.1 | MIT | https://github.com/component/toidentifier |
 | tough-cookie@6.0.1 | BSD-3-Clause | https://github.com/salesforce/tough-cookie |
 | tr46@6.0.0 | MIT | https://github.com/jsdom/tr46 |

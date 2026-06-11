@@ -7,6 +7,12 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   integrations: [icon()],
+  // No markdown is rendered in this app, so Shiki (the default highlighter)
+  // is unused. Disabling it silences the build-time CSP-incompatibility warning
+  // since Shiki emits inline styles that our CSP wouldn't allow anyway.
+  markdown: {
+    syntaxHighlight: false,
+  },
   // Self-hosted Inter - keeps font bytes on our origin so the app never reaches
   // fonts.googleapis.com / fonts.gstatic.com. License text and attribution live
   // in src/assets/fonts/inter/OFL.txt and the /about page.

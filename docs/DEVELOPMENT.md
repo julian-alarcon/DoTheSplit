@@ -5,7 +5,7 @@ How to check, build, test, and deploy DoTheSplit. See [../BLUEPRINT.md](../BLUEP
 ## Prerequisites
 
 - **Docker** + **Docker Compose v2** (only strict requirement for running the stack)
-- **Go 1.25+** (for local dev and unit tests outside Docker)
+- **Go 1.26+** (for local dev and unit tests outside Docker)
 - **Node 24+** and **npm 10+** (for local dev and `astro check`)
 - `make`, `openssl` (for key generation), `curl` and `python3` (used in smoke scripts)
 

@@ -36,7 +36,13 @@ type ApiFetchOptions = {
   // When set, the value is JSON-encoded and Content-Type is added. Use this
   // for request bodies; omit it for GET/DELETE-without-body calls.
   json?: unknown;
+  // Abort timeout in milliseconds. Defaults to 15s, which suits ordinary
+  // CRUD. Heavy writes (e.g. committing a CSV import of a whole group) pass a
+  // larger value so a slow-but-progressing request isn't aborted mid-flight.
+  timeoutMs?: number;
 };
+
+const DEFAULT_TIMEOUT_MS = 15000;
 
 export function apiFetch(path: string, opts: ApiFetchOptions = {}): Promise<Response> {
   // Defense-in-depth: callers interpolate user-supplied ids into fixed /v1/...
@@ -59,7 +65,7 @@ export function apiFetch(path: string, opts: ApiFetchOptions = {}): Promise<Resp
     headers,
     body,
     // Bound the request so a hung Go backend can't tie up the Astro worker.
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
 }
 

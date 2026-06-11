@@ -54,7 +54,9 @@ type GroupRepo struct {
 
 func NewGroupRepo(p *pgxpool.Pool) *GroupRepo { return &GroupRepo{pool: p} }
 
-// Create inserts the group and adds the creator as a member. Done in a transaction.
+// Create inserts the group and adds the creator as a member in its own
+// transaction. Callers that already hold a transaction (e.g. the importer)
+// should use CreateTx instead.
 func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -62,20 +64,29 @@ func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, cr
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
-	err = tx.QueryRow(ctx, `
-		INSERT INTO groups (name, default_currency, created_by) VALUES ($1, $2, $3)
-		RETURNING id, created_at
-	`, name, defaultCurrency, creatorID).Scan(&g.ID, &g.CreatedAt)
+	g, err := r.CreateTx(ctx, tx, name, defaultCurrency, creatorID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
-	`, g.ID, creatorID); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	return g, nil
+}
+
+// CreateTx inserts the group and adds the creator as a member on the supplied
+// querier (a *pgxpool.Pool or pgx.Tx). The caller owns any transaction.
+func (r *GroupRepo) CreateTx(ctx context.Context, q Querier, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
+	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
+	if err := q.QueryRow(ctx, `
+		INSERT INTO groups (name, default_currency, created_by) VALUES ($1, $2, $3)
+		RETURNING id, created_at
+	`, name, defaultCurrency, creatorID).Scan(&g.ID, &g.CreatedAt); err != nil {
+		return nil, err
+	}
+	if _, err := q.Exec(ctx, `
+		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
+	`, g.ID, creatorID); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -327,6 +338,18 @@ func (r *GroupRepo) RemoveMember(ctx context.Context, groupID, userID uuid.UUID)
 		return ErrNotFound
 	}
 	return nil
+}
+
+// AddMemberTx inserts a membership on the supplied querier (a *pgxpool.Pool or
+// pgx.Tx), idempotently. Unlike AddMember it does not read the row back; the
+// importer ignores the returned member, so this avoids a needless round-trip
+// and keeps the insert in the caller's transaction.
+func (r *GroupRepo) AddMemberTx(ctx context.Context, q Querier, groupID, userID uuid.UUID) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, groupID, userID)
+	return err
 }
 
 // AddMember inserts a membership. Returns the new member's row (with display name).

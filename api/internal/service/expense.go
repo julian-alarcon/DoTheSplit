@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
@@ -131,6 +132,16 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 		return nil, err
 	}
 	return e, nil
+}
+
+// CreateWithSplitsTx writes an already-built expense + splits on the caller's
+// transaction. It performs no validation: the caller (currently the importer,
+// which commits an entire group in one tx) is responsible for ensuring the
+// payer and split users are members and the share sum is valid, because the
+// membership reads in Create cannot see rows inserted in the same uncommitted
+// tx. Use Create for the normal request path.
+func (s *ExpenseService) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *repo.Expense) error {
+	return s.exps.CreateWithSplitsTx(ctx, tx, e)
 }
 
 // Get returns a single expense by id, enforcing group membership. Soft-deleted

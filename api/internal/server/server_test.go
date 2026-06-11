@@ -164,7 +164,7 @@ func setup(t *testing.T) *testStack {
 	settlementSvc.SetNotifications(users, notificationSvc)
 	recurringSvc.SetNotifications(users, notificationSvc)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, authSvc, email)
+	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
 	h := server.New(&handlers.Server{

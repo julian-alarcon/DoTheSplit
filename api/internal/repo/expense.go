@@ -47,15 +47,26 @@ const (
 	expenseColsWithDeleted = `id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id`
 )
 
-// CreateWithSplits inserts an expense and its splits atomically.
+// CreateWithSplits inserts an expense and its splits atomically in its own
+// transaction. Callers that already hold a transaction (e.g. the importer,
+// which commits a whole group in one tx) should use CreateWithSplitsTx instead.
 func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.CreateWithSplitsTx(ctx, tx, e); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
-	err = tx.QueryRow(ctx, `
+// CreateWithSplitsTx inserts an expense, its splits, and the activity event on
+// the supplied transaction. The caller owns the tx lifecycle (Begin/Commit/
+// Rollback).
+func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *Expense) error {
+	err := tx.QueryRow(ctx, `
 		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at
@@ -96,7 +107,7 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
 	}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ListByGroup returns non-deleted expenses with their splits, newest first.

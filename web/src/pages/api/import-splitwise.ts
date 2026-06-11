@@ -31,28 +31,40 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect("/import/splitwise?error=missing_fields", 302);
   }
 
-  const res = await apiFetch("/v1/imports/splitwise", {
-    method: "POST",
-    cookie,
-    json: {
-      csv,
-      group_name: groupName,
-      default_currency: currency || "EUR",
-      members,
-      dry_run: false,
-    },
-  });
-  if (!res.ok) {
-    let code = "import_failed";
-    try {
-      const body = (await res.json()) as { code?: string };
-      if (body && typeof body.code === "string") code = body.code;
-    } catch {
-      /* empty */
+  // Committing an import is the heaviest write in the app (a whole group of
+  // expenses + settlements in one transaction), so give it a generous timeout.
+  // A throw here (timeout/network) must not bubble up as a raw 500 at this
+  // POST action URL - this is a native form submit, so the browser would just
+  // render whatever we return. Catch it and bounce back to the importer with
+  // an error code instead.
+  let out: { group_id?: string };
+  try {
+    const res = await apiFetch("/v1/imports/splitwise", {
+      method: "POST",
+      cookie,
+      timeoutMs: 60000,
+      json: {
+        csv,
+        group_name: groupName,
+        default_currency: currency || "EUR",
+        members,
+        dry_run: false,
+      },
+    });
+    if (!res.ok) {
+      let code = "import_failed";
+      try {
+        const body = (await res.json()) as { code?: string };
+        if (body && typeof body.code === "string") code = body.code;
+      } catch {
+        /* empty */
+      }
+      return redirect(`/import/splitwise?error=${encodeURIComponent(code)}`, 302);
     }
-    return redirect(`/import/splitwise?error=${encodeURIComponent(code)}`, 302);
+    out = (await res.json()) as { group_id?: string };
+  } catch {
+    return redirect("/import/splitwise?error=timeout", 302);
   }
-  const out = (await res.json()) as { group_id?: string };
   if (!out.group_id) {
     return redirect("/import/splitwise?error=no_group_id", 302);
   }

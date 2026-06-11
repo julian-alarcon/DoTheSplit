@@ -89,7 +89,7 @@ func main() {
 	transactionSvc := service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo)
 	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, auth, email)
+	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, auth, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
 	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, auth, email, cfg.PasswordPepper)

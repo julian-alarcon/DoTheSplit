@@ -4,6 +4,19 @@ import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currenc
 
 const locale = Astro.locals.locale;
 const others = otherCurrencies();
+
+const errorCode = Astro.url.searchParams.get("error") ?? "";
+const ERROR_MESSAGES: Record<string, string> = {
+  timeout:
+    "The import took too long and was cancelled. Nothing was saved. Try again - a large file can take a moment.",
+  import_failed: "The import failed. Check the file and try again.",
+  missing_fields: "Some required fields were missing. Please try again.",
+  missing_members: "Member details were missing. Please try again.",
+  no_group_id: "The import did not complete. Nothing was saved. Please try again.",
+};
+const errorMessage = errorCode
+  ? (ERROR_MESSAGES[errorCode] ?? `The import failed (${errorCode}). Please try again.`)
+  : "";
 ---
 
 <Base title="Import Splitwise" back={{ href: "/import", label: "Import" }}>
@@ -13,6 +26,15 @@ const others = otherCurrencies();
     file on the server, show you a preview, and let you confirm before any
     data is written.
   </p>
+
+  {errorMessage && (
+    <p
+      role="alert"
+      class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+    >
+      {errorMessage}
+    </p>
+  )}
 
   {/* Phase 1: file picker. */}
   <section id="phase-pick" class="rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">

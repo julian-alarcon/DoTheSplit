@@ -429,6 +429,11 @@ svg[data-icon-slug="other"] {
 .field-category-trigger:hover {
   background: var(--muted);
 }
+/* See .btn-secondary: --muted == --card in dark themes, so lift to --accent. */
+:root[data-theme="dark"] .field-category-trigger:hover,
+:root[data-theme="high-contrast"] .field-category-trigger:hover {
+  background: var(--accent);
+}
 
 /* Single row inside the category dialog list. Reads as a tappable list item:
    emoji + label, full-width hit target, hover/focus tint. */
@@ -487,6 +492,14 @@ svg[data-icon-slug="other"] {
 .btn-secondary:hover:not(:disabled) {
   background: var(--muted);
 }
+/* In dark themes --muted equals --card (both neutral-900), so a muted hover
+   is invisible. Lift to --accent (one step brighter) for a perceptible
+   highlight - same treatment as .user-menu-item below. */
+:root[data-theme="dark"] .btn-secondary:hover:not(:disabled),
+:root[data-theme="high-contrast"] .btn-secondary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
 
 .btn-danger {
   background: var(--destructive);
@@ -523,6 +536,12 @@ svg[data-icon-slug="other"] {
 }
 .btn-icon:hover:not(:disabled) {
   background: var(--muted);
+}
+/* See .btn-secondary: --muted == --card in dark themes, so lift to --accent. */
+:root[data-theme="dark"] .btn-icon:hover:not(:disabled),
+:root[data-theme="high-contrast"] .btn-icon:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /* Switch: a styled native checkbox rendered as a horizontal toggle. The real
@@ -585,6 +604,49 @@ svg[data-icon-slug="other"] {
 
 .toggle-input:disabled + .toggle-track {
   @apply cursor-not-allowed opacity-50;
+}
+
+/* Segmented switch: a native radio group rendered as a 3-state pill. The real
+   <input type="radio"> stays in the DOM (visually hidden but focusable) so the
+   label-for, keyboard activation (arrow keys), and screen reader announcement
+   all work without JavaScript. The selected segment lifts to --primary; the
+   rest sit on the track background like the toggle's off state. */
+.theme-seg {
+  @apply inline-flex items-center rounded-full p-0.5;
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+:root[data-theme="dark"] .theme-seg,
+:root[data-theme="high-contrast"] .theme-seg {
+  background: var(--secondary);
+}
+
+.theme-seg-opt {
+  @apply cursor-pointer select-none;
+}
+
+.theme-seg-opt input {
+  @apply sr-only;
+}
+
+.theme-seg-icon {
+  @apply inline-flex items-center justify-center rounded-full px-2 py-1 leading-none transition-colors;
+  color: var(--muted-foreground);
+}
+
+.theme-seg-opt:hover .theme-seg-icon {
+  color: var(--foreground);
+}
+
+.theme-seg-opt input:checked + .theme-seg-icon {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.theme-seg-opt input:focus-visible + .theme-seg-icon {
+  @apply ring-2;
+  --tw-ring-color: var(--ring);
 }
 
 /* Header user menu. Click-to-toggle, native theme tokens (--popover, --border).
@@ -687,6 +749,7 @@ svg[data-icon-slug="other"] {
   background: var(--muted);
   color: var(--muted-foreground);
 }
+.avatar-12 { width: 12px; height: 12px; font-size: 6px; }
 .avatar-16 { width: 16px; height: 16px; font-size: 8px; }
 .avatar-18 { width: 18px; height: 18px; font-size: 9px; }
 .avatar-20 { width: 20px; height: 20px; font-size: 9px; }

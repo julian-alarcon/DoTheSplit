@@ -39,6 +39,8 @@ type RecurringRepo struct {
 
 func NewRecurringRepo(p *pgxpool.Pool) *RecurringRepo { return &RecurringRepo{pool: p} }
 
+const recurringCols = `id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at`
+
 func (r *RecurringRepo) Create(ctx context.Context, e *RecurringExpense) error {
 	tmpl, err := json.Marshal(e.SplitTemplate)
 	if err != nil {
@@ -55,7 +57,7 @@ func (r *RecurringRepo) Create(ctx context.Context, e *RecurringExpense) error {
 
 func (r *RecurringRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]RecurringExpense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY next_run_at
@@ -98,7 +100,7 @@ func (r *RecurringRepo) FindByID(ctx context.Context, id uuid.UUID) (*RecurringE
 	var e RecurringExpense
 	var tmpl []byte
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Mode, &tmpl, &e.Cadence, &e.NextRunAt, &e.CreatedAt)
@@ -114,6 +116,32 @@ func (r *RecurringRepo) FindByID(ctx context.Context, id uuid.UUID) (*RecurringE
 	return &e, nil
 }
 
+// CadenceByIDs maps each given recurring-template id to its cadence, including
+// soft-deleted templates (a materialized expense outlives its template). Used
+// by the transaction feed to tag expenses that came from a recurring template.
+func (r *RecurringRepo) CadenceByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	out := map[uuid.UUID]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, cadence FROM recurring_expenses WHERE id = ANY($1)
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var cadence string
+		if err := rows.Scan(&id, &cadence); err != nil {
+			return nil, err
+		}
+		out[id] = cadence
+	}
+	return out, rows.Err()
+}
+
 // ClaimDue returns up to limit recurring expenses whose next_run_at is now or
 // earlier, using FOR UPDATE SKIP LOCKED so concurrent workers don't collide.
 // The returned rows are inside a transaction that the caller MUST commit or
@@ -123,12 +151,19 @@ func (r *RecurringRepo) ClaimDue(ctx context.Context, limit int) (pgx.Tx, []Recu
 	if err != nil {
 		return nil, nil, err
 	}
+	// FOR NO KEY UPDATE (not FOR UPDATE): the tick only mutates next_run_at, a
+	// non-key column. Crucially, the materialized expense carries a
+	// recurring_expense_id FK back to this row, and inserting that FK needs a
+	// FOR KEY SHARE lock on the parent. FOR KEY SHARE conflicts with FOR UPDATE
+	// but not with FOR NO KEY UPDATE, so the stronger lock would self-deadlock
+	// (outer tick tx vs. inner CreateWithSplits tx). SKIP LOCKED still keeps
+	// concurrent workers from claiming the same rows.
 	rows, err := tx.Query(ctx, `
-		SELECT id, group_id, payer_id, category_id, amount_cents, currency, description, mode, split_template, cadence, next_run_at, created_at
+		SELECT `+recurringCols+`
 		FROM recurring_expenses
 		WHERE deleted_at IS NULL AND next_run_at <= now()
 		ORDER BY next_run_at
-		FOR UPDATE SKIP LOCKED
+		FOR NO KEY UPDATE SKIP LOCKED
 		LIMIT $1
 	`, limit)
 	if err != nil {

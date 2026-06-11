@@ -37,7 +37,7 @@ function fmtTs(s: string) {
 
   <ul class="grid gap-2">
     {items.map((e) => (
-      <li class:list={["rounded border p-3 text-sm", e.success ? "border-neutral-200 dark:border-neutral-800" : "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30"]}>
+      <li class:list={["rounded-md border p-3 text-sm", e.success ? "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900" : "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30"]}>
         <div class="flex flex-wrap items-center gap-2">
           <code class="rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800">{e.action}</code>
           <span class="text-xs text-neutral-500">{fmtTs(e.created_at)}</span>

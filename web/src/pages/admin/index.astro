@@ -13,28 +13,28 @@ if (!user || !user.is_admin) return Astro.redirect("/groups");
   </p>
 
   <div class="grid gap-3">
-    <a href="/admin/users" class="rounded-lg border border-neutral-200 px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900 flex items-center gap-3">
+    <a href="/admin/users" class="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500">
       <FaIcon name="users" size={20} />
       <div>
         <div class="font-medium">Users</div>
         <div class="text-xs text-neutral-600 dark:text-neutral-400">List, add, remove, reset passwords.</div>
       </div>
     </a>
-    <a href="/admin/groups" class="rounded-lg border border-neutral-200 px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900 flex items-center gap-3">
+    <a href="/admin/groups" class="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500">
       <FaIcon name="layer-group" size={20} />
       <div>
         <div class="font-medium">All groups</div>
         <div class="text-xs text-neutral-600 dark:text-neutral-400">Inspect every group; remove unwanted ones.</div>
       </div>
     </a>
-    <a href="/admin/smtp" class="rounded-lg border border-neutral-200 px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900 flex items-center gap-3">
+    <a href="/admin/smtp" class="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500">
       <FaIcon name="envelope" size={20} />
       <div>
         <div class="font-medium">SMTP</div>
         <div class="text-xs text-neutral-600 dark:text-neutral-400">Configure outbound email (password is encrypted at rest).</div>
       </div>
     </a>
-    <a href="/admin/audit" class="rounded-lg border border-neutral-200 px-4 py-3 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900 flex items-center gap-3">
+    <a href="/admin/audit" class="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500">
       <FaIcon name="clock-rotate-left" size={20} />
       <div>
         <div class="font-medium">Audit log</div>

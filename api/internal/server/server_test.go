@@ -137,7 +137,7 @@ func setup(t *testing.T) *testStack {
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
 	categorySvc := service.NewCategoryService(categories)
-	activityRepo := repo.NewActivityRepo(pool)
+	transactionRepo := repo.NewTransactionRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
 	smtpRepo := repo.NewSmtpRepo(pool)
 	setupRepo := repo.NewSetupRepo(pool)
@@ -178,7 +178,8 @@ func setup(t *testing.T) *testStack {
 		Balances:      service.NewBalanceService(balances, groups),
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
-		Activity:      service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring),
+		Transactions:      service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
+		Activity:      service.NewActivityService(groupSvc, repo.NewActivityRepo(pool)),
 		SearchSvc:     service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,
@@ -863,10 +864,10 @@ func TestGoldenPath(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-// TestActivityFeed exercises the merged /v1/groups/{id}/activity endpoint:
+// TestTransactionFeed exercises the merged /v1/groups/{id}/transactions endpoint:
 // page size, ordering invariant (newest first), cursor continuation across
 // multiple pages, no-overlap guarantee, and 403 for non-members.
-func TestActivityFeed(t *testing.T) {
+func TestTransactionFeed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration: needs Docker/testcontainers")
 	}
@@ -934,7 +935,7 @@ func TestActivityFeed(t *testing.T) {
 	// Page 1: default limit 50.
 	collected := map[string]bool{}
 	var lastAt string
-	resp, p1 := request(t, "GET", base+"/v1/groups/"+groupID+"/activity", nil, cookieA)
+	resp, p1 := request(t, "GET", base+"/v1/groups/"+groupID+"/transactions", nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	items1 := p1["items"].([]any)
 	require.Len(t, items1, 50)
@@ -958,7 +959,7 @@ func TestActivityFeed(t *testing.T) {
 
 	// Page 2: cursor + limit 25.
 	cursor := p1["next_cursor"].(string)
-	resp, p2 := request(t, "GET", base+"/v1/groups/"+groupID+"/activity?limit=25&cursor="+cursor, nil, cookieA)
+	resp, p2 := request(t, "GET", base+"/v1/groups/"+groupID+"/transactions?limit=25&cursor="+cursor, nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	items2 := p2["items"].([]any)
 	require.Len(t, items2, 25)
@@ -980,7 +981,7 @@ func TestActivityFeed(t *testing.T) {
 
 	// Page 3: drains the remaining 5 items, no next_cursor.
 	cursor = p2["next_cursor"].(string)
-	resp, p3 := request(t, "GET", base+"/v1/groups/"+groupID+"/activity?limit=25&cursor="+cursor, nil, cookieA)
+	resp, p3 := request(t, "GET", base+"/v1/groups/"+groupID+"/transactions?limit=25&cursor="+cursor, nil, cookieA)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	items3 := p3["items"].([]any)
 	require.Len(t, items3, totalCount-50-25)
@@ -1003,11 +1004,11 @@ func TestActivityFeed(t *testing.T) {
 
 	// Authz: a non-member gets 403.
 	_, cookieC := registerUser(t, base, "feed-c@test.dev", "passwordpassword", "FeedC")
-	resp, _ = request(t, "GET", base+"/v1/groups/"+groupID+"/activity", nil, cookieC)
+	resp, _ = request(t, "GET", base+"/v1/groups/"+groupID+"/transactions", nil, cookieC)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
 	// Bad cursor → 400.
-	resp, _ = request(t, "GET", base+"/v1/groups/"+groupID+"/activity?cursor=not-a-real-cursor", nil, cookieA)
+	resp, _ = request(t, "GET", base+"/v1/groups/"+groupID+"/transactions?cursor=not-a-real-cursor", nil, cookieA)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 

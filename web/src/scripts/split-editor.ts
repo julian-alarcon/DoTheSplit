@@ -7,6 +7,8 @@
 // On form submit, we re-validate and fill [name="splits_json"] so the SSR
 // handler can forward {mode, splits:[{user_id, value?}]} to the Go API.
 
+import { formatMoney } from "@/lib/currencies";
+
 type Mode = "equal" | "exact" | "percent";
 
 interface Member {
@@ -60,14 +62,6 @@ function parseDefault(raw: string | undefined): DefaultSplitEntry[] {
   } catch {
     return [];
   }
-}
-
-function formatCents(cents: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    currencyDisplay: "narrowSymbol",
-  }).format(cents / 100);
 }
 
 // Drop trailing zeros (and the dot) from a fixed-2 decimal: "50.00" → "50", "33.30" → "33.3".
@@ -289,7 +283,7 @@ function setupEditor(root: HTMLElement) {
         }
       }
       const share = shares.get(s.userID) ?? 0;
-      r.preview.textContent = s.included ? formatCents(share, currency) : "-";
+      r.preview.textContent = s.included ? formatMoney(share, currency) : "-";
       r.label.textContent = twoPersonLabel(s.userID);
     }
 
@@ -297,14 +291,14 @@ function setupEditor(root: HTMLElement) {
     let remainingText = "";
     let valid = true;
     if (mode === "equal") {
-      sumDisplay = formatCents(amount, currency);
+      sumDisplay = formatMoney(amount, currency);
       remainingText = "";
     } else if (mode === "exact") {
       let sum = 0;
       for (const s of state) if (s.included) sum += s.value;
-      sumDisplay = `${formatCents(sum, currency)} / ${formatCents(amount, currency)}`;
+      sumDisplay = `${formatMoney(sum, currency)} / ${formatMoney(amount, currency)}`;
       const remaining = amount - sum;
-      remainingText = remaining === 0 ? "" : `Remaining: ${formatCents(remaining, currency)}`;
+      remainingText = remaining === 0 ? "" : `Remaining: ${formatMoney(remaining, currency)}`;
       valid = sum === amount && amount > 0 && state.some((s) => s.included);
     } else {
       let bps = 0;
@@ -338,7 +332,7 @@ function setupEditor(root: HTMLElement) {
       if (!s.included) continue;
       const share = shares.get(s.userID) ?? 0;
       const name = memberByID.get(s.userID)?.name ?? s.userID;
-      parts.push(`${name}: ${formatCents(share, currency)}`);
+      parts.push(`${name}: ${formatMoney(share, currency)}`);
     }
     summary.textContent =
       mode === "equal" ? `Split equally between ${state.filter((s) => s.included).length} member(s)` : parts.join(" · ");

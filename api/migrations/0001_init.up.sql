@@ -133,6 +133,10 @@ CREATE TABLE expenses (
     notes        TEXT NOT NULL DEFAULT '',
     incurred_at  TIMESTAMPTZ NOT NULL,
     category_id  UUID NOT NULL REFERENCES categories(id),
+    -- Links a materialized expense back to the recurring template that spawned
+    -- it. Nullable: manual expenses have no template. FK + index are added after
+    -- recurring_expenses is created below.
+    recurring_expense_id UUID,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at   TIMESTAMPTZ
 );
@@ -181,6 +185,15 @@ CREATE TABLE recurring_expenses (
 CREATE INDEX idx_recurring_next_run
     ON recurring_expenses (next_run_at)
     WHERE deleted_at IS NULL;
+
+-- expenses.recurring_expense_id FK + index, deferred to here because
+-- recurring_expenses must exist first.
+ALTER TABLE expenses
+    ADD CONSTRAINT expenses_recurring_expense_id_fkey
+    FOREIGN KEY (recurring_expense_id) REFERENCES recurring_expenses(id);
+CREATE INDEX idx_expenses_recurring
+    ON expenses (recurring_expense_id)
+    WHERE recurring_expense_id IS NOT NULL;
 
 CREATE TABLE expense_revisions (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -276,3 +289,24 @@ CREATE TABLE app_setup (
     completed_at        TIMESTAMPTZ,
     completed_by        UUID REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- Append-only feed of group actions. group_id cascades like every other
+-- group-scoped table. actor_id is nullable (NULL = worker/system) and is a
+-- plain FK because users are soft-deleted, never hard-deleted. expense_id /
+-- settlement_id are plain nullable FKs with NO cascade: their targets are
+-- soft-deleted (deleted_at), so the row always survives and a `*.deleted`
+-- event can still resolve the description it points at.
+CREATE TABLE activity_events (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id      UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    actor_id      UUID REFERENCES users(id),
+    action        TEXT NOT NULL CHECK (action IN (
+                      'expense.created','expense.updated','expense.deleted',
+                      'settlement.created','settlement.updated','settlement.deleted')),
+    expense_id    UUID REFERENCES expenses(id),
+    settlement_id UUID REFERENCES settlements(id),
+    metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_activity_events_group_keyset
+    ON activity_events (group_id, created_at DESC, id DESC);

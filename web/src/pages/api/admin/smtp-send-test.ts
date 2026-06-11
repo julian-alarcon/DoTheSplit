@@ -1,13 +1,11 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 export const POST: APIRoute = async ({ request, redirect }) => {
-  const cookie = request.headers.get("cookie") ?? "";
-  const res = await fetch(`${internalBase}/v1/admin/smtp/send-test`, {
+  const cookie = cookieFrom(request);
+  const res = await apiFetch("/v1/admin/smtp/send-test", {
     method: "POST",
-    headers: { cookie },
+    cookie,
   });
   if (res.status === 404) return redirect("/admin/smtp?send=not_configured", 302);
   if (!res.ok) return redirect("/admin/smtp?send=error", 302);

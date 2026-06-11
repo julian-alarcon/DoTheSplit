@@ -1,5 +1,5 @@
-// Helpers for the "Month YYYY" dividers that group the activity feed by
-// calendar month. The activity API returns items newest-first, so when the
+// Helpers for the "Month YYYY" dividers that group the transaction feed by
+// calendar month. The transaction API returns items newest-first, so when the
 // month flips we emit a header before the next item. Pagination cooperates by
 // emitting a header at the *start* of every fragment too; the client
 // deduplicates if the first fragment header matches the last one already on
@@ -13,7 +13,7 @@ export type MonthHeader = {
   label: string;
 };
 
-export type ActivityRow<T> =
+export type TransactionRow<T> =
   | MonthHeader
   | { kind: "item"; item: T };
 
@@ -29,14 +29,14 @@ export function withMonthHeaders<T>(
   items: T[],
   getOccurredAt: (item: T) => string,
   locale: string,
-): ActivityRow<T>[] {
+): TransactionRow<T>[] {
   if (items.length === 0) return [];
   const fmt = new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
   });
-  const out: ActivityRow<T>[] = [];
+  const out: TransactionRow<T>[] = [];
   let lastKey: string | null = null;
   for (const item of items) {
     const d = new Date(getOccurredAt(item));

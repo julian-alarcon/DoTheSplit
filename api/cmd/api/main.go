@@ -66,6 +66,7 @@ func main() {
 	balances := repo.NewBalanceRepo(pool)
 	recurring := repo.NewRecurringRepo(pool)
 	categories := repo.NewCategoryRepo(pool)
+	transactionRepo := repo.NewTransactionRepo(pool)
 	activityRepo := repo.NewActivityRepo(pool)
 	searchRepo := repo.NewSearchRepo(pool)
 	auditRepo := repo.NewAuditRepo(pool)
@@ -85,7 +86,8 @@ func main() {
 	balanceSvc := service.NewBalanceService(balances, groups)
 	settlementSvc := service.NewSettlementService(settlements, groups)
 	recurringSvc := service.NewRecurringService(recurring, expenses, groups, categorySvc)
-	activitySvc := service.NewActivityService(groupSvc, activityRepo, expenses, settlements, recurring)
+	transactionSvc := service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring)
+	activitySvc := service.NewActivityService(groupSvc, activityRepo)
 	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
 	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, auth, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
@@ -126,6 +128,7 @@ func main() {
 		Balances:      balanceSvc,
 		Settlements:   settlementSvc,
 		Recurring:     recurringSvc,
+		Transactions:      transactionSvc,
 		Activity:      activitySvc,
 		SearchSvc:     searchSvc,
 		Imports:          importSvc,
@@ -147,6 +150,9 @@ func main() {
 		Addr:              cfg.HTTPAddr,
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

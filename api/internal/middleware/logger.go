@@ -22,7 +22,7 @@ func Logger(logger *slog.Logger) gin.HandlerFunc {
 			slog.String("path", path),
 			slog.Int("status", c.Writer.Status()),
 			slog.Duration("dur", time.Since(start)),
-			slog.String("ip", clientIP(c.Request)),
+			slog.String("ip", c.ClientIP()),
 			slog.String("req_id", c.GetString("request_id")),
 		)
 	}

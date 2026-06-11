@@ -295,7 +295,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 				Note:        st.Note,
 				SettledAt:   when,
 			}
-			if err := s.settlements.Create(ctx, settlement); err != nil {
+			if err := s.settlements.Create(ctx, settlement, actorID); err != nil {
 				return ImportSplitwiseResult{}, err
 			}
 			continue

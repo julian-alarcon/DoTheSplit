@@ -63,19 +63,19 @@ func (s *Server) Search(c *gin.Context) {
 }
 
 func toAPISearchResponse(r *service.SearchResult) apigen.SearchResponse {
-	items := make([]apigen.ActivityItem, 0, len(r.Items))
+	items := make([]apigen.TransactionItem, 0, len(r.Items))
 	for _, item := range r.Items {
-		ai := apigen.ActivityItem{
-			Kind:       apigen.ActivityItemKind(item.Kind),
+		ai := apigen.TransactionItem{
+			Kind:       apigen.TransactionItemKind(item.Kind),
 			OccurredAt: item.OccurredAt,
 		}
 		switch item.Kind {
-		case repo.ActivityExpense:
+		case repo.TransactionExpense:
 			if item.Expense != nil {
 				e := toAPIExpense(item.Expense)
 				ai.Expense = &e
 			}
-		case repo.ActivitySettlement:
+		case repo.TransactionSettlement:
 			if item.Settlement != nil {
 				st := toAPISettlement(item.Settlement)
 				ai.Settlement = &st

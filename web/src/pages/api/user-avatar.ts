@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 /**
  * Streaming proxy for `/v1/users/{id}/avatar` so the browser talks to the
@@ -10,9 +8,8 @@ const internalBase =
 export const GET: APIRoute = async ({ request, url }) => {
   const id = url.searchParams.get("id");
   if (!id) return new Response("missing id", { status: 400 });
-  const cookie = request.headers.get("cookie") ?? "";
-  const upstream = await fetch(`${internalBase}/v1/users/${id}/avatar`, {
-    headers: { cookie },
+  const upstream = await apiFetch(`/v1/users/${id}/avatar`, {
+    cookie: cookieFrom(request),
   });
   if (!upstream.ok) {
     return new Response(null, { status: upstream.status });

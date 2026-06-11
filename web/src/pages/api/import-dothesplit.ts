@@ -1,13 +1,11 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 // Phase-2 endpoint for the dothesplit-flavored importer. Identical to
 // import-splitwise.ts modulo the upstream URL.
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
 
   const csv = (form.get("csv") ?? "").toString();
   const groupName = (form.get("group_name") ?? "").toString().trim();
@@ -38,16 +36,16 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect("/import/dothesplit?error=missing_fields", 302);
   }
 
-  const res = await fetch(`${internalBase}/v1/imports/dothesplit`, {
+  const res = await apiFetch("/v1/imports/dothesplit", {
     method: "POST",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({
+    cookie,
+    json: {
       csv,
       group_name: groupName,
       default_currency: currency || "EUR",
       members,
       dry_run: false,
-    }),
+    },
   });
   if (!res.ok) {
     let code = "import_failed";

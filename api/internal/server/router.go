@@ -14,7 +14,14 @@ import (
 func New(s *handlers.Server) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	// Gin trusts all proxies by default, which would let any client forge
+	// X-Forwarded-For and spoof their IP for rate limiting + audit logs. Pin
+	// the trust to the configured proxies (empty = trust none, use RemoteAddr).
+	if err := r.SetTrustedProxies(s.Cfg.TrustedProxies); err != nil {
+		panic("server: set trusted proxies: " + err.Error())
+	}
 	r.Use(gin.Recovery())
+	r.Use(mw.MaxBodyBytes(mw.DefaultMaxBodyBytes))
 	r.Use(requestID())
 	r.Use(mw.Logger(slog.Default()))
 	r.Use(mw.SecurityHeaders(s.Cfg.CookieSecure))
@@ -76,6 +83,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/expenses/:id", s.GetExpense)
 	auth.PATCH("/expenses/:id", s.UpdateExpense)
 	auth.DELETE("/expenses/:id", s.DeleteExpense)
+	auth.POST("/expenses/:id/restore", s.RestoreExpense)
 	auth.GET("/expenses/:id/revisions", s.ListExpenseRevisions)
 
 	auth.GET("/categories", s.ListCategories)
@@ -87,7 +95,9 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/settlements/:id", s.GetSettlement)
 	auth.PATCH("/settlements/:id", s.UpdateSettlement)
 	auth.DELETE("/settlements/:id", s.DeleteSettlement)
+	auth.POST("/settlements/:id/restore", s.RestoreSettlement)
 
+	auth.GET("/groups/:id/transactions", s.ListTransactions)
 	auth.GET("/groups/:id/activity", s.ListActivity)
 
 	auth.GET("/search", s.Search)

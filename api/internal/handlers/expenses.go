@@ -44,7 +44,8 @@ func (s *Server) CreateExpense(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	incurredAt := time.Now().UTC()
+	// Leave zero when omitted; the service anchors the default to noon UTC.
+	var incurredAt time.Time
 	if req.IncurredAt != nil {
 		incurredAt = *req.IncurredAt
 	}
@@ -237,6 +238,31 @@ func (s *Server) DeleteExpense(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// RestoreExpense un-deletes a soft-deleted expense (any group member).
+func (s *Server) RestoreExpense(c *gin.Context) {
+	u := middleware.User(c)
+	expenseID, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := s.Expenses.Restore(c.Request.Context(), u.ID, expenseID)
+	switch {
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		return
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case errors.Is(err, service.ErrAlreadyActive):
+		writeErr(c, http.StatusConflict, "conflict", "expense is not deleted")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, toAPIExpense(out))
+}
+
 func toAPIExpense(e *repo.Expense) apigen.Expense {
 	splits := make([]apigen.Split, 0, len(e.Splits))
 	for _, sp := range e.Splits {
@@ -254,6 +280,7 @@ func toAPIExpense(e *repo.Expense) apigen.Expense {
 		Notes:       e.Notes,
 		IncurredAt:  e.IncurredAt,
 		CreatedAt:   e.CreatedAt,
+		DeletedAt:   e.DeletedAt,
 		Splits:      splits,
 	}
 }

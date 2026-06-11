@@ -129,7 +129,7 @@ func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, di
 
 	// Bootstrap admin is auto-verified - they typed their email into the
 	// setup form themselves, and SMTP definitionally isn't configured yet.
-	if _, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, repoUser.ID); err != nil {
+	if err := s.auth.users.MarkEmailVerified(ctx, tx, repoUser.ID); err != nil {
 		return nil, "", err
 	}
 	out.EmailVerifiedAt = ptrNow()

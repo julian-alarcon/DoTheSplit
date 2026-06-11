@@ -4,11 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
-	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
@@ -47,26 +47,37 @@ func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {
 	out := apigen.ActivityPage{
 		Items: make([]apigen.ActivityItem, 0, len(p.Items)),
 	}
-	for _, item := range p.Items {
+	for _, h := range p.Items {
+		kind := apigen.ActivityItemTargetKindExpense
+		if strings.HasPrefix(string(h.Action), "settlement.") {
+			kind = apigen.ActivityItemTargetKindSettlement
+		}
 		ai := apigen.ActivityItem{
-			Kind:       apigen.ActivityItemKind(item.Kind),
-			OccurredAt: item.OccurredAt,
+			Id:          h.ID,
+			Action:      apigen.ActivityItemAction(h.Action),
+			OccurredAt:  h.OccurredAt,
+			TargetId:    h.TargetID,
+			TargetKind:  kind,
+			Description: h.Description,
+			AmountCents: h.AmountCents,
+			Currency:    h.Currency,
+			Recurring:   h.Recurring,
+			FromUserId:  h.FromUserID,
+			ToUserId:    h.ToUserID,
 		}
-		if item.Cadence != "" {
-			c := apigen.Cadence(item.Cadence)
-			ai.Cadence = &c
+		if h.ActorID != nil && h.ActorName != nil {
+			ai.Actor = &apigen.ActivityActor{
+				UserId:          *h.ActorID,
+				DisplayName:     *h.ActorName,
+				HasAvatar:       h.ActorAvatarUpdatedAt != nil,
+				AvatarUpdatedAt: h.ActorAvatarUpdatedAt,
+			}
 		}
-		switch item.Kind {
-		case repo.ActivityExpense:
-			if item.Expense != nil {
-				e := toAPIExpense(item.Expense)
-				ai.Expense = &e
-			}
-		case repo.ActivitySettlement:
-			if item.Settlement != nil {
-				st := toAPISettlement(item.Settlement)
-				ai.Settlement = &st
-			}
+		if h.CategorySlug != nil {
+			ai.CategorySlug = h.CategorySlug
+		}
+		if h.CategoryGroupLabel != nil {
+			ai.CategoryGroupLabel = h.CategoryGroupLabel
 		}
 		out.Items = append(out.Items, ai)
 	}

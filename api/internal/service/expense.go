@@ -10,6 +10,15 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
+// defaultOccurredAt anchors an omitted expense/settlement date to noon UTC on
+// the current day. Clients that pick a date send "YYYY-MM-DDT12:00:00Z", so
+// anchoring at noon keeps a same-day omitted date sorting alongside picked ones
+// (the transaction feed orders by occurred_at, then created_at).
+func defaultOccurredAt() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+}
+
 type SplitMode string
 
 const (
@@ -31,6 +40,7 @@ var (
 	ErrPayerNotMember = errors.New("payer is not a group member")
 	ErrSplitNotMember = errors.New("split user is not a group member")
 	ErrForbidden      = errors.New("forbidden")
+	ErrAlreadyActive  = errors.New("not deleted")
 )
 
 type ExpenseService struct {
@@ -76,7 +86,7 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 		in.Currency = g.DefaultCurrency
 	}
 	if in.IncurredAt.IsZero() {
-		in.IncurredAt = time.Now().UTC()
+		in.IncurredAt = defaultOccurredAt()
 	}
 
 	// Validate payer is a group member.
@@ -123,14 +133,13 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 	return e, nil
 }
 
-// Get returns a single expense by id, enforcing group membership.
+// Get returns a single expense by id, enforcing group membership. Soft-deleted
+// expenses are returned too (with DeletedAt set) so the detail page can render a
+// read-only restore view; Update and Delete re-check DeletedAt themselves.
 func (s *ExpenseService) Get(ctx context.Context, actorID, id uuid.UUID) (*repo.Expense, error) {
 	e, err := s.exps.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if e.DeletedAt != nil {
-		return nil, repo.ErrNotFound
 	}
 	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
 		return nil, err
@@ -249,7 +258,26 @@ func (s *ExpenseService) Delete(ctx context.Context, actorID, expenseID uuid.UUI
 	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
 		return err
 	}
-	return s.exps.SoftDelete(ctx, expenseID)
+	return s.exps.SoftDelete(ctx, expenseID, actorID)
+}
+
+// Restore un-deletes a soft-deleted expense. Any group member may restore; the
+// row's deleted_at is cleared and the audit trail records the action.
+func (s *ExpenseService) Restore(ctx context.Context, actorID, expenseID uuid.UUID) (*repo.Expense, error) {
+	e, err := s.exps.FindByID(ctx, expenseID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
+		return nil, err
+	}
+	if e.DeletedAt == nil {
+		return nil, ErrAlreadyActive
+	}
+	if err := s.exps.Restore(ctx, expenseID, actorID); err != nil {
+		return nil, err
+	}
+	return s.exps.FindByID(ctx, expenseID)
 }
 
 func (s *ExpenseService) requireMember(ctx context.Context, groupID, userID uuid.UUID) error {

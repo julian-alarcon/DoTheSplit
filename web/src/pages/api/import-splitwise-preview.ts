@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom, passthroughJSON } from "@/lib/api/forward";
 
 const HEADER_PREFIX = ["Date", "Description", "Category", "Cost", "Currency"] as const;
 
@@ -37,7 +35,7 @@ function firstCurrency(csv: string): string {
 // directly. The Go service is the only place the CSV is parsed - the client
 // is just a transport here, so we don't trust any of its derived fields.
 export const POST: APIRoute = async ({ request }) => {
-  const cookie = request.headers.get("cookie") ?? "";
+  const cookie = cookieFrom(request);
   let payload: { csv?: string; group_name_hint?: string };
   try {
     payload = await request.json();
@@ -59,20 +57,16 @@ export const POST: APIRoute = async ({ request }) => {
     email: `preview-${i}@example.invalid`,
   }));
 
-  const res = await fetch(`${internalBase}/v1/imports/splitwise`, {
+  const res = await apiFetch("/v1/imports/splitwise", {
     method: "POST",
-    headers: { "Content-Type": "application/json", cookie },
-    body: JSON.stringify({
+    cookie,
+    json: {
       csv,
       group_name: groupName,
       default_currency: firstCurrency(csv),
       members: placeholders,
       dry_run: true,
-    }),
+    },
   });
-  const text = await res.text();
-  return new Response(text, {
-    status: res.status,
-    headers: { "Content-Type": res.headers.get("Content-Type") ?? "application/json" },
-  });
+  return passthroughJSON(res, await res.text());
 };

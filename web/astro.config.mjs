@@ -34,12 +34,20 @@ export default defineConfig({
   },
   security: {
     checkOrigin: false,
-    // CSP: Astro auto-hashes <script is:inline> blocks; Tailwind-injected
-    // inline <style> tags still need 'unsafe-inline'.
+    // CSP: Astro auto-hashes its own bundled scripts (client islands,
+    // <script src> modules) but NOT author-written <script is:inline> blocks -
+    // those need their hash added by hand (see scriptDirective below).
+    // Tailwind-injected inline <style> tags still need 'unsafe-inline'.
     csp: {
       algorithm: "SHA-256",
       styleDirective: {
         resources: ["'self'", "'unsafe-inline'"],
+      },
+      // Hash of the synchronous theme-boot is:inline block in Base.astro.
+      // Astro auto-hashes its own bundled scripts but not is:inline blocks, so
+      // this one must be registered by hand. Recompute if that script changes.
+      scriptDirective: {
+        hashes: ["sha256-9Jmc8B18ot7J+hV7HcN7yjjh7HnGwBbvXBSgLb3rKs0="],
       },
     },
   },

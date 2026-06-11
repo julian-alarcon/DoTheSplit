@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,16 @@ func TestResolveSplitsDuplicateUser(t *testing.T) {
 	id := uuid.New()
 	_, err := resolveSplits(SplitEqual, 100, []SplitInput{{UserID: id}, {UserID: id}})
 	require.Error(t, err)
+}
+
+func TestDefaultOccurredAtAnchorsNoonUTC(t *testing.T) {
+	got := defaultOccurredAt()
+	now := time.Now().UTC()
+	require.Equal(t, now.Year(), got.Year())
+	require.Equal(t, now.Month(), got.Month())
+	require.Equal(t, now.Day(), got.Day())
+	require.Equal(t, 12, got.Hour())
+	require.Equal(t, 0, got.Minute())
+	require.Equal(t, 0, got.Second())
+	require.Equal(t, time.UTC, got.Location())
 }

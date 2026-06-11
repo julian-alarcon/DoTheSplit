@@ -109,11 +109,11 @@ func (s *GroupService) Update(ctx context.Context, groupID, actorID uuid.UUID, i
 			return nil, nil, err
 		}
 		if cur != current.DefaultCurrency {
-			hasActivity, err := s.groups.HasActivity(ctx, groupID)
+			hasTransactions, err := s.groups.HasTransactions(ctx, groupID)
 			if err != nil {
 				return nil, nil, err
 			}
-			if hasActivity {
+			if hasTransactions {
 				return nil, nil, ErrCurrencyLocked
 			}
 		}

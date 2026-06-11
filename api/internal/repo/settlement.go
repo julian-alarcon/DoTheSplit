@@ -28,19 +28,52 @@ type SettlementRepo struct {
 
 func NewSettlementRepo(p *pgxpool.Pool) *SettlementRepo { return &SettlementRepo{pool: p} }
 
-func (r *SettlementRepo) Create(ctx context.Context, s *Settlement) error {
-	return r.pool.QueryRow(ctx, `
+const (
+	settlementCols            = `id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at`
+	settlementColsWithDeleted = settlementCols + `, deleted_at`
+)
+
+func (r *SettlementRepo) Create(ctx context.Context, s *Settlement, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := tx.QueryRow(ctx, `
 		INSERT INTO settlements (group_id, from_user, to_user, amount_cents, note, settled_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at
 	`, s.GroupID, s.FromUser, s.ToUser, s.AmountCents, s.Note, s.SettledAt).
-		Scan(&s.ID, &s.CreatedAt)
+		Scan(&s.ID, &s.CreatedAt); err != nil {
+		return err
+	}
+	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, ActionSettlementCreated); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// insertSettlementEvent writes a settlement activity event inside an existing
+// tx. The denormalized note/amount are resolved at read time via the join, so
+// no metadata is needed here.
+func insertSettlementEvent(ctx context.Context, tx pgx.Tx, groupID, settlementID, actorID uuid.UUID, action ActivityAction) error {
+	var actor *uuid.UUID
+	if actorID != uuid.Nil {
+		actor = &actorID
+	}
+	return insertActivityEvent(ctx, tx, ActivityEvent{
+		GroupID:      groupID,
+		ActorID:      actor,
+		Action:       action,
+		SettlementID: &settlementID,
+	})
 }
 
 func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*Settlement, error) {
 	var s Settlement
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at, deleted_at
+		SELECT `+settlementColsWithDeleted+`
 		FROM settlements
 		WHERE id = $1
 	`, id).Scan(&s.ID, &s.GroupID, &s.FromUser, &s.ToUser,
@@ -54,8 +87,14 @@ func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*Settlemen
 	return &s, nil
 }
 
-func (r *SettlementRepo) Update(ctx context.Context, s *Settlement) error {
-	tag, err := r.pool.Exec(ctx, `
+func (r *SettlementRepo) Update(ctx context.Context, s *Settlement, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE settlements
 		SET from_user = $2, to_user = $3, amount_cents = $4, note = $5, settled_at = $6
 		WHERE id = $1 AND deleted_at IS NULL
@@ -66,11 +105,21 @@ func (r *SettlementRepo) Update(ctx context.Context, s *Settlement) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, ActionSettlementUpdated); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
-	tag, err := r.pool.Exec(ctx, `
+func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var groupID uuid.UUID
+	tag, err := tx.Exec(ctx, `
 		UPDATE settlements SET deleted_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
 	`, id)
@@ -80,7 +129,40 @@ func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err := tx.QueryRow(ctx, `SELECT group_id FROM settlements WHERE id = $1`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, ActionSettlementDeleted); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *SettlementRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var groupID uuid.UUID
+	tag, err := tx.Exec(ctx, `
+		UPDATE settlements SET deleted_at = NULL
+		WHERE id = $1 AND deleted_at IS NOT NULL
+	`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := tx.QueryRow(ctx, `SELECT group_id FROM settlements WHERE id = $1`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, ActionSettlementRestored); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // FindByIDs returns the non-deleted settlements with the given IDs, keyed by id.
@@ -90,7 +172,7 @@ func (r *SettlementRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uu
 		return map[uuid.UUID]Settlement{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at
+		SELECT `+settlementCols+`
 		FROM settlements
 		WHERE id = ANY($1) AND deleted_at IS NULL
 	`, ids)
@@ -112,7 +194,7 @@ func (r *SettlementRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uu
 
 func (r *SettlementRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Settlement, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at
+		SELECT `+settlementCols+`
 		FROM settlements
 		WHERE group_id = $1 AND deleted_at IS NULL
 		ORDER BY settled_at DESC, created_at DESC

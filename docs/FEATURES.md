@@ -70,20 +70,25 @@ and optional free-text **notes** for context the description shouldn't carry.
 Any group member can edit description / amount / category / payer / splits /
 notes / date after the fact; splits either rescale proportionally on
 amount-only edits or are re-resolved when a new mode/split is supplied.
-Soft-delete is open to any group member. The full edit history shows who /
-when / field / old → new, including per-member split diffs.
+Soft-delete is open to any group member, and is reversible: a deleted expense
+still opens its detail page (read-only, with a "deleted" banner) where any
+member can **restore** it via `POST /v1/expenses/{id}/restore`, bringing it back
+into balances with its splits and edit history intact. The full edit history
+shows who / when / field / old to new, including per-member split diffs.
 
 ## Balances & settle-up
 
 Net-balance computation over all expenses + settlements, plus a simplified "X
 owes Y" view. Settlements are recorded directly from the group page, appear in
-the same paginated activity feed as expenses, and have their own detail page.
+the same paginated transaction feed as expenses, and have their own detail page.
 The settle-up form lets the actor pick **who is paying** (defaults to
 themselves), so a member can record a settlement on someone else's behalf
 without impersonating. Any group member can later edit a settlement
 (`PATCH /v1/settlements/{id}`): from / to / amount / note / settled-at are
 all mutable as long as both parties are still group members and differ from
-each other.
+each other. Settlements soft-delete and restore the same way expenses do
+(`POST /v1/settlements/{id}/restore`): a deleted settlement keeps a read-only
+detail page from which any member can bring it back into the balances.
 
 ## Recurring expenses
 
@@ -91,7 +96,7 @@ Templates with daily / weekly / biweekly / monthly / yearly cadence. A
 separate Go worker materializes a real expense on each cadence tick. Both the
 API and the UI (`/groups/{id}/recurring`) are shipped.
 
-## Activity feed
+## Transaction feed
 
 Paginated, time-ordered feed of expenses + settlements per group. Months are
 labelled, ordering matches the underlying timestamps regardless of insertion

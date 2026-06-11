@@ -7,7 +7,7 @@ import ThemeSwitcher from "@/components/ThemeSwitcher.astro";
 interface Props {
   title: string;
   // Opt-in wider cap for pages that genuinely benefit from a multi-column
-  // layout at ≥1024px (e.g. the group dashboard's Balances | Activity |
+  // layout at ≥1024px (e.g. the group dashboard's Balances | Transactions |
   // Add expense triptych). Default stays max-w-3xl (768px) - see the
   // single-column rule in CLAUDE.md.
   wide?: boolean;
@@ -47,12 +47,16 @@ const tzOverride = user?.timezone ?? null;
     <link rel="icon" type="image/x-icon" sizes="any" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <Font cssVariable="--font-inter" preload />
-    {/* Theme boot script: applies the stored theme before paint. Loaded as
-        an external module (not <script is:inline>) so Vite emits it as a
-        hashed asset that the strict CSP `script-src 'self'` allows. Astro
-        does not auto-hash raw <script is:inline> blocks placed in .astro
-        sources, so inlining the body would silently get blocked. */}
-    <script src="/src/scripts/theme-boot.ts"></script>
+    {/* Theme boot: MUST run synchronously before first paint, otherwise the
+        browser paints the light :root default and then flips to the stored
+        dark/high-contrast theme (a flash-of-wrong-theme, worst on slow
+        networks / heavy pages). A deferred `<script type="module" src>` runs
+        after first paint, so this is an `is:inline` classic script instead.
+        Astro does NOT auto-hash is:inline blocks, so its sha256 is registered
+        by hand in astro.config.mjs `security.csp.scriptDirective.hashes`. If
+        you edit the body below, recompute the hash and update that list or the
+        strict CSP (`script-src 'self'`) will block it. */}
+    <script is:inline>(()=>{try{var t=localStorage.getItem("dts_theme");document.documentElement.dataset.theme=t==="light"||t==="dark"||t==="high-contrast"?t:"dark"}catch(e){document.documentElement.dataset.theme="dark"}})();</script>
     <script src="/src/scripts/tz-cookie.ts"></script>
     <script src="/src/scripts/local-time.ts"></script>
     <script src="/src/scripts/dialog-scroll-lock.ts"></script>

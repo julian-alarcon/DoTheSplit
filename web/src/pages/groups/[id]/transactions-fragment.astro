@@ -1,0 +1,227 @@
+---
+// Server-rendered HTML fragment for the transaction Load-more island. Returns a
+// list of <li> items + a hidden div carrying the next cursor, no document
+// shell. The dashboard's transactions-load-more.ts fetches this URL as text and
+// appends the items into the existing <ul>.
+//
+// Render-only: no auth or 404 redirects (the API call already enforces that).
+import Avatar from "@/components/Avatar.astro";
+import FaIcon from "@/components/FaIcon.astro";
+import CategoryIcon from "@/components/CategoryIcon.astro";
+import { apiFor } from "@/lib/api/client";
+import { withMonthHeaders } from "@/lib/transaction-month";
+import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { shortName } from "@/lib/short-name";
+
+const { id } = Astro.params as { id: string };
+const cursor = Astro.url.searchParams.get("cursor") ?? "";
+const limit = Astro.url.searchParams.get("limit") ?? "25";
+
+const api = apiFor(Astro.locals.cookie);
+const [groupsRes, categoriesRes, transactionsRes] = await Promise.all([
+  api.GET("/v1/groups"),
+  api.GET("/v1/categories"),
+  api.GET("/v1/groups/{id}/transactions", {
+    params: { path: { id }, query: { cursor: cursor || undefined, limit: Number(limit) } },
+  }),
+]);
+const group = groupsRes.data?.find((g) => g.id === id);
+const categories = categoriesRes.data ?? [];
+const transactions = transactionsRes.data?.items ?? [];
+const nextCursor = transactionsRes.data?.next_cursor ?? "";
+
+const cadenceLabels: Record<string, string> = {
+  daily: "daily",
+  weekly: "weekly",
+  biweekly: "every 2 weeks",
+  monthly: "monthly",
+  yearly: "yearly",
+};
+const categoryByID = new Map(categories.map((c) => [c.id, c]));
+const memberByID = new Map((group?.members ?? []).map((m) => [m.user_id, m]));
+const nameByUserID = new Map<string, string>();
+for (const m of group?.members ?? []) nameByUserID.set(m.user_id, m.display_name);
+
+
+const viewerID = Astro.locals.user?.id ?? "";
+type ViewerStake =
+  | { kind: "lent"; cents: number }
+  | { kind: "owes"; cents: number }
+  | { kind: "none" };
+const viewerStake = (e: { payer_id: string; amount_cents: number; splits: Array<{ user_id: string; share_cents: number }> }): ViewerStake => {
+  if (!viewerID) return { kind: "none" };
+  const myShare = e.splits.find((s) => s.user_id === viewerID)?.share_cents ?? 0;
+  const iPaid = e.payer_id === viewerID;
+  const involved = iPaid || e.splits.some((s) => s.user_id === viewerID);
+  if (!involved) return { kind: "none" };
+  if (iPaid) {
+    const lent = e.amount_cents - myShare;
+    if (lent > 0) return { kind: "lent", cents: lent };
+    return { kind: "none" };
+  }
+  if (myShare > 0) return { kind: "owes", cents: myShare };
+  return { kind: "none" };
+};
+
+const currency = group?.default_currency ?? "EUR";
+const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
+const dayFmt = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
+
+const transactionRows = withMonthHeaders(
+  transactions,
+  (item) => item.expense?.incurred_at ?? item.settlement?.settled_at ?? "",
+  Astro.locals.locale,
+);
+---
+{transactionRows.map((row) => {
+  if (row.kind === "month-header") {
+    return (
+      <li
+        data-month-header
+        data-month-key={row.key}
+        class="px-1 pt-3 first:pt-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400"
+      >
+        {row.label}
+      </li>
+    );
+  }
+  const item = row.item;
+  if (item.kind === "expense" && item.expense) {
+    const e = item.expense;
+    const cat = categoryByID.get(e.category_id);
+    const cadence = item.cadence;
+    const stake = viewerStake(e);
+    const moneyFmtRow = moneyFormatter(e.currency);
+    return (
+      <li>
+        <a
+          href={`/groups/${id}/expenses/${e.id}`}
+          class="flex items-stretch justify-between gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:focus-visible:ring-neutral-500"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <span
+              class="shrink-0 inline-flex w-7 flex-col items-center justify-center leading-none"
+              title={cat?.label ?? ""}
+            >
+              <CategoryIcon slug={cat?.slug} groupLabel={cat?.group_label} size={28} />
+              <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                {monthFmt.format(new Date(e.incurred_at))}
+              </span>
+              <span class="-mt-0.5 text-s font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
+                {dayFmt.format(new Date(e.incurred_at))}
+              </span>
+            </span>
+            <div class="flex min-w-0 flex-col gap-y-0.5">
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+                <span class="truncate">{e.description}</span>
+                {cadence && (
+                  <span
+                    class="inline-flex items-center gap-0.5 rounded-full bg-neutral-100 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                    title={`Repeats ${cadenceLabels[cadence] ?? cadence}`}
+                  >
+                    <FaIcon name="arrows-rotate" size={9} />
+                    {cadenceLabels[cadence] ?? cadence}
+                  </span>
+                )}
+              </div>
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-500">
+                <span>paid by</span>
+                <Avatar
+                  userId={e.payer_id}
+                  displayName={nameByUserID.get(e.payer_id) ?? "?"}
+                  hasAvatar={memberByID.get(e.payer_id)?.has_avatar}
+                  avatarUpdatedAt={memberByID.get(e.payer_id)?.avatar_updated_at}
+                  size={12}
+                  class="opacity-60"
+                />
+                <span class="-ml-1 truncate">{shortName(nameByUserID.get(e.payer_id))}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex shrink-0 flex-col items-end justify-between gap-1">
+            <span class="text-[11px] tabular-nums">
+              {stake.kind === "lent" && (
+                <>
+                  <span class="text-[var(--color-emerald-900)] dark:text-[var(--color-emerald-200)]">you lent </span>
+                  <span class="font-mono text-neutral-700 dark:text-neutral-300">{moneyFmtRow.format(stake.cents / 100)}</span>
+                </>
+              )}
+              {stake.kind === "owes" && (
+                <>
+                  <span class="text-[var(--color-amber-700)] dark:text-[var(--color-amber-200)]">you owe </span>
+                  <span class="font-mono text-neutral-700 dark:text-neutral-300">{moneyFmtRow.format(stake.cents / 100)}</span>
+                </>
+              )}
+              {stake.kind === "none" && (
+                <span class="text-neutral-500 dark:text-neutral-500">not involved</span>
+              )}
+            </span>
+            <span class="font-mono text-lg tabular-nums">
+              {moneyFmtRow.format(e.amount_cents / 100)}
+            </span>
+          </div>
+        </a>
+      </li>
+    );
+  }
+  if (!item.settlement) return null;
+  const s = item.settlement;
+  const from = memberByID.get(s.from_user_id);
+  const to = memberByID.get(s.to_user_id);
+  return (
+    <li>
+      <a
+        href={`/groups/${id}/settlements/${s.id}`}
+        class="flex items-center justify-between gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-700"
+      >
+        <div class="flex min-w-0 items-center gap-3">
+          <span
+            class="shrink-0 inline-flex w-7 flex-col items-center justify-center leading-none"
+            title="Settlement"
+          >
+            <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+              <FaIcon name="arrow-right" size={14} />
+            </span>
+            <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+              {monthFmt.format(new Date(s.settled_at))}
+            </span>
+            <span class="-mt-0.5 text-s font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
+              {dayFmt.format(new Date(s.settled_at))}
+            </span>
+          </span>
+          <div class="flex min-w-0 flex-col gap-y-0.5">
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+              <Avatar
+                userId={s.from_user_id}
+                displayName={from?.display_name ?? "?"}
+                hasAvatar={from?.has_avatar}
+                avatarUpdatedAt={from?.avatar_updated_at}
+                size={16}
+                class="opacity-60"
+              />
+              <span class="-ml-1 truncate">{shortName(nameByUserID.get(s.from_user_id))}</span>
+              <span class="text-neutral-500 dark:text-neutral-500">paid</span>
+              <Avatar
+                userId={s.to_user_id}
+                displayName={to?.display_name ?? "?"}
+                hasAvatar={to?.has_avatar}
+                avatarUpdatedAt={to?.avatar_updated_at}
+                size={16}
+                class="opacity-60"
+              />
+              <span class="-ml-1 truncate">{shortName(nameByUserID.get(s.to_user_id))}</span>
+            </div>
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-neutral-500 dark:text-neutral-500">
+              <span>settlement</span>
+              {s.note && <span class="truncate">· {s.note}</span>}
+            </div>
+          </div>
+        </div>
+        <span class="shrink-0 font-mono text-lg tabular-nums">
+          {formatMoney(s.amount_cents, currency)}
+        </span>
+      </a>
+    </li>
+  );
+})}
+<div data-transactions-next-cursor={nextCursor} hidden></div>

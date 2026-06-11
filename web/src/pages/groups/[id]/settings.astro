@@ -4,15 +4,15 @@ import Avatar from "@/components/Avatar.astro";
 import ConfirmDialog from "@/components/ConfirmDialog.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import { apiFor } from "@/lib/api/client";
-import { COMMON_CURRENCIES, otherCurrencies, currencyLabel } from "@/lib/currencies";
+import { COMMON_CURRENCIES, otherCurrencies, currencyLabel, formatMoney } from "@/lib/currencies";
 
 const { id } = Astro.params as { id: string };
 const api = apiFor(Astro.locals.cookie);
 
-const [groupsRes, balancesRes, activityRes] = await Promise.all([
+const [groupsRes, balancesRes, transactionsRes] = await Promise.all([
   api.GET("/v1/groups"),
   api.GET("/v1/groups/{id}/balances", { params: { path: { id } } }),
-  api.GET("/v1/groups/{id}/activity", { params: { path: { id }, query: { limit: 1 } } }),
+  api.GET("/v1/groups/{id}/transactions", { params: { path: { id }, query: { limit: 1 } } }),
 ]);
 const group = groupsRes.data?.find((g) => g.id === id);
 if (!group) {
@@ -20,7 +20,7 @@ if (!group) {
 }
 // The currency is locked once the ledger has any expense or settlement -
 // changing it after that would silently reinterpret stored amount_cents.
-const currencyLocked = (activityRes.data?.items?.length ?? 0) > 0;
+const currencyLocked = (transactionsRes.data?.items?.length ?? 0) > 0;
 
 const currency = group.default_currency;
 const isCreator = group.created_by === Astro.locals.user?.id;
@@ -28,11 +28,6 @@ const isCreator = group.created_by === Astro.locals.user?.id;
 const myID = Astro.locals.user?.id ?? "";
 const myNetCents =
   balancesRes.data?.net?.find((b) => b.user_id === myID)?.net_cents ?? 0;
-const myMoneyFmt = new Intl.NumberFormat(undefined, {
-  style: "currency",
-  currency,
-  currencyDisplay: "narrowSymbol",
-});
 
 const isPair = group.members.length === 2;
 const pairMembers = isPair ? group.members : [];
@@ -67,7 +62,7 @@ const others = otherCurrencies();
     </p>
   )}
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Rename &amp; currency</h2>
     <form method="POST" action={`/api/group-settings?id=${id}`} class="flex flex-col gap-3">
       <label class="field">
@@ -105,7 +100,7 @@ const others = otherCurrencies();
       </label>
       {currencyLocked ? (
         <p id="currency-lock-hint" class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-          Currency is fixed after the first expense or settlement. To change it, delete all activity or create a new group.
+          Currency is fixed after the first expense or settlement. To change it, delete all transactions or create a new group.
         </p>
       ) : (
         <p class="-mt-1 text-xs text-neutral-600 dark:text-neutral-400">
@@ -116,7 +111,7 @@ const others = otherCurrencies();
     </form>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Members</h2>
     <ul class="mb-3 flex flex-col gap-2 text-sm">
       {group.members.map((m) => {
@@ -193,7 +188,7 @@ const others = otherCurrencies();
     <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">The invitee must already be registered.</p>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Default split</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       {!isPair
@@ -247,7 +242,7 @@ const others = otherCurrencies();
     </fieldset>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Export</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       Download every expense and settlement in this group as a CSV file. The format is a superset of Splitwise's export, so you can re-import it into either tool.
@@ -260,7 +255,7 @@ const others = otherCurrencies();
     </form>
   </section>
 
-  <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+  <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Import expenses</h2>
     <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
       Bulk-add expenses from a DoTheSplit-shaped CSV. Splits use this group's default rule (pinned percentage for 2-member groups, equal otherwise). Empty cells fall back to the group currency, the importer as payer, and the <code>other</code> category.
@@ -281,7 +276,7 @@ const others = otherCurrencies();
       </p>
       {myNetCents !== 0 && (
         <p class="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          You have a non-zero balance of <span class="font-mono">{myMoneyFmt.format(myNetCents / 100)}</span> in this group. Leaving without settling up means
+          You have a non-zero balance of <span class="font-mono">{formatMoney(myNetCents, currency)}</span> in this group. Leaving without settling up means
           {myNetCents > 0
             ? " others won't be reminded to pay you back."
             : " you won't be reminded to pay your share."}
@@ -315,7 +310,7 @@ const others = otherCurrencies();
   )}
 
   {isCreator && group.members.length > 1 && (
-    <section class="mb-2 rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
       <h2 class="mb-2 font-medium">Transfer ownership</h2>
       <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
         Hand the group to another member. You stay in the group as a regular member, and the new owner takes over creator-only powers (transfer, delete, remove members).

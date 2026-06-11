@@ -1,7 +1,5 @@
 import type { APIRoute } from "astro";
-
-const internalBase =
-  process.env.API_BASE_URL_INTERNAL ?? "http://localhost:8080";
+import { apiFetch, cookieFrom } from "@/lib/api/forward";
 
 // Submitted as a regular HTML form from the group settings page. We
 // forward a GET to the Go API with the user's cookie and stream the
@@ -12,14 +10,9 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const groupID = url.searchParams.get("id");
   if (!groupID) return new Response("missing id", { status: 400 });
 
-  const cookie = request.headers.get("cookie") ?? "";
-  const upstream = await fetch(
-    `${internalBase}/v1/groups/${groupID}/export.csv`,
-    {
-      method: "GET",
-      headers: { cookie },
-    },
-  );
+  const upstream = await apiFetch(`/v1/groups/${groupID}/export.csv`, {
+    cookie: cookieFrom(request),
+  });
   if (!upstream.ok) {
     return redirect(`/groups/${groupID}/settings?error=1`, 302);
   }

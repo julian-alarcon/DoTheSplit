@@ -44,6 +44,18 @@ func TestLoadValid(t *testing.T) {
 	require.Len(t, cfg.PasswordPepper, 32)
 }
 
+func TestLoadTrustedProxies(t *testing.T) {
+	setEnv(t, nil)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Empty(t, cfg.TrustedProxies)
+
+	setEnv(t, map[string]string{"TRUSTED_PROXIES": "10.0.0.0/8, 192.168.1.1 ,"})
+	cfg, err = Load()
+	require.NoError(t, err)
+	require.Equal(t, []string{"10.0.0.0/8", "192.168.1.1"}, cfg.TrustedProxies)
+}
+
 func TestLoadMissingDatabaseURL(t *testing.T) {
 	setEnv(t, nil)
 	t.Setenv("DATABASE_URL", "")

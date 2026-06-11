@@ -82,7 +82,8 @@ func (s *Server) CreateSettlement(c *gin.Context) {
 	if req.Note != nil {
 		note = *req.Note
 	}
-	settledAt := time.Now().UTC()
+	// Leave zero when omitted; the service anchors the default to noon UTC.
+	var settledAt time.Time
 	if req.SettledAt != nil {
 		settledAt = *req.SettledAt
 	}
@@ -183,6 +184,31 @@ func (s *Server) DeleteSettlement(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// RestoreSettlement un-deletes a soft-deleted settlement (any group member).
+func (s *Server) RestoreSettlement(c *gin.Context) {
+	u := middleware.User(c)
+	settlementID, ok := parseUUID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := s.Settlements.Restore(c.Request.Context(), u.ID, settlementID)
+	switch {
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(c, http.StatusNotFound, "not_found", "settlement not found")
+		return
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case errors.Is(err, service.ErrAlreadyActive):
+		writeErr(c, http.StatusConflict, "conflict", "settlement is not deleted")
+		return
+	case err != nil:
+		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, toAPISettlement(out))
+}
+
 func toAPISettlement(s *repo.Settlement) apigen.Settlement {
 	var note *string
 	if s.Note != "" {
@@ -198,5 +224,6 @@ func toAPISettlement(s *repo.Settlement) apigen.Settlement {
 		Note:        note,
 		SettledAt:   s.SettledAt,
 		CreatedAt:   s.CreatedAt,
+		DeletedAt:   s.DeletedAt,
 	}
 }

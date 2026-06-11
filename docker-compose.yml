@@ -62,6 +62,7 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
       EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}

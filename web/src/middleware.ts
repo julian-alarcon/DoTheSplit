@@ -11,6 +11,19 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   const path = ctx.url.pathname;
 
+  // Baseline security headers on every rendered response: block framing
+  // (clickjacking), stop MIME sniffing, and trim the Referer to same-origin.
+  // Admin pages additionally opt out of intermediary caching. Redirects skip
+  // this - they carry no framable body.
+  const finish = async () => {
+    const res = await next();
+    res.headers.set("X-Content-Type-Options", "nosniff");
+    res.headers.set("Referrer-Policy", "same-origin");
+    res.headers.set("X-Frame-Options", "DENY");
+    if (path.startsWith("/admin")) res.headers.set("Cache-Control", "no-store");
+    return res;
+  };
+
   // First-run setup probe. The endpoint is public (no cookie needed) and
   // returns one bool. Default to locked=true if the API is unreachable so a
   // network failure never accidentally exposes the install flow.
@@ -34,7 +47,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     }
     ctx.locals.timezone = resolveTimezone(undefined, cookie);
     ctx.locals.locale = resolveLocale(ctx.request.headers.get("accept-language"));
-    return next();
+    return finish();
   }
 
   // Setup is locked → resolve the session as usual.
@@ -75,12 +88,5 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return ctx.redirect("/groups");
   }
 
-  // Admin SSR responses must not be cached by intermediaries.
-  if (path.startsWith("/admin")) {
-    const res = await next();
-    res.headers.set("Cache-Control", "no-store");
-    res.headers.set("X-Frame-Options", "DENY");
-    return res;
-  }
-  return next();
+  return finish();
 });

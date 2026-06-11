@@ -2,9 +2,7 @@
 package middleware
 
 import (
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	limiter "github.com/ulule/limiter/v3"
@@ -30,7 +28,7 @@ func ipRateLimiter(prefix, rateSpec string) gin.HandlerFunc {
 	rate, _ := limiter.NewRateFromFormatted(rateSpec)
 	lim := limiter.New(memory.NewStore(), rate)
 	return func(c *gin.Context) {
-		ip := clientIP(c.Request)
+		ip := c.ClientIP()
 		ctx, err := lim.Get(c.Request.Context(), prefix+":"+ip)
 		if err != nil {
 			c.Next()
@@ -45,18 +43,4 @@ func ipRateLimiter(prefix, rateSpec string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

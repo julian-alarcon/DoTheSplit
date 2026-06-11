@@ -9,11 +9,11 @@ help:
 
 gen: gen-go gen-ts ## Regenerate server + client bindings from docs/openapi.yaml
 
-gen-go: ## Generate Go types + chi server interface
+gen-go: ## Generate Go models + embedded spec from docs/openapi.yaml
 	cd api && go generate ./...
 
 gen-ts: ## Generate TypeScript types for the web client
-	cd web && npx openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts
+	cd web && npm run gen:api
 
 migrate-up: ## Apply all migrations
 	cd api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate \
@@ -46,10 +46,10 @@ tidy: ## go mod tidy
 lint: lint-go lint-web ## Lint everything
 
 lint-go: ## Lint Go
-	cd api && golangci-lint run ./...
+	cd api && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
 
 lint-web: ## Lint web
-	cd web && npm run lint --silent || true
+	cd web && npm run check --silent
 
 build: ## Build Go binaries
 	cd api && go build -o bin/api ./cmd/api && go build -o bin/worker ./cmd/worker

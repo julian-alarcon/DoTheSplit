@@ -21,14 +21,14 @@ For local development you usually want the Quick start in [README.md](README.md#
 
 ### Step 1: Get the release artifacts
 
-Pick a release tag from <https://github.com/julian-alarcon/dothesplit/releases> and substitute it for `v0.7.0` below.
+Pick a release tag from <https://github.com/julian-alarcon/dothesplit/releases> and substitute it for `v1.0.0` below.
 
 ```sh
 mkdir -p ~/dothesplit && cd ~/dothesplit
-curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v0.7.0.tar.gz \
+curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
   | tar -xz --strip-components=1 \
-      'dothesplit-0.7.0/api/migrations' \
-      'dothesplit-0.7.0/.env.example'
+      'dothesplit-1.0.0/api/migrations' \
+      'dothesplit-1.0.0/.env.example'
 ```
 
 You should now have `api/migrations/*.sql` and `.env.example` in `~/dothesplit`.
@@ -51,12 +51,12 @@ Save the four secrets in a password manager **now**. Losing `EMAIL_ENC_KEY`, `EM
 
 ### Step 3: Write `docker-compose.yml`
 
-Save this as `docker-compose.yml` next to `.env`. It mirrors the project's compose file but pulls pinned release images from GHCR instead of building from source. Substitute your release tag for `v0.7.0`:
+Save this as `docker-compose.yml` next to `.env`. It mirrors the project's compose file but pulls pinned release images from GHCR instead of building from source. Substitute your release tag for `v1.0.0`:
 
 ```yaml
 services:
   postgres:
-    image: postgres:18.3-alpine3.22
+    image: postgres:18.4-alpine3.22
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dts}
@@ -65,7 +65,11 @@ services:
     volumes:
       - dts_pg_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dts} -d ${POSTGRES_DB:-dts}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-dts} -d ${POSTGRES_DB:-dts}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -95,7 +99,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=8m
 
   api:
-    image: ghcr.io/julian-alarcon/dothesplit-api:v0.7.0
+    image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,7 +130,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
 
   worker:
-    image: ghcr.io/julian-alarcon/dothesplit-api:v0.7.0
+    image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,7 +151,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
 
   web:
-    image: ghcr.io/julian-alarcon/dothesplit-web:v0.7.0
+    image: ghcr.io/julian-alarcon/dothesplit-web:1.0.0
     depends_on:
       - api
     environment:
@@ -239,27 +243,32 @@ This path uses host-path bind mounts under `/mnt/<pool>/apps-data/dothesplit/` s
 
 The TrueNAS Custom App wizard cannot create directories on save, so the install will fail if the bind-mount source is missing. Create everything up front from the shell:
 
-```sh
-storage filesystem mkdir path="/mnt/ssd-storage/apps-data/dothesplit"
-storage filesystem mkdir path="/mnt/ssd-storage/apps-data/dothesplit/pgdata"
-storage filesystem mkdir path="/mnt/ssd-storage/apps-data/dothesplit/migrations"
+Datasets:
 
-chown -R 999:999 /mnt/ssd-storage/apps-data/dothesplit/pgdata
-chmod 700        /mnt/ssd-storage/apps-data/dothesplit/pgdata
+- `ssd-storage/apps-data/dothesplit`
+
+The Custom App wizard cannot create directories on save, so create them up front
+from the shell:
+
+```sh
+mkdir -p /mnt/ssd-storage/apps-data/dothesplit/pgdata
+mkdir -p /mnt/ssd-storage/apps-data/dothesplit/migrations
+chown -R 70:70 /mnt/ssd-storage/apps-data/dothesplit/pgdata
+chmod 700      /mnt/ssd-storage/apps-data/dothesplit/pgdata
 ```
 
-About UID **999**: the upstream `postgres:18` image ships an internal `postgres` user with UID/GID 999, and that's the user the engine drops to after `initdb`. TrueNAS' own Custom App docs call out the same number for Postgres volumes. **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres will refuse to start on a directory it can't own.
+About UID **70**: the `postgres:18.3-alpine3.22` image ships an internal `postgres` user with UID/GID 70 (the Alpine convention; the Debian-based `postgres` images use 999 instead), and that's the user the engine drops to after `initdb`. **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres will refuse to start on a directory it can't own.
 
 The `migrations` directory does not need special ownership; the `migrate` container reads it `:ro`.
 
 ### Step 2: Drop the migrations on disk
 
-The `migrate` one-shot container reads SQL files from a host path. Fetch the migrations matching the release you intend to install (replace `v0.7.0` with the tag you want):
+The `migrate` one-shot container reads SQL files from a host path. Fetch the migrations matching the release you intend to install (replace `v1.0.0` with the tag you want):
 
 ```sh
 cd /mnt/ssd-storage/apps-data/dothesplit/migrations
-curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v0.7.0.tar.gz \
-  | tar -xz --strip-components=2 'dothesplit-0.7.0/api/migrations'
+curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
+  | tar -xz --strip-components=3 --wildcards '*/api/migrations'
 ls   # should list 0001_*.up.sql, 0001_*.down.sql, …
 ```
 
@@ -290,12 +299,12 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
 
 1. **Apps → Discover Apps → Custom App**.
 2. **Application Name**: `dothesplit`.
-3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. Both `api` and `web` use pinned GHCR release images instead of building from source. Substitute your release tag for `v0.7.0`:
+3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. Both `api` and `web` use pinned GHCR release images instead of building from source. Substitute your release tag for `v1.0.0`:
 
    ```yaml
    services:
      postgres:
-       image: postgres:18.3-alpine3.22
+       image: postgres:18.4-alpine3.22
        restart: unless-stopped
        environment:
          POSTGRES_USER: dts
@@ -334,7 +343,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          - /tmp:rw,noexec,nosuid,size=8m
 
      api:
-       image: ghcr.io/julian-alarcon/dothesplit-api:v0.7.0
+       image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
        depends_on:
          postgres:
            condition: service_healthy
@@ -365,7 +374,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          - /tmp:rw,noexec,nosuid,size=32m
 
      worker:
-       image: ghcr.io/julian-alarcon/dothesplit-api:v0.7.0
+       image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
        depends_on:
          postgres:
            condition: service_healthy
@@ -386,7 +395,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          - /tmp:rw,noexec,nosuid,size=32m
 
      web:
-       image: ghcr.io/julian-alarcon/dothesplit-web:v0.7.0
+       image: ghcr.io/julian-alarcon/dothesplit-web:1.0.0
        depends_on:
          - api
        environment:
@@ -405,19 +414,18 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
    ```
 
    Two details worth not changing:
-
    - The Postgres mount target stays `/var/lib/postgresql` (parent dir, not `…/data`). PG 18 stores data in a major-version-specific subdir so future `pg_upgrade --link` works in place; mounting at `…/data` makes the container fail to start.
    - The published port mappings drop the upstream `127.0.0.1:` host prefix because TrueNAS expects the app to be reachable on the LAN. If you put the app behind Traefik or another reverse proxy on the same host, prefer to attach it to the proxy's Docker network and stop publishing 3000/8080 to the host at all.
 
 4. **Environment Variables**: add the four secrets and the connection string to the Custom App's environment table:
 
-   | Name                | Value                                                              |
-   | ------------------- | ------------------------------------------------------------------ |
-   | `POSTGRES_PASSWORD` | (from Step 3)                                                      |
+   | Name                | Value                                                                  |
+   | ------------------- | ---------------------------------------------------------------------- |
+   | `POSTGRES_PASSWORD` | (from Step 3)                                                          |
    | `DATABASE_URL`      | `postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable` |
-   | `EMAIL_ENC_KEY`     | (from Step 3)                                                      |
-   | `EMAIL_HMAC_KEY`    | (from Step 3)                                                      |
-   | `PASSWORD_PEPPER`   | (from Step 3)                                                      |
+   | `EMAIL_ENC_KEY`     | (from Step 3)                                                          |
+   | `EMAIL_HMAC_KEY`    | (from Step 3)                                                          |
+   | `PASSWORD_PEPPER`   | (from Step 3)                                                          |
 
 5. **Networking**: leave on the default bridge. Ports 3000 (web) and 8080 (api) are exposed on the TrueNAS host. For internet exposure, see the section below.
 
@@ -454,7 +462,7 @@ The web footer also shows the running version, linked to the GitHub Release.
 ### Updates
 
 1. Refresh the migrations directory to the new release (re-run the `curl | tar` command from Step 2 with the new tag).
-2. **Apps → dothesplit → Edit** → bump the `image:` tags for `api`, `worker`, and `web` to the new `:vX.Y.Z` and click **Save**.
+2. **Apps → dothesplit → Edit** → bump the `image:` tags for `api`, `worker`, and `web` to the new `:X.Y.Z` and click **Save**.
 
 The `migrate` one-shot runs again on every up; it is idempotent and applies any new `*.up.sql` files. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for the special case of major Postgres version bumps.
 
@@ -465,9 +473,10 @@ The `migrate` one-shot runs again on every up; it is idempotent and applies any 
 The app ships HTTP-only by default; see [Deployment note: HTTPS deviation](README.md#deployment-note-https-deviation) in the README. To put it on the internet:
 
 1. Terminate TLS at an upstream reverse proxy (Caddy, Traefik, nginx, Cloudflare Tunnel: anything that speaks HTTP/1.1 upstream).
-2. Set `COOKIE_SECURE=true` and `WEB_ORIGIN=https://split.yourdomain.tld` (in `.env` for the generic path, or in the Custom App env table on TrueNAS).
-3. Stop publishing ports 3000/8080 on the host and instead attach the app to the proxy's Docker network.
-4. Restart the stack.
+2. Set `COOKIE_SECURE=true` and `WEB_ORIGIN=https://split.yourdomain.tld` (in `.env` for the generic path, or in the Custom App env table on TrueNAS). `WEB_ORIGIN` must include the port if the proxy listens on a non-standard one (e.g. `https://split.yourdomain.tld:35000`).
+3. Set `TRUSTED_PROXIES` to the proxy's IP or CIDR (e.g. `192.168.1.200/32`). The API otherwise ignores `X-Forwarded-For` and attributes every request to the proxy's address, which breaks per-client rate limiting and audit logs. Leave it empty when no proxy is in front, so a client can't forge `X-Forwarded-For` to dodge the limiter.
+4. Stop publishing ports 3000/8080 on the host and instead attach the app to the proxy's Docker network.
+5. Restart the stack.
 
 When `COOKIE_SECURE=true` the session cookie is renamed to `__Host-dts_session` (browsers reject the `__Host-` prefix without `Secure`); the backend handles the switch automatically.
 
@@ -475,11 +484,11 @@ When `COOKIE_SECURE=true` the session cookie is renamed to `__Host-dts_session` 
 
 For reference, the four containers run as follows:
 
-| Service    | User                         | Filesystem  | Notes                                   |
-| ---------- | ---------------------------- | ----------- | --------------------------------------- |
-| `api`      | `nonroot:nonroot` (UID 65534) | `read_only` | Distroless image, all caps dropped      |
-| `worker`   | `nonroot:nonroot` (UID 65534) | `read_only` | Same image as `api`                     |
-| `web`      | `node` (UID 1000)            | `read_only` | Node 24 Alpine                          |
-| `postgres` | starts as root, drops to `postgres` (UID 999) | writable | Standard upstream behaviour; needs root for `initdb`, runs as 999 thereafter, which is why the TrueNAS path chowns `pgdata` to 999 rather than the `apps` UID 568 |
+| Service    | User                                         | Filesystem  | Notes                                                                                                                                                           |
+| ---------- | -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`      | `nonroot:nonroot` (UID 65532)                | `read_only` | Distroless image, all caps dropped                                                                                                                              |
+| `worker`   | `nonroot:nonroot` (UID 65532)                | `read_only` | Same image as `api`                                                                                                                                             |
+| `web`      | `node` (UID 1000)                            | `read_only` | Node 24 Alpine                                                                                                                                                  |
+| `postgres` | starts as root, drops to `postgres` (UID 70) | writable    | Standard upstream behaviour; needs root for `initdb`, runs as 70 thereafter, which is why the TrueNAS path chowns `pgdata` to 70 rather than the `apps` UID 568 |
 
 On TrueNAS specifically: the data directory belongs to the database engine, not to the shared `apps` user pool, so deviating from the `Apps` permission preset for `pgdata` is intentional.

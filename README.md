@@ -60,16 +60,16 @@ the GitHub Container Registry:
 
 | Image                                   | Tags                                    |
 | --------------------------------------- | --------------------------------------- |
-| `ghcr.io/julian-alarcon/dothesplit-api` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
-| `ghcr.io/julian-alarcon/dothesplit-web` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
+| `ghcr.io/julian-alarcon/dothesplit-api` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
+| `ghcr.io/julian-alarcon/dothesplit-web` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
 
 `:dev` always points at the latest commit on `main`. The api image hosts both
 the `/api` and `/worker` entrypoints; in compose, override `entrypoint:
 ["/worker"]` to run the worker. Pull a pinned release for production:
 
 ```bash
-docker pull ghcr.io/julian-alarcon/dothesplit-api:v0.3.0
-docker pull ghcr.io/julian-alarcon/dothesplit-web:v0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit-api:0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit-web:0.3.0
 ```
 
 The running version is reported by `GET /healthz` (api) and the page footer
@@ -151,7 +151,9 @@ Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format
 [BLUEPRINT.md](BLUEPRINT.md) states **"HTTPS only"**. The v1 LAN profile ships
 **HTTP-only** for TrueNAS LAN use: session cookies use `Secure=false`. For
 internet-exposed deployments, terminate TLS at an upstream reverse proxy (Caddy,
-Traefik, Cloudflare Tunnel) and flip `COOKIE_SECURE=true`.
+Traefik, Cloudflare Tunnel), flip `COOKIE_SECURE=true`, and set `TRUSTED_PROXIES`
+to the proxy's IP/CIDR so rate limiting and audit logs see the real client IP.
+See [INSTALL.md](INSTALL.md#https--internet-exposure) for the full checklist.
 
 ## License & compliance
 

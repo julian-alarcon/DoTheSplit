@@ -107,7 +107,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 3. **Merging the Release PR** auto-creates the git tag `vX.Y.Z` and a GitHub Release with the changelog body.
 
 4. **The tag triggers two workflows in parallel**:
-   - [`publish.yml`](../.github/workflows/publish.yml) builds multi-arch (`linux/amd64,linux/arm64`) images for `api` and `web`, pushes to `ghcr.io/julian-alarcon/dothesplit-{api,web}` with tags `:vX.Y.Z`, `:vX.Y`, `:vX`, `:latest`, plus a build provenance attestation.
+   - [`publish.yml`](../.github/workflows/publish.yml) builds multi-arch (`linux/amd64,linux/arm64`) images for `api` and `web`, pushes to `ghcr.io/julian-alarcon/dothesplit-{api,web}` with tags `:X.Y.Z`, `:X.Y`, `:X`, `:latest`, plus a build provenance attestation.
    - [`compliance.yml`](../.github/workflows/compliance.yml) regenerates SBOMs + `THIRD_PARTY_LICENSES.md` and attaches them to the GitHub Release.
 
 5. **Every push to `main`** (including merges that are not the Release PR) also triggers `publish.yml`, which pushes `:dev`, `:main`, and `:sha-<short>` tags. The `:dev` tag tracks the latest `main` and is appropriate for a staging environment.
@@ -118,7 +118,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 | ----------------------------------------- | ----------------------------------------------------- |
 | `web/package.json` `version`              | release-please bump on merge (single source of truth) |
 | GitHub Release page                       | release-please on PR merge                            |
-| `ghcr.io/.../dothesplit-{api,web}:vX.Y.Z` | `publish.yml` on tag                                  |
+| `ghcr.io/.../dothesplit-{api,web}:X.Y.Z`  | `publish.yml` on tag                                  |
 | API `GET /healthz` JSON                   | `-ldflags` baked in by `api/Dockerfile`               |
 | Web page footer                           | `BUILD_VERSION` env baked in by `web/Dockerfile`      |
 
@@ -238,7 +238,7 @@ For production deployments, **pull pinned images from GHCR** instead of building
 
 ```bash
 # On the deployment host, after a new release is tagged:
-docker compose pull                  # pull the pinned :vX.Y.Z (or :latest) images
+docker compose pull                  # pull the pinned :X.Y.Z (or :latest) images
 docker compose up -d                 # restart services with the new images
 ```
 

@@ -139,7 +139,7 @@ Run everything with `make test`. Go alone: `cd api && go test ./... -race`. Web 
 - `make up` - same, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `web/package.json`) into the images so `/healthz` and the web footer self-identify.
 - `make dev-api` / `make dev-web` for local non-Docker dev.
 - After any change that affects the API contract: `make gen`, then rebuild the containers whose code changed (`api`, `worker`, `web`).
-- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit-{api,web}:vX.Y.Z`). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
+- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit-{api,web}:X.Y.Z`). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
 
 ## Scope boundaries (don't build these without asking)
 

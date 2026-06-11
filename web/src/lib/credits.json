@@ -55,7 +55,7 @@
     },
     {
       "name": "github.com/oapi-codegen/runtime",
-      "version": "v1.4.0",
+      "version": "v1.4.1",
       "license": "Apache-2.0",
       "url": "https://github.com/oapi-codegen/runtime"
     },
@@ -93,13 +93,13 @@
   "frontend": [
     {
       "name": "@astrojs/check",
-      "version": "0.9.9",
+      "version": "0.9.2",
       "license": "MIT",
-      "url": "https://github.com/withastro/astro"
+      "url": "https://github.com/withastro/language-tools"
     },
     {
       "name": "@astrojs/node",
-      "version": "10.1.1",
+      "version": "10.1.4",
       "license": "MIT",
       "url": "https://github.com/withastro/astro"
     },
@@ -111,13 +111,13 @@
     },
     {
       "name": "astro",
-      "version": "6.3.6",
+      "version": "6.4.6",
       "license": "MIT",
       "url": "https://github.com/withastro/astro"
     },
     {
       "name": "openapi-fetch",
-      "version": "0.12.5",
+      "version": "0.17.0",
       "license": "MIT",
       "url": "https://github.com/openapi-ts/openapi-typescript"
     },
@@ -147,7 +147,7 @@
     },
     {
       "name": "@types/node",
-      "version": "24.12.2",
+      "version": "24.13.2",
       "license": "MIT",
       "url": "https://github.com/DefinitelyTyped/DefinitelyTyped"
     },
@@ -159,7 +159,7 @@
     },
     {
       "name": "jsdom",
-      "version": "25.0.1",
+      "version": "29.1.1",
       "license": "MIT",
       "url": "https://github.com/jsdom/jsdom"
     },
@@ -171,7 +171,7 @@
     },
     {
       "name": "vitest",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT",
       "url": "https://github.com/vitest-dev/vitest"
     }

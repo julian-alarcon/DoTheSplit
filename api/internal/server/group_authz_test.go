@@ -135,10 +135,12 @@ func TestGroupAuthzNegativeMatrix(t *testing.T) {
 		{"get_expense", "GET", "/v1/expenses/" + expenseID, nil},
 		{"update_expense", "PATCH", "/v1/expenses/" + expenseID, map[string]any{"description": "hijack"}},
 		{"delete_expense", "DELETE", "/v1/expenses/" + expenseID, nil},
+		{"restore_expense", "POST", "/v1/expenses/" + expenseID + "/restore", nil},
 		{"list_expense_revisions", "GET", "/v1/expenses/" + expenseID + "/revisions", nil},
 		{"get_settlement", "GET", "/v1/settlements/" + settlementID, nil},
 		{"update_settlement", "PATCH", "/v1/settlements/" + settlementID, map[string]any{"amount_cents": 9999}},
 		{"delete_settlement", "DELETE", "/v1/settlements/" + settlementID, nil},
+		{"restore_settlement", "POST", "/v1/settlements/" + settlementID + "/restore", nil},
 		{"delete_recurring", "DELETE", "/v1/recurring-expenses/" + recurringID, nil},
 	}
 

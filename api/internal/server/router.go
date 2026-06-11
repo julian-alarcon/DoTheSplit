@@ -83,6 +83,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/expenses/:id", s.GetExpense)
 	auth.PATCH("/expenses/:id", s.UpdateExpense)
 	auth.DELETE("/expenses/:id", s.DeleteExpense)
+	auth.POST("/expenses/:id/restore", s.RestoreExpense)
 	auth.GET("/expenses/:id/revisions", s.ListExpenseRevisions)
 
 	auth.GET("/categories", s.ListCategories)
@@ -94,6 +95,7 @@ func New(s *handlers.Server) http.Handler {
 	auth.GET("/settlements/:id", s.GetSettlement)
 	auth.PATCH("/settlements/:id", s.UpdateSettlement)
 	auth.DELETE("/settlements/:id", s.DeleteSettlement)
+	auth.POST("/settlements/:id/restore", s.RestoreSettlement)
 
 	auth.GET("/groups/:id/transactions", s.ListTransactions)
 	auth.GET("/groups/:id/activity", s.ListActivity)

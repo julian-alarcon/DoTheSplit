@@ -70,8 +70,11 @@ and optional free-text **notes** for context the description shouldn't carry.
 Any group member can edit description / amount / category / payer / splits /
 notes / date after the fact; splits either rescale proportionally on
 amount-only edits or are re-resolved when a new mode/split is supplied.
-Soft-delete is open to any group member. The full edit history shows who /
-when / field / old → new, including per-member split diffs.
+Soft-delete is open to any group member, and is reversible: a deleted expense
+still opens its detail page (read-only, with a "deleted" banner) where any
+member can **restore** it via `POST /v1/expenses/{id}/restore`, bringing it back
+into balances with its splits and edit history intact. The full edit history
+shows who / when / field / old to new, including per-member split diffs.
 
 ## Balances & settle-up
 
@@ -83,7 +86,9 @@ themselves), so a member can record a settlement on someone else's behalf
 without impersonating. Any group member can later edit a settlement
 (`PATCH /v1/settlements/{id}`): from / to / amount / note / settled-at are
 all mutable as long as both parties are still group members and differ from
-each other.
+each other. Settlements soft-delete and restore the same way expenses do
+(`POST /v1/settlements/{id}/restore`): a deleted settlement keeps a read-only
+detail page from which any member can bring it back into the balances.
 
 ## Recurring expenses
 

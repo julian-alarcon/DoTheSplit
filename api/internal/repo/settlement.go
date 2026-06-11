@@ -138,6 +138,33 @@ func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID u
 	return tx.Commit(ctx)
 }
 
+func (r *SettlementRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var groupID uuid.UUID
+	tag, err := tx.Exec(ctx, `
+		UPDATE settlements SET deleted_at = NULL
+		WHERE id = $1 AND deleted_at IS NOT NULL
+	`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := tx.QueryRow(ctx, `SELECT group_id FROM settlements WHERE id = $1`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, ActionSettlementRestored); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // FindByIDs returns the non-deleted settlements with the given IDs, keyed by id.
 // Missing IDs (or soft-deleted ones) are simply absent from the result.
 func (r *SettlementRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Settlement, error) {

@@ -56,7 +56,8 @@ Rules of thumb:
 - Always call `GroupService.RequireMember` (or equivalent `IsMember`) before reading/writing group-scoped data.
 - Expense creation must validate: split-sum invariant, payer ∈ members, all split users ∈ members, mode matches supplied values. All inside one tx.
 - Currency is optional on the wire. Empty string means "use the group's `default_currency`" - the service layer looks it up.
-- Soft-delete via `deleted_at` for expenses; every read filters `WHERE deleted_at IS NULL` or joins with that filter.
+- Soft-delete via `deleted_at` for expenses and settlements; every *list* read filters `WHERE deleted_at IS NULL` or joins with that filter. The single-item `ExpenseService.Get` / `SettlementService.Get` deliberately return soft-deleted rows (with `deleted_at` set) so the detail page can render a read-only "deleted" view and offer Restore; `Update`/`Delete` keep their own `deleted_at` guards so a deleted item still can't be edited or double-deleted.
+- Soft-delete is reversible: `POST /v1/expenses/{id}/restore` and `POST /v1/settlements/{id}/restore` clear `deleted_at` (any group member) and write an `expense.restored` / `settlement.restored` activity event. Restoring an already-active row is a `409`. The `activity_events.action` CHECK constraint must list every action - add new ones in a migration (see `0002_activity_restore_actions`).
 
 ## Database
 

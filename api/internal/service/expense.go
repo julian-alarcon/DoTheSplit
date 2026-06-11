@@ -31,6 +31,7 @@ var (
 	ErrPayerNotMember = errors.New("payer is not a group member")
 	ErrSplitNotMember = errors.New("split user is not a group member")
 	ErrForbidden      = errors.New("forbidden")
+	ErrAlreadyActive  = errors.New("not deleted")
 )
 
 type ExpenseService struct {
@@ -123,14 +124,13 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 	return e, nil
 }
 
-// Get returns a single expense by id, enforcing group membership.
+// Get returns a single expense by id, enforcing group membership. Soft-deleted
+// expenses are returned too (with DeletedAt set) so the detail page can render a
+// read-only restore view; Update and Delete re-check DeletedAt themselves.
 func (s *ExpenseService) Get(ctx context.Context, actorID, id uuid.UUID) (*repo.Expense, error) {
 	e, err := s.exps.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if e.DeletedAt != nil {
-		return nil, repo.ErrNotFound
 	}
 	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
 		return nil, err
@@ -250,6 +250,25 @@ func (s *ExpenseService) Delete(ctx context.Context, actorID, expenseID uuid.UUI
 		return err
 	}
 	return s.exps.SoftDelete(ctx, expenseID, actorID)
+}
+
+// Restore un-deletes a soft-deleted expense. Any group member may restore; the
+// row's deleted_at is cleared and the audit trail records the action.
+func (s *ExpenseService) Restore(ctx context.Context, actorID, expenseID uuid.UUID) (*repo.Expense, error) {
+	e, err := s.exps.FindByID(ctx, expenseID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.requireMember(ctx, e.GroupID, actorID); err != nil {
+		return nil, err
+	}
+	if e.DeletedAt == nil {
+		return nil, ErrAlreadyActive
+	}
+	if err := s.exps.Restore(ctx, expenseID, actorID); err != nil {
+		return nil, err
+	}
+	return s.exps.FindByID(ctx, expenseID)
 }
 
 func (s *ExpenseService) requireMember(ctx context.Context, groupID, userID uuid.UUID) error {

@@ -272,6 +272,46 @@ func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID uuid
 	return tx.Commit(ctx)
 }
 
+func (r *ExpenseRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var groupID uuid.UUID
+	tag, err := tx.Exec(ctx, `
+		UPDATE expenses SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL
+	`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := tx.QueryRow(ctx, `SELECT group_id FROM expenses WHERE id = $1`, id).Scan(&groupID); err != nil {
+		return err
+	}
+	meta, err := expenseEventMeta(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	var actor *uuid.UUID
+	if actorID != uuid.Nil {
+		actor = &actorID
+	}
+	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+		GroupID:   groupID,
+		ActorID:   actor,
+		Action:    ActionExpenseRestored,
+		ExpenseID: &id,
+		Metadata:  meta,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // Update applies description / amount / category / payer / splits changes in one tx.
 // If newSplits is non-nil, existing splits are replaced wholesale (the service layer
 // has already resolved per-user shares via resolveSplits). Otherwise, if amountCents

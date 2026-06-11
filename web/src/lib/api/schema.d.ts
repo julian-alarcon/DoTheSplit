@@ -542,6 +542,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/expenses/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a soft-deleted expense (any group member) */
+        post: operations["restoreExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/categories": {
         parameters: {
             query?: never;
@@ -616,6 +633,23 @@ export interface paths {
          *     group, and must differ from each other. Any group member may edit.
          */
         patch: operations["updateSettlement"];
+        trace?: never;
+    };
+    "/v1/settlements/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a soft-deleted settlement (any group member) */
+        post: operations["restoreSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/groups/{id}/transactions": {
@@ -1406,6 +1440,11 @@ export interface components {
             /** Format: uuid */
             category_id: string;
             notes: string;
+            /**
+             * Format: date-time
+             * @description When the expense was soft-deleted; null/absent when active.
+             */
+            deleted_at?: string | null;
             splits: components["schemas"]["Split"][];
         };
         Category: {
@@ -1642,6 +1681,11 @@ export interface components {
             settled_at: string;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: date-time
+             * @description When the settlement was soft-deleted; null/absent when active.
+             */
+            deleted_at?: string | null;
         };
         TransactionItem: {
             /** @enum {string} */
@@ -1676,7 +1720,7 @@ export interface components {
              */
             id: string;
             /** @enum {string} */
-            action: "expense.created" | "expense.updated" | "expense.deleted" | "settlement.created" | "settlement.updated" | "settlement.deleted";
+            action: "expense.created" | "expense.updated" | "expense.deleted" | "expense.restored" | "settlement.created" | "settlement.updated" | "settlement.deleted" | "settlement.restored";
             /**
              * Format: date-time
              * @description When the action happened (the event timestamp, not the expense/settlement date).
@@ -1688,8 +1732,18 @@ export interface components {
             target_id: string;
             /** @enum {string} */
             target_kind: "expense" | "settlement";
-            /** @description Expense description, or settlement note/label. Survives soft-delete. */
+            /** @description Expense description, or settlement note (may be empty). Survives soft-delete. */
             description: string;
+            /**
+             * Format: uuid
+             * @description Settlements only: the member who paid. Lets the client render "X paid Y".
+             */
+            from_user_id?: string;
+            /**
+             * Format: uuid
+             * @description Settlements only: the member who was paid.
+             */
+            to_user_id?: string;
             /** Format: int64 */
             amount_cents: number;
             currency: string;
@@ -2941,6 +2995,32 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    restoreExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ExpenseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     listCategories: {
         parameters: {
             query?: never;
@@ -3113,6 +3193,32 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    restoreSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settlement"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listTransactions: {

@@ -792,6 +792,24 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/expenses/{id}/restore:
+    post:
+      summary: Restore a soft-deleted expense (any group member)
+      operationId: restoreExpense
+      tags: [expenses]
+      parameters:
+        - $ref: "#/components/parameters/ExpenseId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/categories:
     get:
       summary: List available expense categories (seeded)
@@ -912,6 +930,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/settlements/{id}/restore:
+    post:
+      summary: Restore a soft-deleted settlement (any group member)
+      operationId: restoreSettlement
+      tags: [settlements]
+      parameters:
+        - $ref: "#/components/parameters/SettlementId"
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settlement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /v1/groups/{id}/transactions:
     get:
@@ -2055,6 +2091,11 @@ components:
         created_at: { type: string, format: date-time }
         category_id: { type: string, format: uuid }
         notes: { type: string }
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the expense was soft-deleted; null/absent when active.
         splits:
           type: array
           items: { $ref: "#/components/schemas/Split" }
@@ -2331,6 +2372,11 @@ components:
         note: { type: string }
         settled_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the settlement was soft-deleted; null/absent when active.
 
     TransactionItem:
       type: object
@@ -2385,9 +2431,11 @@ components:
             - expense.created
             - expense.updated
             - expense.deleted
+            - expense.restored
             - settlement.created
             - settlement.updated
             - settlement.deleted
+            - settlement.restored
         occurred_at:
           type: string
           format: date-time
@@ -2401,7 +2449,15 @@ components:
           enum: [expense, settlement]
         description:
           type: string
-          description: Expense description, or settlement note/label. Survives soft-delete.
+          description: Expense description, or settlement note (may be empty). Survives soft-delete.
+        from_user_id:
+          type: string
+          format: uuid
+          description: "Settlements only: the member who paid. Lets the client render \"X paid Y\"."
+        to_user_id:
+          type: string
+          format: uuid
+          description: "Settlements only: the member who was paid."
         amount_cents: { type: integer, format: int64 }
         currency: { type: string, minLength: 3, maxLength: 3 }
         category_slug:

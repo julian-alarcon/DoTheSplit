@@ -111,8 +111,8 @@ See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
-- **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs.
-- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated transaction feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date.
+- **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs, reversible soft-delete (any member can restore from the expense's detail page).
+- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated transaction feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date, or soft-delete and restore.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
 - **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
 - **Import & export**: CSV in / out via `/import` (Splitwise or DoTheSplit) and group settings → Export. The DoTheSplit format keeps the Splitwise prefix and adds `Time`, `Payer`, `Notes`, `Created`, `CreatedBy`, so a round-trip preserves second-precision timestamps, explicit payers, and per-expense notes.

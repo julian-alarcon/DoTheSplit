@@ -139,9 +139,6 @@ func (s *SettlementService) Get(ctx context.Context, actorID, id uuid.UUID) (*re
 	if err != nil {
 		return nil, err
 	}
-	if st.DeletedAt != nil {
-		return nil, repo.ErrNotFound
-	}
 	ok, err := s.groups.IsMember(ctx, st.GroupID, actorID)
 	if err != nil {
 		return nil, err
@@ -234,6 +231,29 @@ func (s *SettlementService) Delete(ctx context.Context, actorID, settlementID uu
 		return ErrNotMember
 	}
 	return s.settlements.SoftDelete(ctx, settlementID, actorID)
+}
+
+// Restore un-deletes a soft-deleted settlement. Any group member may restore;
+// balances start counting it again and the audit trail records the action.
+func (s *SettlementService) Restore(ctx context.Context, actorID, settlementID uuid.UUID) (*repo.Settlement, error) {
+	st, err := s.settlements.FindByID(ctx, settlementID)
+	if err != nil {
+		return nil, err
+	}
+	ok, err := s.groups.IsMember(ctx, st.GroupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotMember
+	}
+	if st.DeletedAt == nil {
+		return nil, ErrAlreadyActive
+	}
+	if err := s.settlements.Restore(ctx, settlementID, actorID); err != nil {
+		return nil, err
+	}
+	return s.settlements.FindByID(ctx, settlementID)
 }
 
 func (s *SettlementService) List(ctx context.Context, actorID, groupID uuid.UUID) ([]repo.Settlement, error) {

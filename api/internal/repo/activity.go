@@ -15,12 +15,14 @@ import (
 type ActivityAction string
 
 const (
-	ActionExpenseCreated    ActivityAction = "expense.created"
-	ActionExpenseUpdated    ActivityAction = "expense.updated"
-	ActionExpenseDeleted    ActivityAction = "expense.deleted"
-	ActionSettlementCreated ActivityAction = "settlement.created"
-	ActionSettlementUpdated ActivityAction = "settlement.updated"
-	ActionSettlementDeleted ActivityAction = "settlement.deleted"
+	ActionExpenseCreated     ActivityAction = "expense.created"
+	ActionExpenseUpdated     ActivityAction = "expense.updated"
+	ActionExpenseDeleted     ActivityAction = "expense.deleted"
+	ActionExpenseRestored    ActivityAction = "expense.restored"
+	ActionSettlementCreated  ActivityAction = "settlement.created"
+	ActionSettlementUpdated  ActivityAction = "settlement.updated"
+	ActionSettlementDeleted  ActivityAction = "settlement.deleted"
+	ActionSettlementRestored ActivityAction = "settlement.restored"
 )
 
 // ActivityEvent is the write model for one row in the append-only feed.
@@ -58,6 +60,9 @@ type ActivityHydrated struct {
 	CategorySlug         *string
 	CategoryGroupLabel   *string
 	Recurring            bool
+	// Settlement rows only: who paid whom. Nil for expense rows.
+	FromUserID *uuid.UUID
+	ToUserID   *uuid.UUID
 }
 
 type ActivityRepo struct {
@@ -135,7 +140,9 @@ func (r *ActivityRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit
 			COALESCE(e.currency, g.default_currency) AS currency,
 			ae.metadata->>'category_slug' AS category_slug,
 			ae.metadata->>'category_group_label' AS category_group_label,
-			COALESCE((ae.metadata->>'recurring')::boolean, false) AS recurring
+			COALESCE((ae.metadata->>'recurring')::boolean, false) AS recurring,
+			s.from_user AS from_user_id,
+			s.to_user AS to_user_id
 		FROM activity_events ae
 		JOIN groups g ON g.id = ae.group_id
 		LEFT JOIN users u ON u.id = ae.actor_id
@@ -157,7 +164,8 @@ func (r *ActivityRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit
 		var action string
 		if err := rows.Scan(&h.ID, &action, &h.OccurredAt, &h.ActorID, &h.ActorName,
 			&h.ActorAvatarUpdatedAt, &h.TargetID, &h.Description, &h.AmountCents,
-			&h.Currency, &h.CategorySlug, &h.CategoryGroupLabel, &h.Recurring); err != nil {
+			&h.Currency, &h.CategorySlug, &h.CategoryGroupLabel, &h.Recurring,
+			&h.FromUserID, &h.ToUserID); err != nil {
 			return nil, err
 		}
 		h.Action = ActivityAction(action)

@@ -64,8 +64,13 @@ const expenseCadence = matchedTemplate?.cadence;
 
 const userID = Astro.locals.user?.id;
 const isMember = group.members.some((m) => m.user_id === userID);
-const canEdit = isMember;
-const canDelete = isMember;
+const isDeleted = !!expense.deleted_at;
+const canEdit = isMember && !isDeleted;
+const canDelete = isMember && !isDeleted;
+const canRestore = isMember && isDeleted;
+const deletedAtFmt = expense.deleted_at
+  ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: Astro.locals.timezone }).format(new Date(expense.deleted_at))
+  : "";
 
 const nameByUserID = new Map<string, string>();
 const memberByID = new Map(group.members.map((m) => [m.user_id, m]));
@@ -162,6 +167,17 @@ const fieldLabel: Record<string, string> = {
     </p>
   )}
 
+  {isDeleted && (
+    <p
+      role="status"
+      class="mb-3 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+    >
+      <FaIcon name="trash" size={14} />
+      <span>This expense was deleted on {deletedAtFmt}. It no longer affects balances. Restore it below to bring it back.</span>
+    </p>
+  )}
+
+  {!isDeleted && (
   <section class="mb-1 rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
     <h2 class="mb-3 font-medium">Edit</h2>
     {canEdit ? (
@@ -306,6 +322,7 @@ const fieldLabel: Record<string, string> = {
       <p class="text-sm text-neutral-500">Only group members can edit this expense.</p>
     )}
   </section>
+  )}
 
   <script>
     import "@/scripts/category-picker.ts";
@@ -403,9 +420,36 @@ const fieldLabel: Record<string, string> = {
       <ConfirmDialog
         id="confirm-delete-expense"
         title="Delete this expense?"
-        message="It will stop affecting balances, but the edit history is kept. This cannot be undone from the UI."
+        message="It will stop affecting balances, but the edit history is kept. You can restore it later from the activity log."
         confirmLabel="Delete expense"
         confirmIcon="trash"
+      />
+    </section>
+  )}
+
+  {canRestore && (
+    <section class="rounded-md border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">Restore</h2>
+      <p class="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
+        Brings this expense back. It will count toward balances again, with its splits and edit history intact.
+      </p>
+      <form
+        method="POST"
+        action={`/api/expenses/restore?id=${eid}&group=${id}`}
+        class="flex justify-end"
+      >
+        <button type="button" data-confirm-open="confirm-restore-expense" class="btn-primary">
+          <FaIcon name="trash-arrow-up" />
+          <span>Restore expense</span>
+        </button>
+      </form>
+      <ConfirmDialog
+        id="confirm-restore-expense"
+        title="Restore this expense?"
+        message="It will start affecting balances again."
+        confirmLabel="Restore expense"
+        confirmVariant="primary"
+        confirmIcon="trash-arrow-up"
       />
     </section>
   )}

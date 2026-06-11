@@ -9,11 +9,19 @@ export const POST: APIRoute = async ({ request, url, redirect }) => {
   const amountCents = Math.round(Number(form.get("amount_dollars") ?? "0") * 100);
   const toUserID = String(form.get("to_user_id") ?? "");
   const fromUserID = String(form.get("from_user_id") ?? "");
+  const note = (form.get("note") ?? "").toString();
+  const settledAt = (form.get("settled_at") ?? "").toString().trim();
   const body: Record<string, unknown> = {
     to_user_id: toUserID,
     amount_cents: amountCents,
   };
   if (fromUserID) body.from_user_id = fromUserID;
+  if (note) body.note = note;
+  // <input type="date"> emits "YYYY-MM-DD". Anchor at noon UTC to match the
+  // expense form so a same-day settlement sorts alongside same-day expenses.
+  if (settledAt && /^\d{4}-\d{2}-\d{2}$/.test(settledAt)) {
+    body.settled_at = `${settledAt}T12:00:00Z`;
+  }
   const res = await apiFetch(`/v1/groups/${groupID}/settlements`, {
     method: "POST",
     cookie,

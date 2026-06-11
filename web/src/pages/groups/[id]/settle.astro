@@ -2,6 +2,7 @@
 import Base from "@/layouts/Base.astro";
 import Avatar from "@/components/Avatar.astro";
 import FaIcon from "@/components/FaIcon.astro";
+import DatePicker from "@/components/DatePicker.astro";
 import { apiFor } from "@/lib/api/client";
 import { moneyFormatter } from "@/lib/currencies";
 
@@ -24,6 +25,10 @@ const nameByUserID = new Map(members.map((m) => [m.user_id, m.display_name]));
 const moneyFmt = moneyFormatter(currency);
 const format = (cents: number) => moneyFmt.format(cents / 100);
 const showError = Astro.url.searchParams.get("error") === "1";
+
+// Default the settle form's date to today (UTC), matching the expense form so a
+// settlement recorded today sorts alongside today's expenses in the feed.
+const todayISO = new Date().toISOString().slice(0, 10);
 ---
 
 <Base title={`Settle up · ${group.name}`} back={{ href: `/groups/${id}`, label: group.name }}>
@@ -89,7 +94,19 @@ const showError = Astro.url.searchParams.get("error") === "1";
         </label>
         <p class="field-error">Enter an amount greater than 0</p>
 
+        <label class="field">
+          <input name="note" maxlength="200" placeholder=" " class="field-input" />
+          <span class="field-label">Note</span>
+        </label>
+
         <div class="flex items-center justify-end gap-2">
+          <DatePicker
+            name="settled_at"
+            value={todayISO}
+            variant="compact"
+            ariaLabel="Pick date"
+            weekStart={me?.week_start === 0 ? 0 : 1}
+          />
           <a href={`/groups/${id}`} class="btn-secondary">Cancel</a>
           <button type="submit" class="btn-primary">Record payment</button>
         </div>
@@ -148,6 +165,7 @@ const showError = Astro.url.searchParams.get("error") === "1";
 
   <script>
     import "@/scripts/currency-input.ts";
+    import "@/scripts/date-picker.ts";
 
     // Clicking a suggested transfer prefills the settle form above: payer,
     // recipient, and amount. The amount is written to the visible currency

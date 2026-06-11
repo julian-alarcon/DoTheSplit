@@ -1,6 +1,6 @@
 # Build context is the repo root so we can pull in /docs/openapi.yaml.
 # NODE_VERSION must stay in sync with web/.nvmrc; ALPINE_VERSION is the base image variant.
-ARG NODE_VERSION=24.15.0
+ARG NODE_VERSION=24.16.0
 ARG ALPINE_VERSION=3.22
 
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS deps

@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.11.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.10.0...v0.11.0) (2026-06-11)
+
+
+### Features
+
+* **api:** trust only configured proxies for client IP and cap  request body size ([3fc975e](https://github.com/julian-alarcon/DoTheSplit/commit/3fc975e46ab08dac721cd61d071f50f37b014ad2))
+* restore soft-deleted expenses and settlements via detail page ([2fe071b](https://github.com/julian-alarcon/DoTheSplit/commit/2fe071bb3a457e1065618de29adb2621fdd3d791))
+* **web,api:** provide activity log for all actions in the group ([b50dc41](https://github.com/julian-alarcon/DoTheSplit/commit/b50dc4159829e251b0d6e6a9c259e46f65aab1ea))
+* **web:** add note field and date picker to settlement creation form ([80101cb](https://github.com/julian-alarcon/DoTheSplit/commit/80101cbf5b403bf60a443d11bf1b8da02a2921dd))
+* **web:** viewer-centric balances and click-to-prefill settle transfers ([4b37ea3](https://github.com/julian-alarcon/DoTheSplit/commit/4b37ea323ffc7ef0baae1481349d2cfb7f76ca64))
+
+
+### Bug Fixes
+
+* **api:** add read, write, and idle timeouts to the HTTP server ([86b4699](https://github.com/julian-alarcon/DoTheSplit/commit/86b4699e12c98bfbb650cc2be8c5ddafe078a716))
+* **api:** anchor omitted expense/settlement dates to noon UTC so same-day items sort consistently ([c666855](https://github.com/julian-alarcon/DoTheSplit/commit/c666855206b4da23b0ed54ba249a12f28e384866))
+* **api:** neutralize spreadsheet formula injection in CSV export ([3916d53](https://github.com/julian-alarcon/DoTheSplit/commit/3916d5352278f5621243f13ab44bd034546aadd7))
+* **api:** stop leaking raw database error from readyz probe ([a775be2](https://github.com/julian-alarcon/DoTheSplit/commit/a775be271effb53eebe406c6050e8220976589b3))
+* **web:** apply baseline security headers site-wide, not just on admin ([16c5e51](https://github.com/julian-alarcon/DoTheSplit/commit/16c5e512f786a9a3e9054844576857ef131cc140))
+* **web:** buttons in dark themes where not properly rendered, also admin ui was standarized ([e3ff57c](https://github.com/julian-alarcon/DoTheSplit/commit/e3ff57c7bdbcd70162456926084c198d56bbaef7))
+* **web:** fix alignment error in recurrent expenses ([e115ae6](https://github.com/julian-alarcon/DoTheSplit/commit/e115ae6cc5f7ec29d3944f4e0517ad87159c9b3f))
+* **web:** fix resources not being rendered with newer appraoch ([bc50106](https://github.com/julian-alarcon/DoTheSplit/commit/bc501061002d014082d825c395e22b14ba76c196))
+* **web:** guard SSR forwarders against path traversal and add request timeout ([c2e1de0](https://github.com/julian-alarcon/DoTheSplit/commit/c2e1de05722398c11cd993ce7c6b1e2be2c47edc))
+* **web:** improve showing the data and order of elements ([8c120fa](https://github.com/julian-alarcon/DoTheSplit/commit/8c120fa95d37f4e255fef9fd35e64785f6e2796c))
+* **web:** improve view streching components and move elements to show more information ([b11adec](https://github.com/julian-alarcon/DoTheSplit/commit/b11adec10989263350f7b28590c52e33ba7da485))
+* **web:** load more items when clicking the button ([88a14e8](https://github.com/julian-alarcon/DoTheSplit/commit/88a14e898bdd9ec31a7363e2e3457396433ac708))
+* **web:** provide more vertical space in groups view changing the initial panel ([e6d07ee](https://github.com/julian-alarcon/DoTheSplit/commit/e6d07eea2cfe16a3b3937817e5aaacca351806f9))
+* **web:** reject non-ascii upstream paths in SSR forwarder ([159ab62](https://github.com/julian-alarcon/DoTheSplit/commit/159ab62ae26051b5f72b34df841835b86548abbd))
+* **web:** rename to high contrast ([abbd225](https://github.com/julian-alarcon/DoTheSplit/commit/abbd22566ac9131eef907e75d7b55f8fe0c8c099))
+* **web:** show settlement payer/payee in activity log and restructure rows ([c0308c7](https://github.com/julian-alarcon/DoTheSplit/commit/c0308c7fa4eb68aca4b5fe7c52df26cfed83c7f7))
+* **web:** surface API failures for expense/settlement/member actions ([a55fade](https://github.com/julian-alarcon/DoTheSplit/commit/a55fade0f9df1dbb4e9544c8c73136d717cb1dea))
+* **web:** theme was reset temporary in high load calls ([e795109](https://github.com/julian-alarcon/DoTheSplit/commit/e79510921427e666d24318ae9c28493640666a88))
+* **web:** truncate long names ([d823eaf](https://github.com/julian-alarcon/DoTheSplit/commit/d823eaf0c6aea49976d96133b718511bbb6b7d8b))
+
 ## [0.10.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.9.0...v0.10.0) (2026-06-07)
 
 

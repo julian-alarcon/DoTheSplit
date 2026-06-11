@@ -301,8 +301,8 @@ CREATE TABLE activity_events (
     group_id      UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     actor_id      UUID REFERENCES users(id),
     action        TEXT NOT NULL CHECK (action IN (
-                      'expense.created','expense.updated','expense.deleted',
-                      'settlement.created','settlement.updated','settlement.deleted')),
+                      'expense.created','expense.updated','expense.deleted','expense.restored',
+                      'settlement.created','settlement.updated','settlement.deleted','settlement.restored')),
     expense_id    UUID REFERENCES expenses(id),
     settlement_id UUID REFERENCES settlements(id),
     metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,

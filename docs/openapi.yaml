@@ -1203,12 +1203,14 @@ paths:
           description: "Preview (when `dry_run: true`)"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+              schema:
+                { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
         "201":
           description: "Created (when `dry_run: false`)"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+              schema:
+                { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1239,7 +1241,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateRecurringExpenseRequest" }
+            schema:
+              { $ref: "#/components/schemas/CreateRecurringExpenseRequest" }
       responses:
         "201":
           description: Created
@@ -2014,14 +2017,25 @@ components:
       properties:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
-        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        currency:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 3,
+            description: "Defaults to group.default_currency if omitted",
+          }
         payer_id: { type: string, format: uuid }
         incurred_at: { type: string, format: date-time }
         category_id:
           type: string
           format: uuid
           description: "Defaults to the `other` category when omitted."
-        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
+        notes:
+          {
+            type: string,
+            maxLength: 2000,
+            description: "Optional free-form notes about the expense.",
+          }
         mode: { $ref: "#/components/schemas/SplitMode" }
         splits:
           type: array
@@ -2044,7 +2058,12 @@ components:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
         category_id: { type: string, format: uuid }
-        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
+        notes:
+          {
+            type: string,
+            maxLength: 2000,
+            description: "Optional free-form notes about the expense.",
+          }
         payer_id:
           type: string
           format: uuid
@@ -2072,7 +2091,20 @@ components:
     Expense:
       type: object
       required:
-        [id, group_id, description, amount_cents, currency, payer_id, created_by, incurred_at, created_at, splits, category_id, notes]
+        [
+          id,
+          group_id,
+          description,
+          amount_cents,
+          currency,
+          payer_id,
+          created_by,
+          incurred_at,
+          created_at,
+          splits,
+          category_id,
+          notes,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2104,10 +2136,18 @@ components:
       type: object
       required: [id, slug, label, group_label]
       properties:
-        id:    { type: string, format: uuid }
-        slug:  { type: string, description: "Stable machine identifier (e.g. `groceries`). The frontend maps this to an icon." }
+        id: { type: string, format: uuid }
+        slug:
+          {
+            type: string,
+            description: "Stable machine identifier (e.g. `groceries`). The frontend maps this to an icon.",
+          }
         label: { type: string, description: "Human-readable name." }
-        group_label: { type: string, description: "Section header for the picker (e.g. `Entertainment`, `No category`)." }
+        group_label:
+          {
+            type: string,
+            description: "Section header for the picker (e.g. `Entertainment`, `No category`).",
+          }
 
     ImportSplitwiseRequest:
       type: object
@@ -2146,12 +2186,31 @@ components:
       additionalProperties: false
       required: [csv_name, email]
       properties:
-        csv_name: { type: string, minLength: 1, maxLength: 80, description: Name as it appears in the CSV column header. }
+        csv_name:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 80,
+            description: Name as it appears in the CSV column header.,
+          }
         email: { type: string, format: email }
 
     ImportSplitwiseResponse:
       type: object
-      required: [group_name, default_currency, members, expense_count, settlement_count, skipped_count, skipped, balances, preview, settlement_preview, csv_currencies]
+      required:
+        [
+          group_name,
+          default_currency,
+          members,
+          expense_count,
+          settlement_count,
+          skipped_count,
+          skipped,
+          balances,
+          preview,
+          settlement_preview,
+          csv_currencies,
+        ]
       properties:
         group_id:
           type: string
@@ -2191,7 +2250,8 @@ components:
         settlement_preview:
           type: array
           maxItems: 6
-          items: { $ref: "#/components/schemas/ImportSplitwiseSettlementPreview" }
+          items:
+            { $ref: "#/components/schemas/ImportSplitwiseSettlementPreview" }
         csv_currencies:
           type: array
           description: |
@@ -2206,7 +2266,11 @@ components:
       type: object
       required: [csv_name, net_cents]
       properties:
-        csv_name: { type: string, description: Member name as it appears in the CSV header. }
+        csv_name:
+          {
+            type: string,
+            description: Member name as it appears in the CSV header.,
+          }
         net_cents:
           type: integer
           format: int64
@@ -2214,7 +2278,15 @@ components:
 
     ImportSplitwisePreviewRow:
       type: object
-      required: [description, incurred_at, amount_cents, currency, category_slug, payer_csv_name]
+      required:
+        [
+          description,
+          incurred_at,
+          amount_cents,
+          currency,
+          category_slug,
+          payer_csv_name,
+        ]
       properties:
         description: { type: string }
         incurred_at: { type: string, format: date-time }
@@ -2225,14 +2297,20 @@ components:
 
     ImportSplitwiseSettlementPreview:
       type: object
-      required: [note, settled_at, amount_cents, currency, from_csv_name, to_csv_name]
+      required:
+        [note, settled_at, amount_cents, currency, from_csv_name, to_csv_name]
       properties:
         note: { type: string }
         settled_at: { type: string, format: date-time }
         amount_cents: { type: integer, format: int64 }
         currency: { type: string, minLength: 3, maxLength: 3 }
-        from_csv_name: { type: string, description: Member who paid (CSV column header). }
-        to_csv_name: { type: string, description: Member who received the payment (CSV column header). }
+        from_csv_name:
+          { type: string, description: Member who paid (CSV column header). }
+        to_csv_name:
+          {
+            type: string,
+            description: Member who received the payment (CSV column header).,
+          }
 
     ImportGroupExpensesRequest:
       type: object
@@ -2281,29 +2359,51 @@ components:
 
     ImportGroupExpensesPreviewRow:
       type: object
-      required: [description, incurred_at, amount_cents, currency, category_slug, payer_display_name]
+      required:
+        [
+          description,
+          incurred_at,
+          amount_cents,
+          currency,
+          category_slug,
+          payer_display_name,
+        ]
       properties:
         description: { type: string }
         incurred_at: { type: string, format: date-time }
         amount_cents: { type: integer, format: int64 }
         currency: { type: string, minLength: 3, maxLength: 3 }
         category_slug: { type: string }
-        payer_display_name: { type: string, description: Display name of the resolved member who paid this row. }
+        payer_display_name:
+          {
+            type: string,
+            description: Display name of the resolved member who paid this row.,
+          }
 
     ExpenseRevision:
       type: object
-      required: [id, expense_id, edited_by, edited_at, field, old_value, new_value]
+      required:
+        [id, expense_id, edited_by, edited_at, field, old_value, new_value]
       properties:
-        id:         { type: string, format: uuid }
+        id: { type: string, format: uuid }
         expense_id: { type: string, format: uuid }
-        edited_by:  { type: string, format: uuid }
-        edited_at:  { type: string, format: date-time }
+        edited_by: { type: string, format: uuid }
+        edited_at: { type: string, format: date-time }
         field:
           type: string
-          enum: [description, amount_cents, category_id, payer_id, splits, incurred_at, notes]
+          enum:
+            [
+              description,
+              amount_cents,
+              category_id,
+              payer_id,
+              splits,
+              incurred_at,
+              notes,
+            ]
           description: Which field was changed.
-        old_value:  { type: string, description: "Previous value, stringified." }
-        new_value:  { type: string, description: "New value, stringified." }
+        old_value: { type: string, description: "Previous value, stringified." }
+        new_value: { type: string, description: "New value, stringified." }
 
     Balance:
       type: object
@@ -2311,7 +2411,12 @@ components:
       properties:
         user_id: { type: string, format: uuid }
         display_name: { type: string }
-        net_cents: { type: integer, format: int64, description: "positive = owed to user; negative = user owes" }
+        net_cents:
+          {
+            type: integer,
+            format: int64,
+            description: "positive = owed to user; negative = user owes",
+          }
 
     SimplifiedDebt:
       type: object
@@ -2362,7 +2467,16 @@ components:
 
     Settlement:
       type: object
-      required: [id, group_id, from_user_id, to_user_id, amount_cents, settled_at, created_at]
+      required:
+        [
+          id,
+          group_id,
+          from_user_id,
+          to_user_id,
+          amount_cents,
+          settled_at,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2419,7 +2533,18 @@ components:
 
     ActivityItem:
       type: object
-      required: [id, action, occurred_at, target_id, target_kind, description, amount_cents, currency, recurring]
+      required:
+        [
+          id,
+          action,
+          occurred_at,
+          target_id,
+          target_kind,
+          description,
+          amount_cents,
+          currency,
+          recurring,
+        ]
       properties:
         id:
           type: string
@@ -2453,7 +2578,7 @@ components:
         from_user_id:
           type: string
           format: uuid
-          description: "Settlements only: the member who paid. Lets the client render \"X paid Y\"."
+          description: 'Settlements only: the member who paid. Lets the client render "X paid Y".'
         to_user_id:
           type: string
           format: uuid
@@ -2468,7 +2593,7 @@ components:
           description: "Category group label, used for the icon fallback. Expenses only."
         recurring:
           type: boolean
-          description: "True when the expense was generated from a recurring template; the client prefixes \"New recurring expense:\"."
+          description: 'True when the expense was generated from a recurring template; the client prefixes "New recurring expense:".'
 
     ActivityPage:
       type: object
@@ -2531,13 +2656,33 @@ components:
     CreateRecurringExpenseRequest:
       type: object
       additionalProperties: false
-      required: [description, amount_cents, payer_id, mode, splits, cadence, next_run_at]
+      required:
+        [
+          description,
+          amount_cents,
+          payer_id,
+          mode,
+          splits,
+          cadence,
+          next_run_at,
+        ]
       properties:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
-        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        currency:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 3,
+            description: "Defaults to group.default_currency if omitted",
+          }
         payer_id: { type: string, format: uuid }
-        category_id: { type: string, format: uuid, description: "Defaults to the `other` category when omitted." }
+        category_id:
+          {
+            type: string,
+            format: uuid,
+            description: "Defaults to the `other` category when omitted.",
+          }
         mode: { $ref: "#/components/schemas/SplitMode" }
         splits:
           type: array
@@ -2549,7 +2694,20 @@ components:
     RecurringExpense:
       type: object
       required:
-        [id, group_id, description, amount_cents, currency, payer_id, category_id, mode, splits, cadence, next_run_at, created_at]
+        [
+          id,
+          group_id,
+          description,
+          amount_cents,
+          currency,
+          payer_id,
+          category_id,
+          mode,
+          splits,
+          cadence,
+          next_run_at,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2578,7 +2736,8 @@ components:
 
     AdminUser:
       type: object
-      required: [id, email, display_name, role, created_at, has_avatar, week_start]
+      required:
+        [id, email, display_name, role, created_at, has_avatar, week_start]
       properties:
         id: { type: string, format: uuid }
         email:
@@ -2640,7 +2799,16 @@ components:
 
     AdminGroup:
       type: object
-      required: [id, name, default_currency, created_by, created_at, member_count, expense_count]
+      required:
+        [
+          id,
+          name,
+          default_currency,
+          created_by,
+          created_at,
+          member_count,
+          expense_count,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }

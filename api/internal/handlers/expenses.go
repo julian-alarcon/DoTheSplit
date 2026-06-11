@@ -44,7 +44,8 @@ func (s *Server) CreateExpense(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	incurredAt := time.Now().UTC()
+	// Leave zero when omitted; the service anchors the default to noon UTC.
+	var incurredAt time.Time
 	if req.IncurredAt != nil {
 		incurredAt = *req.IncurredAt
 	}

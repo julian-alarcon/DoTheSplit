@@ -82,7 +82,8 @@ func (s *Server) CreateSettlement(c *gin.Context) {
 	if req.Note != nil {
 		note = *req.Note
 	}
-	settledAt := time.Now().UTC()
+	// Leave zero when omitted; the service anchors the default to noon UTC.
+	var settledAt time.Time
 	if req.SettledAt != nil {
 		settledAt = *req.SettledAt
 	}

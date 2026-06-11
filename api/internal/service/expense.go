@@ -10,6 +10,15 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
+// defaultOccurredAt anchors an omitted expense/settlement date to noon UTC on
+// the current day. Clients that pick a date send "YYYY-MM-DDT12:00:00Z", so
+// anchoring at noon keeps a same-day omitted date sorting alongside picked ones
+// (the transaction feed orders by occurred_at, then created_at).
+func defaultOccurredAt() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+}
+
 type SplitMode string
 
 const (
@@ -77,7 +86,7 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 		in.Currency = g.DefaultCurrency
 	}
 	if in.IncurredAt.IsZero() {
-		in.IncurredAt = time.Now().UTC()
+		in.IncurredAt = defaultOccurredAt()
 	}
 
 	// Validate payer is a group member.

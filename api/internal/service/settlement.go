@@ -64,7 +64,7 @@ func (s *SettlementService) Create(ctx context.Context, actorID uuid.UUID, in Cr
 		}
 	}
 	if in.SettledAt.IsZero() {
-		in.SettledAt = time.Now().UTC()
+		in.SettledAt = defaultOccurredAt()
 	}
 	st := &repo.Settlement{
 		GroupID:     in.GroupID,

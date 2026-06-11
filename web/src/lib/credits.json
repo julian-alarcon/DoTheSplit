@@ -25,7 +25,7 @@
   "backend": [
     {
       "name": "github.com/getkin/kin-openapi",
-      "version": "v0.135.0",
+      "version": "v0.140.0",
       "license": "MIT",
       "url": "https://github.com/getkin/kin-openapi"
     },
@@ -43,7 +43,7 @@
     },
     {
       "name": "github.com/jackc/pgx/v5",
-      "version": "v5.9.2",
+      "version": "v5.10.0",
       "license": "MIT",
       "url": "https://github.com/jackc/pgx"
     },
@@ -85,9 +85,9 @@
     },
     {
       "name": "golang.org/x/crypto",
-      "version": "v0.48.0",
+      "version": "v0.53.0",
       "license": "BSD-3-Clause",
-      "url": "https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE"
+      "url": "https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE"
     }
   ],
   "frontend": [

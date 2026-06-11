@@ -1,4 +1,4 @@
-FROM golang:1.25.10-alpine3.22 AS build
+FROM golang:1.26.4-alpine3.22 AS build
 WORKDIR /src
 ARG BUILD_VERSION=dev
 ARG BUILD_COMMIT=dev

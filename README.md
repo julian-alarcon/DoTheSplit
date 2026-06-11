@@ -35,7 +35,7 @@ Open http://localhost:3000.
 
 ## Layout
 
-- `/api`: Go 1.25 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
+- `/api`: Go 1.26 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
 - `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue

@@ -8,7 +8,7 @@ See also: [BLUEPRINT.md](BLUEPRINT.md) for product scope and [README.md](README.
 
 DoTheSplit - a expense-sharing app.
 
-- **Backend**: Go 1.25, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/).
+- **Backend**: Go 1.26, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/).
 - **Frontend**: Astro 6 (SSR, `@astrojs/node`) + Tailwind v4. No React islands, no component library - pages are pure `.astro` + tiny ES-module scripts under [web/src/scripts/](web/src/scripts/). Source in [web/](web/).
 - **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
 - **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).

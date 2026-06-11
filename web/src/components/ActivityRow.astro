@@ -1,47 +1,56 @@
 ---
-// One row in the group activity feed. Layout:
-//   [category icon | settlement arrow]  <Avatar> Who verb "Description".   Value
-//                                        change date
-// Links to the expense/settlement detail page. Used by the activity page and
-// its Load-more fragment so both render identically.
+// One row in the group activity feed. Three stacked lines:
+//   line 1: <Avatar> Who verb            (who did what)
+//   line 2: settlement -> "From paid To" with avatars; expense -> "Description"
+//   line 3: change date
+// Amount sits on the right. Links to the expense/settlement detail page. Used by
+// the activity page and its Load-more fragment so both render identically.
 import Avatar from "@/components/Avatar.astro";
 import FaIcon from "@/components/FaIcon.astro";
 import CategoryIcon from "@/components/CategoryIcon.astro";
 import type { components } from "@/lib/api/schema";
 import { formatMoney } from "@/lib/currencies";
+import { shortName } from "@/lib/short-name";
 
 type ActivityItem = components["schemas"]["ActivityItem"];
+type GroupMember = components["schemas"]["GroupMember"];
 
 interface Props {
   item: ActivityItem;
   groupId: string;
   viewerId: string;
+  members: GroupMember[];
   locale?: string;
 }
 
-const { item, groupId, viewerId, locale } = Astro.props as Props;
+const { item, groupId, viewerId, members, locale } = Astro.props as Props;
+
+const memberByID = new Map(members.map((m) => [m.user_id, m]));
+const nameByUserID = new Map(members.map((m) => [m.user_id, m.display_name]));
 
 const isSettlement = item.target_kind === "settlement";
 const href = isSettlement
   ? `/groups/${groupId}/settlements/${item.target_id}`
   : `/groups/${groupId}/expenses/${item.target_id}`;
 
-// Who: "You" for the viewer, the actor's name otherwise, or a system label
-// when there is no actor (worker-generated recurring expenses).
+// Who: "You" for the viewer, the actor's (shortened) name otherwise, or a system
+// label when there is no actor (worker-generated recurring expenses).
 let who: string;
 if (!item.actor) {
   who = item.recurring ? "Recurring" : "System";
 } else if (item.actor.user_id === viewerId) {
   who = "You";
 } else {
-  who = item.actor.display_name;
+  who = shortName(item.actor.display_name);
 }
 
 const verb = item.action.endsWith(".created")
   ? "added"
   : item.action.endsWith(".updated")
     ? "updated"
-    : "deleted";
+    : item.action.endsWith(".restored")
+      ? "restored"
+      : "deleted";
 
 const recurringPrefix = item.recurring && item.action === "expense.created";
 
@@ -52,6 +61,9 @@ const dateFmt = new Intl.DateTimeFormat(locale, {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const fromMember = item.from_user_id ? memberByID.get(item.from_user_id) : undefined;
+const toMember = item.to_user_id ? memberByID.get(item.to_user_id) : undefined;
 ---
 
 <li>
@@ -70,7 +82,8 @@ const dateFmt = new Intl.DateTimeFormat(locale, {
         </span>
       )}
       <div class="flex min-w-0 flex-col gap-y-0.5">
-        <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
+        {/* Line 1: who did what */}
+        <div class="flex min-w-0 items-center gap-1.5 text-sm">
           {item.actor && (
             <Avatar
               userId={item.actor.user_id}
@@ -81,15 +94,48 @@ const dateFmt = new Intl.DateTimeFormat(locale, {
               class="opacity-70"
             />
           )}
-          <span class="min-w-0">
+          <span class="min-w-0 truncate">
             {recurringPrefix && (
               <span class="font-medium text-neutral-500 dark:text-neutral-400">New recurring expense: </span>
             )}
             <span class="font-medium">{who}</span>
-            <span class="text-neutral-500 dark:text-neutral-400"> {verb} </span>
-            <span class="font-medium">&ldquo;{item.description}&rdquo;</span>
+            <span class="text-neutral-500 dark:text-neutral-400"> {verb}</span>
           </span>
         </div>
+        {/* Line 2: what it was */}
+        {isSettlement ? (
+          <div class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+            <span class="inline-flex min-w-0 items-center gap-1">
+              <Avatar
+                userId={item.from_user_id ?? ""}
+                displayName={fromMember?.display_name ?? "?"}
+                hasAvatar={fromMember?.has_avatar}
+                avatarUpdatedAt={fromMember?.avatar_updated_at}
+                size={16}
+                class="opacity-60"
+              />
+              <span class="truncate font-medium">{shortName(nameByUserID.get(item.from_user_id ?? ""))}</span>
+            </span>
+            <span class="text-neutral-500 dark:text-neutral-400">paid</span>
+            <span class="inline-flex min-w-0 items-center gap-1">
+              <Avatar
+                userId={item.to_user_id ?? ""}
+                displayName={toMember?.display_name ?? "?"}
+                hasAvatar={toMember?.has_avatar}
+                avatarUpdatedAt={toMember?.avatar_updated_at}
+                size={16}
+                class="opacity-60"
+              />
+              <span class="truncate font-medium">{shortName(nameByUserID.get(item.to_user_id ?? ""))}</span>
+            </span>
+            {item.description && (
+              <span class="min-w-0 basis-full truncate text-[11px] text-neutral-500 dark:text-neutral-400">{item.description}</span>
+            )}
+          </div>
+        ) : (
+          <span class="min-w-0 truncate text-sm font-medium">&ldquo;{item.description}&rdquo;</span>
+        )}
+        {/* Line 3: when */}
         <span class="text-[11px] tabular-nums text-neutral-500 dark:text-neutral-500">
           {dateFmt.format(new Date(item.occurred_at))}
         </span>

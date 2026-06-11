@@ -12,14 +12,18 @@ const cursor = Astro.url.searchParams.get("cursor") ?? "";
 const limit = Astro.url.searchParams.get("limit") ?? "50";
 
 const api = apiFor(Astro.locals.cookie);
-const activityRes = await api.GET("/v1/groups/{id}/activity", {
-  params: { path: { id }, query: { cursor: cursor || undefined, limit: Number(limit) } },
-});
+const [groupsRes, activityRes] = await Promise.all([
+  api.GET("/v1/groups"),
+  api.GET("/v1/groups/{id}/activity", {
+    params: { path: { id }, query: { cursor: cursor || undefined, limit: Number(limit) } },
+  }),
+]);
 const items = activityRes.data?.items ?? [];
 const nextCursor = activityRes.data?.next_cursor ?? "";
 const viewerID = Astro.locals.user?.id ?? "";
+const members = groupsRes.data?.find((g) => g.id === id)?.members ?? [];
 ---
 {items.map((item) => (
-  <ActivityRow item={item} groupId={id} viewerId={viewerID} locale={Astro.locals.locale} />
+  <ActivityRow item={item} groupId={id} viewerId={viewerID} members={members} locale={Astro.locals.locale} />
 ))}
 <div data-activity-next-cursor={nextCursor} hidden></div>

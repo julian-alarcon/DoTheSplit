@@ -4,11 +4,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
-	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
@@ -49,9 +49,7 @@ func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {
 	}
 	for _, h := range p.Items {
 		kind := apigen.ActivityItemTargetKindExpense
-		if h.Action == repo.ActionSettlementCreated ||
-			h.Action == repo.ActionSettlementUpdated ||
-			h.Action == repo.ActionSettlementDeleted {
+		if strings.HasPrefix(string(h.Action), "settlement.") {
 			kind = apigen.ActivityItemTargetKindSettlement
 		}
 		ai := apigen.ActivityItem{
@@ -64,6 +62,8 @@ func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {
 			AmountCents: h.AmountCents,
 			Currency:    h.Currency,
 			Recurring:   h.Recurring,
+			FromUserId:  h.FromUserID,
+			ToUserId:    h.ToUserID,
 		}
 		if h.ActorID != nil && h.ActorName != nil {
 			ai.Actor = &apigen.ActivityActor{

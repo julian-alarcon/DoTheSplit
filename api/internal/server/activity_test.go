@@ -164,11 +164,14 @@ func TestActivityFeed(t *testing.T) {
 	require.Equal(t, "Groceries run", deleted["description"], "deleted event must keep the description")
 	require.Equal(t, alice["id"], deleted["actor"].(map[string]any)["user_id"])
 
-	// settlement.created: actor Bob, note becomes the description.
+	// settlement.created: actor Bob, note becomes the description, from/to
+	// surfaced so the feed can render "Bob paid Alice".
 	sCreated := byAction["settlement.created"]
 	require.Equal(t, "settlement", sCreated["target_kind"])
 	require.Equal(t, "payback", sCreated["description"])
 	require.Equal(t, bob["id"], sCreated["actor"].(map[string]any)["user_id"])
+	require.Equal(t, bob["id"], sCreated["from_user_id"])
+	require.Equal(t, alice["id"], sCreated["to_user_id"])
 
 	// settlement.updated: actor Alice.
 	require.Equal(t, alice["id"], byAction["settlement.updated"]["actor"].(map[string]any)["user_id"])

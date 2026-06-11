@@ -18,6 +18,7 @@ if (!group) {
 const items = activityRes.data?.items ?? [];
 const nextCursor = activityRes.data?.next_cursor ?? "";
 const viewerID = Astro.locals.user?.id ?? "";
+const members = group.members ?? [];
 ---
 
 <Base title={`${group.name} - activity`} back={{ href: `/groups/${id}`, label: group.name }}>
@@ -27,7 +28,7 @@ const viewerID = Astro.locals.user?.id ?? "";
   ) : (
     <ul class="divide-y divide-neutral-200 dark:divide-neutral-800" data-activity-list>
       {items.map((item) => (
-        <ActivityRow item={item} groupId={id} viewerId={viewerID} locale={Astro.locals.locale} />
+        <ActivityRow item={item} groupId={id} viewerId={viewerID} members={members} locale={Astro.locals.locale} />
       ))}
     </ul>
   )}

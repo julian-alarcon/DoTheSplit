@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.11.0...v0.11.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/oapi-codegen/runtime to v1.4.1 ([b4fdcaa](https://github.com/julian-alarcon/DoTheSplit/commit/b4fdcaa8cbfbb5d29b1eb95a3d7bee4512bb46f1))
+* **web:** disable Shiki highlighting to silence CSP build warning ([b39a3e7](https://github.com/julian-alarcon/DoTheSplit/commit/b39a3e78afb6dfc1b1470d851083e3393d36fca0))
+
 ## [0.11.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.10.0...v0.11.0) (2026-06-11)
 
 

@@ -83,3 +83,22 @@ func (s *Server) clearSessionCookie(c *gin.Context) {
 	c.SetCookie(middleware.SessionCookieName(s.Cfg.CookieSecure), "", -1,
 		"/", s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
 }
+
+// refreshCookieName is the httpOnly cookie carrying the rotating refresh token
+// for web SPA clients. Scoped to /v1/auth so only the refresh + revoke
+// endpoints ever receive it, minimizing its exposure surface.
+const refreshCookieName = "dts_refresh"
+const refreshCookiePath = "/v1/auth"
+
+func (s *Server) setRefreshCookie(c *gin.Context, token string, ttl time.Duration) {
+	maxAge := int(ttl / time.Second)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(refreshCookieName, token, maxAge,
+		refreshCookiePath, s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
+}
+
+func (s *Server) clearRefreshCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(refreshCookieName, "", -1,
+		refreshCookiePath, s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
+}

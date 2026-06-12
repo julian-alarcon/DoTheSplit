@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -46,6 +47,7 @@ type SetupLocker interface {
 type AuthService struct {
 	users        *repo.UserRepo
 	sessions     *repo.SessionRepo
+	refresh      *repo.RefreshTokenRepo
 	audit        *repo.AuditRepo
 	verification *repo.VerificationRepo
 	mailer       *MailerService
@@ -54,6 +56,12 @@ type AuthService struct {
 	email        *crypto.EmailCipher
 	pepper       []byte
 	sessTTL      time.Duration
+	// jwtKey signs/verifies bearer access tokens; accessTTL/refreshTTL govern
+	// the bearer-token flow. Set via SetTokenAuth; zero values disable the
+	// token endpoints (tests that only exercise cookie auth can skip it).
+	jwtKey     []byte
+	accessTTL  time.Duration
+	refreshTTL time.Duration
 
 	// stepUpFails counts recent failed step-up password verifications keyed
 	// by user ID, so handlers performing destructive admin actions can short-
@@ -94,6 +102,28 @@ func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.Ses
 		pepper:       pepper,
 		sessTTL:      sessTTL,
 	}
+}
+
+// SetTokenAuth enables the bearer-token flow (SPA / Capacitor clients). The
+// refresh repo is also threaded into the session-revocation paths so that
+// password change, account delete, and email-change confirm revoke refresh
+// tokens alongside cookie sessions. Wired in cmd/api; tests that exercise only
+// cookie auth may leave it unset.
+func (s *AuthService) SetTokenAuth(refresh *repo.RefreshTokenRepo, jwtKey []byte, accessTTL, refreshTTL time.Duration) {
+	s.refresh = refresh
+	s.jwtKey = jwtKey
+	s.accessTTL = accessTTL
+	s.refreshTTL = refreshTTL
+}
+
+// RevokeRefreshForUser revokes all refresh tokens for a user. Safe to call
+// when token auth is disabled (no-op). Exposed so the Me / Admin services can
+// revoke refresh tokens at the same points they wipe cookie sessions.
+func (s *AuthService) RevokeRefreshForUser(ctx context.Context, userID uuid.UUID) error {
+	if s.refresh == nil {
+		return nil
+	}
+	return s.refresh.RevokeAllForUser(ctx, userID)
 }
 
 // User is a service-layer projection of a user with the decrypted email.
@@ -401,6 +431,199 @@ func (s *AuthService) issueSession(ctx context.Context, userID uuid.UUID) (strin
 func hashToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
+}
+
+// ErrTokenAuthDisabled is returned by the token methods when SetTokenAuth was
+// never called (no signing key configured).
+var ErrTokenAuthDisabled = errors.New("token auth disabled")
+
+// ErrInvalidBearerToken covers expired/forged access tokens and unknown/expired/
+// reused refresh tokens. Handlers map it to 401.
+var ErrInvalidBearerToken = errors.New("invalid token")
+
+// TokenPair is the result of issuing or refreshing bearer tokens.
+type TokenPair struct {
+	AccessToken  string
+	RefreshToken string
+	AccessTTL    time.Duration
+	RefreshTTL   time.Duration
+}
+
+// IssueTokenPair authenticates with a password and returns a JWT access token
+// plus a fresh refresh token. Mirrors Login's credential checks (Argon2id,
+// email-verified gate) so token clients get identical semantics.
+func (s *AuthService) IssueTokenPair(ctx context.Context, email, password string) (*User, *TokenPair, error) {
+	if s.jwtKey == nil || s.refresh == nil {
+		return nil, nil, ErrTokenAuthDisabled
+	}
+	emailHash := s.email.HashEmail(email)
+	u, err := s.users.FindByEmailHash(ctx, emailHash)
+	if errors.Is(err, repo.ErrNotFound) {
+		return nil, nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	ok, err := crypto.VerifyPassword(u.PasswordHash, password, s.pepper)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, ErrInvalidCredentials
+	}
+	if u.EmailVerifiedAt == nil {
+		return nil, nil, ErrEmailUnverified
+	}
+	pair, err := s.mintTokenPair(ctx, u.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := s.toUser(u)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, pair, nil
+}
+
+// RefreshTokenPair rotates a refresh token and mints a new access token.
+// Presenting an already-revoked/rotated token (reuse) revokes the user's whole
+// chain and returns ErrInvalidBearerToken.
+func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string) (*TokenPair, error) {
+	if s.jwtKey == nil || s.refresh == nil {
+		return nil, ErrTokenAuthDisabled
+	}
+	if refreshToken == "" {
+		return nil, ErrInvalidBearerToken
+	}
+	row, err := s.refresh.FindByTokenHash(ctx, hashToken(refreshToken))
+	if errors.Is(err, repo.ErrNotFound) {
+		return nil, ErrInvalidBearerToken
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Reuse detection: a token that's already revoked or has a successor was
+	// either rotated or explicitly killed. Treat re-presentation as theft and
+	// nuke the whole chain.
+	if row.RevokedAt != nil || row.ReplacedBy != nil {
+		_ = s.refresh.RevokeAllForUser(ctx, row.UserID)
+		return nil, ErrInvalidBearerToken
+	}
+	if time.Now().After(row.ExpiresAt) {
+		return nil, ErrInvalidBearerToken
+	}
+	raw, hash, err := newOpaqueToken()
+	if err != nil {
+		return nil, err
+	}
+	next := &repo.RefreshToken{
+		UserID:    row.UserID,
+		TokenHash: hash,
+		ExpiresAt: time.Now().Add(s.refreshTTL),
+	}
+	if _, err := s.refresh.Rotate(ctx, row.ID, next); err != nil {
+		return nil, err
+	}
+	access, err := s.signAccessToken(row.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &TokenPair{
+		AccessToken:  access,
+		RefreshToken: raw,
+		AccessTTL:    s.accessTTL,
+		RefreshTTL:   s.refreshTTL,
+	}, nil
+}
+
+// RevokeRefreshToken revokes a single presented refresh token (token-client
+// logout). Idempotent: unknown/empty tokens are a no-op.
+func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	if s.refresh == nil || refreshToken == "" {
+		return nil
+	}
+	return s.refresh.RevokeByTokenHash(ctx, hashToken(refreshToken))
+}
+
+// ResolveAccessToken validates a bearer JWT and returns the user. Used by the
+// bearer middleware. Returns ErrInvalidBearerToken for any signature/expiry/claims
+// failure or a deleted user.
+func (s *AuthService) ResolveAccessToken(ctx context.Context, token string) (*User, error) {
+	if s.jwtKey == nil {
+		return nil, ErrTokenAuthDisabled
+	}
+	uid, err := s.parseAccessToken(token)
+	if err != nil {
+		return nil, ErrInvalidBearerToken
+	}
+	u, err := s.users.FindByID(ctx, uid)
+	if err != nil {
+		return nil, ErrInvalidBearerToken
+	}
+	if u.DeletedAt != nil {
+		return nil, ErrInvalidBearerToken
+	}
+	return s.toUser(u)
+}
+
+func (s *AuthService) mintTokenPair(ctx context.Context, userID uuid.UUID) (*TokenPair, error) {
+	raw, hash, err := newOpaqueToken()
+	if err != nil {
+		return nil, err
+	}
+	rt := &repo.RefreshToken{
+		UserID:    userID,
+		TokenHash: hash,
+		ExpiresAt: time.Now().Add(s.refreshTTL),
+	}
+	if err := s.refresh.Create(ctx, rt); err != nil {
+		return nil, err
+	}
+	access, err := s.signAccessToken(userID)
+	if err != nil {
+		return nil, err
+	}
+	return &TokenPair{
+		AccessToken:  access,
+		RefreshToken: raw,
+		AccessTTL:    s.accessTTL,
+		RefreshTTL:   s.refreshTTL,
+	}, nil
+}
+
+// newOpaqueToken returns a random 32-byte token (base64url) and its SHA-256.
+func newOpaqueToken() (raw string, hash []byte, err error) {
+	b := make([]byte, 32)
+	if _, err = rand.Read(b); err != nil {
+		return "", nil, err
+	}
+	raw = base64.RawURLEncoding.EncodeToString(b)
+	return raw, hashToken(raw), nil
+}
+
+func (s *AuthService) signAccessToken(userID uuid.UUID) (string, error) {
+	now := time.Now()
+	claims := jwt.RegisteredClaims{
+		Subject:   userID.String(),
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTTL)),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return tok.SignedString(s.jwtKey)
+}
+
+func (s *AuthService) parseAccessToken(token string) (uuid.UUID, error) {
+	var claims jwt.RegisteredClaims
+	_, err := jwt.ParseWithClaims(token, &claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return s.jwtKey, nil
+	}, jwt.WithValidMethods([]string{"HS256"}))
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.Parse(claims.Subject)
 }
 
 // VerifyPassword re-checks a user's password for step-up authorization.

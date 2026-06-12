@@ -93,6 +93,15 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 			},
 			extraField: "remember_me",
 		},
+		{
+			name:   "issue_token",
+			method: "POST",
+			path:   "/v1/auth/token",
+			body: map[string]any{
+				"email": "alice@test.dev", "password": "passwordpassword",
+			},
+			extraField: "remember_me",
+		},
 		// Authenticated me
 		{
 			name:   "patch_me",

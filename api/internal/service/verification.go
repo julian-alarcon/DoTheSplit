@@ -328,6 +328,9 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
 		return nil, "", err
 	}
+	if err := s.RevokeRefreshForUser(ctx, userID); err != nil {
+		return nil, "", err
+	}
 	u2, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, "", err
@@ -503,9 +506,12 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, new
 		return nil, "", err
 	}
 
-	// Revoke every existing session - anyone holding an old cookie loses
-	// access immediately.
+	// Revoke every existing session and refresh token - anyone holding an old
+	// cookie or bearer token loses access immediately.
 	if err := s.sessions.DeleteAllForUser(ctx, u.ID); err != nil {
+		return nil, "", err
+	}
+	if err := s.RevokeRefreshForUser(ctx, u.ID); err != nil {
 		return nil, "", err
 	}
 	u2, err := s.users.FindByID(ctx, u.ID)

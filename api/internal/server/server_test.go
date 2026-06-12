@@ -120,11 +120,14 @@ func setup(t *testing.T) *testStack {
 		key[i] = byte(i + 1)
 	}
 	cfg := &config.Config{
-		DatabaseURL:    dsn,
-		SessionTTLDay:  30,
-		EmailEncKey:    key,
-		EmailHMACKey:   key,
-		PasswordPepper: key,
+		DatabaseURL:        dsn,
+		SessionTTLDay:      30,
+		AccessTokenTTLMin:  15,
+		RefreshTokenTTLDay: 30,
+		EmailEncKey:        key,
+		EmailHMACKey:       key,
+		PasswordPepper:     key,
+		JWTSigningKey:      key,
 	}
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	require.NoError(t, err)
@@ -149,6 +152,9 @@ func setup(t *testing.T) *testStack {
 	groupSvc := service.NewGroupService(groups, users, balances, email)
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, nil)
 	authSvc := service.NewAuthService(pool, users, sessionRepo, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper, ttl)
+	authSvc.SetTokenAuth(repo.NewRefreshTokenRepo(pool), cfg.JWTSigningKey,
+		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
+		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
 	setupSvc := service.NewSetupService(pool, setupRepo, authSvc, auditRepo)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 	// Mirror the production startup hook so the test instance starts in
@@ -171,7 +177,7 @@ func setup(t *testing.T) *testStack {
 		Cfg:           cfg,
 		Pool:          pool,
 		Auth:          authSvc,
-		MeSvc:         service.NewMeService(users, sessionRepo, email, cfg.PasswordPepper),
+		MeSvc:         newMeSvcWithAuth(users, sessionRepo, email, cfg.PasswordPepper, authSvc),
 		Groups:        groupSvc,
 		Categories:    categorySvc,
 		Expenses:      expenseSvc,
@@ -202,6 +208,12 @@ func setup(t *testing.T) *testStack {
 		_ = pgc.Terminate(context.Background())
 	})
 	return ts
+}
+
+func newMeSvcWithAuth(users *repo.UserRepo, sessions *repo.SessionRepo, email *crypto.EmailCipher, pepper []byte, auth *service.AuthService) *service.MeService {
+	m := service.NewMeService(users, sessions, email, pepper)
+	m.SetAuth(auth)
+	return m
 }
 
 // request is a tiny helper used throughout the test.

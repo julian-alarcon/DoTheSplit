@@ -60,6 +60,7 @@ func main() {
 
 	users := repo.NewUserRepo(pool)
 	sessions := repo.NewSessionRepo(pool)
+	refreshTokens := repo.NewRefreshTokenRepo(pool)
 	groups := repo.NewGroupRepo(pool)
 	expenses := repo.NewExpenseRepo(pool)
 	settlements := repo.NewSettlementRepo(pool)
@@ -77,9 +78,13 @@ func main() {
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, logger)
 	auth := service.NewAuthService(pool, users, sessions, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper,
 		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
+	auth.SetTokenAuth(refreshTokens, cfg.JWTSigningKey,
+		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
+		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 
 	meSvc := service.NewMeService(users, sessions, email, cfg.PasswordPepper)
+	meSvc.SetAuth(auth)
 	categorySvc := service.NewCategoryService(categories)
 	groupSvc := service.NewGroupService(groups, users, balances, email)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)

@@ -19,6 +19,7 @@ func setEnv(t *testing.T, overrides map[string]string) {
 		"EMAIL_ENC_KEY":   key,
 		"EMAIL_HMAC_KEY":  key,
 		"PASSWORD_PEPPER": key,
+		"JWT_SIGNING_KEY": key,
 	}
 	for k, v := range overrides {
 		defaults[k] = v
@@ -42,6 +43,10 @@ func TestLoadValid(t *testing.T) {
 	require.Len(t, cfg.EmailEncKey, 32)
 	require.Len(t, cfg.EmailHMACKey, 32)
 	require.Len(t, cfg.PasswordPepper, 32)
+	require.Len(t, cfg.JWTSigningKey, 32)
+	require.Equal(t, 15, cfg.AccessTokenTTLMin)
+	require.Equal(t, 30, cfg.RefreshTokenTTLDay)
+	require.Equal(t, []string{"capacitor://localhost", "https://localhost"}, cfg.CapacitorOrigins)
 }
 
 func TestLoadTrustedProxies(t *testing.T) {

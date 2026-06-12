@@ -22,7 +22,7 @@ DoTheSplit - a expense-sharing app.
 
 1. Edit [docs/openapi.yaml](docs/openapi.yaml) first - schemas, paths, responses.
 2. Run `make gen` to regenerate Go (`api/internal/apigen/`) and TypeScript (`web/src/lib/api/schema.d.ts`) types. The build won't compile until the code matches.
-3. Add a migration if the DB schema changes ([api/migrations/NNNN_*.up.sql](api/migrations/) + matching `.down.sql`).
+3. Add a migration if the DB schema changes ([api/migrations/NNNN\_\*.up.sql](api/migrations/) + matching `.down.sql`).
 4. Wire the backend in this exact order: **repo → service → handlers → router**.
 5. Regenerate / rebuild the frontend against the new types; add/adjust Astro pages and SSR API routes.
 6. Update the worker only if the recurring flow is affected - it reuses services, so most changes propagate for free.
@@ -33,7 +33,7 @@ Don't change generated files by hand - re-run `make gen` instead.
 ### OpenAPI conventions we enforce
 
 - **Spec version**: `3.0.3`. We'd use 3.1 but `oapi-codegen` doesn't fully support it yet - keep it on 3.0.3 until that changes.
-- **API versioning**: all business endpoints live under `/v1/…`. Health probes (`/healthz`, `/readyz`) are *not* versioned. Breaking changes cut a new `/v2`, run both mounts in parallel during migration, then retire `/v1` when clients are gone.
+- **API versioning**: all business endpoints live under `/v1/…`. Health probes (`/healthz`, `/readyz`) are _not_ versioned. Breaking changes cut a new `/v2`, run both mounts in parallel during migration, then retire `/v1` when clients are gone.
 - **Request bodies**: must have `additionalProperties: false`. Unknown fields are a 400 - typos should fail loudly, not silently.
 - **Error responses**: always reference the named `components.responses.{BadRequest,Unauthorized,Forbidden,NotFound,Conflict,TooManyRequests,ServiceUnavailable}` - never inline `schema: { $ref: ".../Error" }` under a status code.
 - **Examples**: add an `example:` to request schemas that anyone would want to try in a docs viewer (create/login flows at minimum).
@@ -56,8 +56,8 @@ Rules of thumb:
 - Always call `GroupService.RequireMember` (or equivalent `IsMember`) before reading/writing group-scoped data.
 - Expense creation must validate: split-sum invariant, payer ∈ members, all split users ∈ members, mode matches supplied values. All inside one tx.
 - Currency is optional on the wire. Empty string means "use the group's `default_currency`" - the service layer looks it up.
-- Soft-delete via `deleted_at` for expenses and settlements; every *list* read filters `WHERE deleted_at IS NULL` or joins with that filter. The single-item `ExpenseService.Get` / `SettlementService.Get` deliberately return soft-deleted rows (with `deleted_at` set) so the detail page can render a read-only "deleted" view and offer Restore; `Update`/`Delete` keep their own `deleted_at` guards so a deleted item still can't be edited or double-deleted.
-- Soft-delete is reversible: `POST /v1/expenses/{id}/restore` and `POST /v1/settlements/{id}/restore` clear `deleted_at` (any group member) and write an `expense.restored` / `settlement.restored` activity event. Restoring an already-active row is a `409`. The `activity_events.action` CHECK constraint must list every action - add new ones in a migration (see `0002_activity_restore_actions`).
+- Soft-delete via `deleted_at` for expenses and settlements; every _list_ read filters `WHERE deleted_at IS NULL` or joins with that filter. The single-item `ExpenseService.Get` / `SettlementService.Get` deliberately return soft-deleted rows (with `deleted_at` set) so the detail page can render a read-only "deleted" view and offer Restore; `Update`/`Delete` keep their own `deleted_at` guards so a deleted item still can't be edited or double-deleted.
+- Soft-delete is reversible: `POST /v1/expenses/{id}/restore` and `POST /v1/settlements/{id}/restore` clear `deleted_at` (any group member) and write an `expense.restored` / `settlement.restored` activity event. Restoring an already-active row is a `409`. The `activity_events.action` CHECK constraint must list every action.
 
 ## Database
 
@@ -78,7 +78,7 @@ Rules of thumb:
 - **Form endpoints post to `/api/*.ts` SSR handlers**, which forward to the Go API with the cookie. Don't call the Go API from client islands if a form-post pattern works - keeps the session on the Astro origin.
 - **Optimistic UI / react-query** is planned for richer islands; static forms are fine for CRUD pages.
 - Astro's `security.checkOrigin` is disabled - we rely on `SameSite=Lax` on the session cookie for CSRF protection (see [astro.config.mjs](web/astro.config.mjs)).
-- **Single-column layout, capped at 768px (default)**: the main wrapper in [Base.astro](web/src/layouts/Base.astro) is `max-w-3xl` (= 48rem / 768px) and pages stack vertically at every viewport - no `md:grid-cols-2` / `lg:grid-cols-2` for page-level columns. On ultrawide screens the content stays centered at 768px instead of expanding. Design every page mobile-first, then verify it still reads well at 768px. Tailwind's `sm:flex-row` is fine *inside* a row item (e.g. flipping a label/value pair from stacked to inline at ≥640px) - that's not page layout, that's local readability. Forms in particular keep one field per row so the floating-label + `:user-invalid` + `.field-error` chain stays predictable.
+- **Single-column layout, capped at 768px (default)**: the main wrapper in [Base.astro](web/src/layouts/Base.astro) is `max-w-3xl` (= 48rem / 768px) and pages stack vertically at every viewport - no `md:grid-cols-2` / `lg:grid-cols-2` for page-level columns. On ultrawide screens the content stays centered at 768px instead of expanding. Design every page mobile-first, then verify it still reads well at 768px. Tailwind's `sm:flex-row` is fine _inside_ a row item (e.g. flipping a label/value pair from stacked to inline at ≥640px) - that's not page layout, that's local readability. Forms in particular keep one field per row so the floating-label + `:user-invalid` + `.field-error` chain stays predictable.
 - **Opt-in wide layout for triptych pages**: pass `wide` to `<Base>` to switch the wrapper to `max-w-6xl` (= 72rem / 1152px). Reserved for pages where three sibling sections genuinely earn their own column at ≥1024px - currently only the group dashboard ([groups/[id].astro](web/src/pages/groups/[id].astro)) where Balances / Transactions / Add expense form a triptych. The grid template is `lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]` (328px fixed sides + flexible center, sides equal by construction); `lg:order-{1,2,3}` reshuffles the markup-mobile-order (Balances → Add expense → Transactions) into the desktop visual order (Balances | Transactions | Add expense). Below `lg` everything stacks single-column, same as the default layout.
 - **Validation feedback**: rely on native HTML constraint validation (`required`, `pattern`, `type="email"`, `minlength`) plus `:user-invalid` styling in [global.css](web/src/styles/global.css). Don't call `event.preventDefault()` in submit handlers, don't wire JS-based validation. For each `required` input, add a sibling `<p class="field-error">…</p>` with the user-facing hint - the CSS toggles it via `.field:has(.field-input:user-invalid) + .field-error`. This is the only visible cue on Firefox for Android, which doesn't render the native constraint-validation tooltip.
 - **Native form controls**: keep them. We polish the closed/inert state via `.field-*` classes (custom chevron on `.field-select`, panel-matching colors, `color-scheme: light dark` cascade) but never replace `<select>`, `<input type="checkbox|radio|number">` with custom JS widgets. Reasons: accessibility (focus trap, keyboard nav, screen readers, IME), offline reliability, and PWA install size. The Android open dropdown sheet stays Material You - that's a deliberate trade. Exception: `<input type="date">` is replaced by [DatePicker.astro](web/src/components/DatePicker.astro) because the native popup sizes inconsistently and we need a today-overlay glyph.
@@ -95,7 +95,7 @@ On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never har
 ## Account invariants
 
 - **Soft delete, never hard delete.** Accounts have `deleted_at`; the foreign keys from expenses, splits, settlements, and recurring templates deliberately stay pointing at the tombstoned row so ledgers survive. If a requirement ever seems to want hard delete + CASCADE, stop and flag it - that's silent data loss for every other group member.
-- **Tombstone format** is `"Deleted user #" + uuid[:8]`. It's stable (members can still identify *which* deleted person paid for what) and non-identifying (no email, no real name). The full UUID is also the only non-scrambled column after delete, so operators can still answer "who was this?" from the audit trail.
+- **Tombstone format** is `"Deleted user #" + uuid[:8]`. It's stable (members can still identify _which_ deleted person paid for what) and non-identifying (no email, no real name). The full UUID is also the only non-scrambled column after delete, so operators can still answer "who was this?" from the audit trail.
 - **Re-registration** with a soft-deleted email works because `users_email_hash_active_key` is a partial unique index (`WHERE deleted_at IS NULL`).
 - **Session revocation on delete + password change**: both flows must call `SessionRepo.DeleteAllForUser` so the old cookie stops working immediately. Password change additionally issues a fresh session so the current browser stays logged in.
 
@@ -121,7 +121,7 @@ Three layers, all run in CI on every PR:
 - **Go integration tests** spin up real Postgres via `testcontainers-go/postgres`. Two homes:
   - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, cookie naming switch).
   - [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) for schema-only invariants (up/down round-trip, group-delete FK cascades).
-- **Web unit tests** via [vitest](https://vitest.dev) under [web/src/scripts/*.test.ts](web/src/scripts/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math.
+- **Web unit tests** via [vitest](https://vitest.dev) under [web/src/scripts/\*.test.ts](web/src/scripts/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math.
 - **End-to-end** via [Playwright](https://playwright.dev) under [web/tests/e2e/](web/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the SSR Astro pages. Catches contract drift between the web bridge and the Go API.
 
 Invariants for adding tests:
@@ -145,4 +145,4 @@ Run everything with `make test`. Go alone: `cd api && go test ./... -race`. Web 
 
 Deferred from v1 - raise with the user before adding:
 
-- OAuth / passkeys, multi-currency FX conversion, PWA offline mode, real-time sync (SSE / WebSockets), file receipts / expense attachments, CSV import / export, full-resolution avatars (8x8 GDPR-minimisation is deliberate), account hard-delete (soft delete preserves co-members' ledgers).
+- OAuth / passkeys, multi-currency FX conversion, file receipts / expense attachments, full-resolution avatars (8x8 GDPR-minimisation is deliberate), account hard-delete (soft delete preserves co-members' ledgers).

@@ -151,12 +151,13 @@ jobs:
       - name: generate stack secrets
         # Throw-away keys: the docker compose stack is destroyed after this
         # job, so the secrets never leave the runner. The api refuses to
-        # boot without all three, so we always generate fresh ones.
+        # boot without all four, so we always generate fresh ones.
         run: |
           {
             echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
             echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
             echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
+            echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
             # base64url alphabet (`-` and `_` instead of `+` and `/`) so the
             # password is safe to drop into DATABASE_URL userinfo without
             # percent-encoding. Plain base64 contains `/` ~64% of the time,

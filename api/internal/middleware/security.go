@@ -38,14 +38,18 @@ func SecurityHeaders(cookieSecure bool) gin.HandlerFunc {
 	}
 }
 
-// CORS allows requests from the configured web origin with credentials.
-// The list may be comma-separated.
-func CORS(allowedOrigins string) gin.HandlerFunc {
+// CORS allows requests from the configured origins with credentials. Each
+// entry may itself be comma-separated; native Capacitor origins
+// (capacitor://localhost, https://localhost) are passed in alongside the web
+// origin. Authorization is allowed so bearer-token clients can send the header.
+func CORS(allowedOrigins ...string) gin.HandlerFunc {
 	allowed := map[string]bool{}
-	for _, o := range strings.Split(allowedOrigins, ",") {
-		o = strings.TrimSpace(o)
-		if o != "" {
-			allowed[o] = true
+	for _, group := range allowedOrigins {
+		for _, o := range strings.Split(group, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				allowed[o] = true
+			}
 		}
 	}
 	return func(c *gin.Context) {
@@ -55,7 +59,7 @@ func CORS(allowedOrigins string) gin.HandlerFunc {
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Vary", "Origin")
 			h.Set("Access-Control-Allow-Credentials", "true")
-			h.Set("Access-Control-Allow-Headers", "Content-Type")
+			h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			h.Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
 			if c.Request.Method == http.MethodOptions {
 				c.AbortWithStatus(http.StatusNoContent)

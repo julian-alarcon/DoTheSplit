@@ -23,6 +23,7 @@ cp .env.example .env
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
   echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
   echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
+  echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
   echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)"
 } >> .env
 
@@ -84,8 +85,9 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 | `EMAIL_ENC_KEY`   | AES-GCM key that encrypts every email at rest | Existing emails are unrecoverable               | Attacker can decrypt every email                   |
 | `EMAIL_HMAC_KEY`  | HMAC key for email lookup hashes              | Login by email stops working for existing users | Attacker can enumerate which emails are registered |
 | `PASSWORD_PEPPER` | Server-side pepper added before Argon2id      | Existing passwords are unrecoverable            | Attacker can crack stolen password hashes offline  |
+| `JWT_SIGNING_KEY` | HS256 key signing SPA / native access tokens  | All token clients are logged out (recoverable)  | Attacker can mint valid access tokens for any user |
 
-`POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database.
+`POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database. `JWT_SIGNING_KEY` is the least catastrophic to lose: rotating it only forces every token client to log in again.
 
 **What this means for you:**
 

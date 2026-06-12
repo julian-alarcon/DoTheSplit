@@ -4,6 +4,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
@@ -25,8 +26,9 @@ func New(s *handlers.Server) http.Handler {
 	r.Use(requestID())
 	r.Use(mw.Logger(slog.Default()))
 	r.Use(mw.SecurityHeaders(s.Cfg.CookieSecure))
-	r.Use(mw.CORS(s.Cfg.WebOrigin))
+	r.Use(mw.CORS(s.Cfg.WebOrigin, strings.Join(s.Cfg.CapacitorOrigins, ",")))
 	r.Use(mw.Session(s.Auth, s.Cfg.CookieSecure))
+	r.Use(mw.Bearer(s.Auth))
 
 	// Health probes are unversioned infrastructure endpoints.
 	r.GET("/healthz", s.Healthz)
@@ -53,7 +55,12 @@ func New(s *handlers.Server) http.Handler {
 	authG.POST("/auth/verify/resend", s.ResendVerification)
 	authG.POST("/auth/password-reset/request", s.RequestPasswordReset)
 	authG.POST("/auth/password-reset/confirm", s.ConfirmPasswordReset)
+	authG.POST("/auth/token", s.IssueToken)
 	v1.POST("/auth/logout", s.Logout)
+	// Refresh + revoke are public (they authenticate via the refresh token
+	// itself) and not rate-limited so a client can always rotate or log out.
+	v1.POST("/auth/refresh", s.RefreshToken)
+	v1.POST("/auth/token/revoke", s.RevokeToken)
 
 	// Authenticated endpoints.
 	auth := v1.Group("")

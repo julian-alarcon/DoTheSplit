@@ -309,6 +309,92 @@ paths:
         "204":
           description: Logged out
 
+  /v1/auth/token:
+    post:
+      summary: Exchange credentials for a bearer access token
+      description: |
+        Token-based login for SPA / native (Capacitor) clients that cannot use
+        the session cookie. Returns a short-lived JWT access token in the body
+        and sets a long-lived, rotating refresh token in an httpOnly cookie
+        (`dts_refresh`, scoped to `/v1/auth/refresh`). Native clients that have
+        no cookie jar receive the refresh token in the body as well.
+      operationId: issueToken
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+            example:
+              email: ada@example.com
+              password: correct-horse-battery
+      responses:
+        "200":
+          description: Access token issued; refresh token set as httpOnly cookie
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account exists but the email address has not been verified yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/auth/refresh:
+    post:
+      summary: Rotate the refresh token and mint a new access token
+      description: |
+        Reads the refresh token from the `dts_refresh` httpOnly cookie (web) or
+        the request body (native), rotates it (the presented token is revoked
+        and replaced), and returns a fresh access token plus a new refresh
+        token. Presenting an already-rotated or revoked refresh token revokes
+        the entire token chain for that user and returns 401 (reuse detection).
+      operationId: refreshToken
+      security: []
+      tags: [auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New access token issued; refresh cookie rotated
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/token/revoke:
+    post:
+      summary: Revoke the caller's refresh token (token-client logout)
+      description: |
+        Revokes the refresh token presented in the `dts_refresh` cookie or the
+        request body and clears the cookie. Idempotent: an absent or unknown
+        token still returns 204.
+      operationId: revokeToken
+      security: []
+      tags: [auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204":
+          description: Refresh token revoked
+
   /v1/me:
     get:
       summary: Get the current user
@@ -1594,6 +1680,15 @@ components:
       description: |
         Session cookie. Name is `dts_session` on plain HTTP deployments and
         `__Host-dts_session` when `COOKIE_SECURE=true`.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Short-lived JWT access token for SPA / native clients, obtained from
+        `/v1/auth/token` and refreshed via `/v1/auth/refresh`. Sent as
+        `Authorization: Bearer <token>`. Accepted on every authenticated
+        endpoint alongside `cookieAuth`; if both are present the cookie wins.
 
   parameters:
     GroupId:
@@ -1888,6 +1983,36 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string }
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: "Short-lived JWT. Send as `Authorization: Bearer <access_token>`."
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds.
+        refresh_token:
+          type: string
+          description: |
+            Rotating refresh token. Only present for native clients (no cookie
+            jar); web clients receive it as the `dts_refresh` httpOnly cookie
+            and this field is omitted.
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          description: |
+            Refresh token for native clients. Web clients omit this and rely on
+            the `dts_refresh` httpOnly cookie instead.
 
     Group:
       type: object

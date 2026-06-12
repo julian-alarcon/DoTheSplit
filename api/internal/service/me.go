@@ -45,12 +45,25 @@ var (
 type MeService struct {
 	users    *repo.UserRepo
 	sessions *repo.SessionRepo
+	auth     *AuthService
 	email    *crypto.EmailCipher
 	pepper   []byte
 }
 
 func NewMeService(users *repo.UserRepo, sessions *repo.SessionRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
 	return &MeService{users: users, sessions: sessions, email: email, pepper: pepper}
+}
+
+// SetAuth threads the AuthService in so password change / account delete can
+// revoke refresh tokens alongside cookie sessions. Optional: when unset (e.g.
+// cookie-only tests) refresh revocation is simply skipped.
+func (s *MeService) SetAuth(auth *AuthService) { s.auth = auth }
+
+func (s *MeService) revokeRefresh(ctx context.Context, userID uuid.UUID) error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RevokeRefreshForUser(ctx, userID)
 }
 
 // Rename updates the display name on an active account.
@@ -120,7 +133,10 @@ func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPas
 		return err
 	}
 	// Nuke all other sessions for this user; caller will issue a fresh one.
-	return s.sessions.DeleteAllForUser(ctx, userID)
+	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
+		return err
+	}
+	return s.revokeRefresh(ctx, userID)
 }
 
 // SetAvatarFromBase64 validates the client-side 8x8 PNG, upscales it to
@@ -223,5 +239,8 @@ func (s *MeService) SoftDelete(ctx context.Context, userID uuid.UUID) error {
 	if err := s.users.SoftDelete(ctx, userID, tombstone, scrambled, scrambled, "!deleted:"+u.ID.String()); err != nil {
 		return err
 	}
-	return s.sessions.DeleteAllForUser(ctx, userID)
+	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
+		return err
+	}
+	return s.revokeRefresh(ctx, userID)
 }

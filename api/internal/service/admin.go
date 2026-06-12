@@ -294,6 +294,9 @@ func (s *AdminService) DeleteUser(ctx context.Context, actorID, targetID uuid.UU
 	if err := s.sessions.DeleteAllForUser(ctx, targetID); err != nil {
 		return err
 	}
+	if err := s.auth.RevokeRefreshForUser(ctx, targetID); err != nil {
+		return err
+	}
 	return s.audit.Insert(ctx, nil, &repo.AuditEntry{
 		ActorUserID:  actorID,
 		TargetUserID: &targetID,
@@ -359,7 +362,10 @@ func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID 
 	}
 	// Sessions are deleted *after* commit - if the email enqueue rolled
 	// back we leave the legitimate user logged in.
-	return s.sessions.DeleteAllForUser(ctx, targetID)
+	if err := s.sessions.DeleteAllForUser(ctx, targetID); err != nil {
+		return err
+	}
+	return s.auth.RevokeRefreshForUser(ctx, targetID)
 }
 
 // AdminGroupListItem mirrors the API response shape for /v1/admin/groups.

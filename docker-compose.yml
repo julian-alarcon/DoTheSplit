@@ -63,9 +63,13 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      CAPACITOR_ORIGINS: ${CAPACITOR_ORIGINS:-capacitor://localhost,https://localhost}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
       EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
       EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:8080:8080"
@@ -103,6 +107,7 @@ services:
       EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
       EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     restart: unless-stopped
     read_only: true

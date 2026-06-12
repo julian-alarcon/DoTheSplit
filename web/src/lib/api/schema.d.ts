@@ -215,6 +215,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange credentials for a bearer access token
+         * @description Token-based login for SPA / native (Capacitor) clients that cannot use
+         *     the session cookie. Returns a short-lived JWT access token in the body
+         *     and sets a long-lived, rotating refresh token in an httpOnly cookie
+         *     (`dts_refresh`, scoped to `/v1/auth/refresh`). Native clients that have
+         *     no cookie jar receive the refresh token in the body as well.
+         */
+        post: operations["issueToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the refresh token and mint a new access token
+         * @description Reads the refresh token from the `dts_refresh` httpOnly cookie (web) or
+         *     the request body (native), rotates it (the presented token is revoked
+         *     and replaced), and returns a fresh access token plus a new refresh
+         *     token. Presenting an already-rotated or revoked refresh token revokes
+         *     the entire token chain for that user and returns 401 (reuse detection).
+         */
+        post: operations["refreshToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/token/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke the caller's refresh token (token-client logout)
+         * @description Revokes the refresh token presented in the `dts_refresh` cookie or the
+         *     request body and clears the cookie. Idempotent: an absent or unknown
+         *     token still returns 204.
+         */
+        post: operations["revokeToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1267,6 +1337,27 @@ export interface components {
             /** Format: email */
             email: string;
             password: string;
+        };
+        TokenResponse: {
+            /** @description Short-lived JWT. Send as `Authorization: Bearer <access_token>`. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            /** @description Access token lifetime in seconds. */
+            expires_in: number;
+            /**
+             * @description Rotating refresh token. Only present for native clients (no cookie
+             *     jar); web clients receive it as the `dts_refresh` httpOnly cookie
+             *     and this field is omitted.
+             */
+            refresh_token?: string;
+        };
+        RefreshRequest: {
+            /**
+             * @description Refresh token for native clients. Web clients omit this and rely on
+             *     the `dts_refresh` httpOnly cookie instead.
+             */
+            refresh_token?: string;
         };
         Group: {
             /** Format: uuid */
@@ -2359,6 +2450,98 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Logged out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issueToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "email": "ada@example.com",
+                 *       "password": "correct-horse-battery"
+                 *     }
+                 */
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Access token issued; refresh token set as httpOnly cookie */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Account exists but the email address has not been verified yet. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    refreshToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description New access token issued; refresh cookie rotated */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    revokeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Refresh token revoked */
             204: {
                 headers: {
                     [name: string]: unknown;

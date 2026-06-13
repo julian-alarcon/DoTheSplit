@@ -47,7 +47,8 @@ services:
 
   api:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}
         BUILD_VERSION: ${BUILD_VERSION:-dev}
@@ -92,7 +93,8 @@ services:
 
   worker:
     build:
-      context: ./api
+      context: .
+      dockerfile: api/Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}
         BUILD_VERSION: ${BUILD_VERSION:-dev}

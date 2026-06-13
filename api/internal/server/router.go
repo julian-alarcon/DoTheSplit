@@ -137,6 +137,15 @@ func New(s *handlers.Server) http.Handler {
 	admin.POST("/smtp/send-test", s.AdminSendSmtpTestEmail)
 	admin.GET("/audit", s.AdminListAudit)
 
+	// Embedded Vue SPA catch-all. Registered last so every /v1, /healthz, and
+	// /readyz route above wins; unknown GETs fall back to the SPA shell for
+	// client-side routing.
+	spa, err := s.NewSPAHandler()
+	if err != nil {
+		panic("server: load embedded SPA: " + err.Error())
+	}
+	r.NoRoute(spa)
+
 	return r
 }
 

@@ -2,6 +2,8 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
+import AppLayout from "@/components/AppLayout.vue";
+import Field from "@/components/Field.vue";
 
 const { login } = useAuth();
 const router = useRouter();
@@ -30,19 +32,51 @@ async function onSubmit() {
 </script>
 
 <template>
-  <main>
-    <h1>Log in</h1>
-    <form @submit.prevent="onSubmit">
-      <label>
-        Email
-        <input v-model="email" type="email" required autocomplete="username" />
-      </label>
-      <label>
-        Password
-        <input v-model="password" type="password" required autocomplete="current-password" />
-      </label>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <button type="submit" :disabled="submitting">Log in</button>
-    </form>
-  </main>
+  <AppLayout>
+    <section class="login">
+      <h1 class="login-title">Log in</h1>
+      <form class="login-form" @submit.prevent="onSubmit">
+        <Field
+          v-model="email"
+          label="Email"
+          type="email"
+          required
+          autocomplete="username"
+          error="Enter a valid email address."
+        />
+        <Field
+          v-model="password"
+          label="Password"
+          type="password"
+          required
+          autocomplete="current-password"
+          error="Enter your password."
+        />
+        <p v-if="error" class="login-error" role="alert">{{ error }}</p>
+        <button type="submit" class="btn-primary" :disabled="submitting">Log in</button>
+      </form>
+    </section>
+  </AppLayout>
 </template>
+
+<style scoped>
+.login {
+  margin-inline: auto;
+  max-width: 24rem;
+  padding-block: 1.5rem;
+}
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+}
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.login-error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+</style>

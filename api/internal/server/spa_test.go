@@ -30,6 +30,14 @@ func TestSPAFallbackServesShell(t *testing.T) {
 	resp, _ = rawRequest(t, "GET", base+"/", nil, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
+	// The theme-boot script is served same-origin as real JS. It's referenced
+	// without defer from index.html and the strict CSP forbids inline scripts,
+	// so it must resolve to an actual file (not the SPA shell fallback).
+	resp, body = rawRequest(t, "GET", base+"/theme-boot.js", nil, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, resp.Header.Get("Content-Type"), "javascript")
+	require.Contains(t, string(body), "dts_theme")
+
 	// A missing hashed asset is a genuine 404, not a shell fallback.
 	resp, _ = rawRequest(t, "GET", base+"/assets/does-not-exist.js", nil, nil)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)

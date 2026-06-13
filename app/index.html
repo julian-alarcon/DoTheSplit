@@ -7,6 +7,10 @@
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>DoTheSplit</title>
+    <!-- Theme boot: applies the stored theme to <html> before first paint to
+         avoid a flash-of-wrong-theme. Must be a same-origin classic script
+         (no defer/async) because the strict CSP forbids inline scripts. -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="app"></div>

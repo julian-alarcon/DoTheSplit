@@ -18,7 +18,7 @@ export default { inheritAttrs: false };
 //
 // v-model binds the input value. `error` is the user-facing hint shown when
 // the field is invalid; omit it to suppress the sibling error line.
-import { useId } from "vue";
+import { ref, useId } from "vue";
 
 defineProps<{
   label: string;
@@ -27,6 +27,11 @@ defineProps<{
 
 const model = defineModel<string>({ default: "" });
 const inputId = useId();
+
+// Exposed so callers can drive native constraint validation directly, e.g.
+// setCustomValidity for a password-confirmation match (see ResetView).
+const input = ref<HTMLInputElement | null>(null);
+defineExpose({ input });
 </script>
 
 <template>
@@ -34,6 +39,7 @@ const inputId = useId();
     <label class="field" :for="inputId">
       <input
         :id="inputId"
+        ref="input"
         v-model="model"
         class="field-input"
         placeholder=" "

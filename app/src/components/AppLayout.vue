@@ -9,7 +9,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
-import Avatar from "@/components/Avatar.vue";
+import MemberAvatar from "@/components/MemberAvatar.vue";
 import Icon from "@/components/Icon.vue";
 import ThemeSwitcher from "@/components/ThemeSwitcher.vue";
 
@@ -94,7 +94,14 @@ onBeforeUnmount(() => {
               aria-controls="user-menu-panel"
               @click="toggleMenu"
             >
-              <Avatar :display-name="user.display_name" :size="24" bordered />
+              <MemberAvatar
+                :user-id="user.id"
+                :display-name="user.display_name"
+                :has-avatar="user.has_avatar"
+                :avatar-updated-at="user.avatar_updated_at"
+                :size="24"
+                bordered
+              />
               <span class="user-name">{{ user.display_name }}</span>
               <Icon name="chevron-down" :size="12" />
             </button>

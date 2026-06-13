@@ -16,11 +16,11 @@ const props = withDefaults(
     caption?: string;
     ariaLabel?: string;
     /** When true, render the Repeat dropdown bound to the cadence model. */
-    cadence?: boolean;
+    showCadence?: boolean;
     /** 0 = Sunday-first, 1 = Monday-first. */
     weekStart?: 0 | 1;
   }>(),
-  { variant: "default", ariaLabel: "Pick date", cadence: false, weekStart: 1 },
+  { variant: "default", ariaLabel: "Pick date", showCadence: false, weekStart: 1 },
 );
 
 const value = defineModel<string>({ required: true });
@@ -243,7 +243,7 @@ function onGridKeydown(e: KeyboardEvent) {
 
 function commit() {
   value.value = pending.value;
-  if (props.cadence) cadenceValue.value = pendingCadence.value;
+  if (props.showCadence) cadenceValue.value = pendingCadence.value;
   dialog.value?.close();
 }
 function cancel() {
@@ -275,7 +275,7 @@ watch(value, (v) => {
           <span class="dp-day">{{ triggerDay }}</span>
         </span>
       </button>
-      <span v-if="cadence && cadenceBadge" class="dp-cadence-badge">{{
+      <span v-if="showCadence && cadenceBadge" class="dp-cadence-badge">{{
         cadenceBadge
       }}</span>
     </template>
@@ -363,7 +363,7 @@ watch(value, (v) => {
             <button type="button" class="btn-secondary btn-sm" @click="goToday">
               Today
             </button>
-            <label v-if="cadence" class="dp-repeat">
+            <label v-if="showCadence" class="dp-repeat">
               <span class="dp-repeat-lbl">
                 <Icon name="arrows-rotate" />
                 <span>Repeat</span>

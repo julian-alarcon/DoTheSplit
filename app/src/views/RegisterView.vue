@@ -1,33 +1,37 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import AppLayout from "@/components/AppLayout.vue";
 import Field from "@/components/Field.vue";
 import Alert from "@/components/Alert.vue";
 
-const { login } = useAuth();
+const { register } = useAuth();
 const router = useRouter();
-const route = useRoute();
 
+const displayName = ref("");
 const email = ref("");
 const password = ref("");
-const error = ref<string | null>(null);
 const submitting = ref(false);
+const error = ref(false);
 
 async function onSubmit() {
-  error.value = null;
+  error.value = false;
   submitting.value = true;
-  const res = await login(email.value, password.value);
+  const res = await register({
+    email: email.value,
+    password: password.value,
+    display_name: displayName.value,
+  });
   submitting.value = false;
-  if (res.ok) {
-    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/groups";
-    await router.replace(redirect);
+  if (!res.ok) {
+    error.value = true;
+    return;
+  }
+  if (res.verificationRequired) {
+    await router.push({ path: "/verify", query: { email: email.value } });
   } else {
-    error.value =
-      res.code === "email_unverified"
-        ? "Your email address is not verified yet."
-        : "Invalid email or password.";
+    await router.replace("/groups");
   }
 }
 </script>
@@ -35,33 +39,42 @@ async function onSubmit() {
 <template>
   <AppLayout>
     <section class="card">
-      <h1 class="title">Log in</h1>
-      <Alert v-if="error" tone="error" class="mb">{{ error }}</Alert>
+      <h1 class="title">Create account</h1>
+      <Alert v-if="error" tone="error" class="mb">
+        Could not register. The email may already be in use.
+      </Alert>
       <form class="form" @submit.prevent="onSubmit">
+        <Field
+          v-model="displayName"
+          label="Display name"
+          type="text"
+          required
+          maxlength="80"
+          error="Required"
+        />
         <Field
           v-model="email"
           label="Email"
           type="email"
           required
-          autocomplete="username"
-          error="Enter a valid email address."
+          autocomplete="email"
+          error="Enter a valid email address"
         />
         <Field
           v-model="password"
-          label="Password"
+          label="Password (min 10 characters)"
           type="password"
           required
           minlength="10"
-          autocomplete="current-password"
-          error="Password must be at least 10 characters."
+          autocomplete="new-password"
+          error="Password must be at least 10 characters"
         />
-        <p class="hint">
-          <RouterLink to="/forgot" class="link">Forgot your password?</RouterLink>
-        </p>
-        <button type="submit" class="btn-primary submit" :disabled="submitting">Log in</button>
+        <button type="submit" class="btn-primary submit" :disabled="submitting">
+          Create account
+        </button>
       </form>
       <p class="foot">
-        No account? <RouterLink to="/register" class="link">Register</RouterLink>.
+        Already have one? <RouterLink to="/login" class="link">Log in</RouterLink>.
       </p>
     </section>
   </AppLayout>
@@ -89,9 +102,6 @@ async function onSubmit() {
   border: 1px solid var(--border);
   background: var(--card);
   padding: 0.75rem;
-}
-.hint {
-  font-size: 0.875rem;
 }
 .submit {
   margin-top: 0.5rem;

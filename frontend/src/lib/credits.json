@@ -14,14 +14,6 @@
     "licensePageUrl": "https://fontawesome.com/license/free",
     "modificationStatement": "Icons used unmodified."
   },
-  "inter": {
-    "creator": "Rasmus Andersson",
-    "creatorUrl": "https://rsms.me/inter/",
-    "license": "SIL Open Font License 1.1",
-    "licenseUrl": "https://openfontlicense.org/",
-    "licensePath": "web/src/assets/fonts/inter/OFL.txt",
-    "modificationStatement": "Files used unmodified."
-  },
   "backend": [
     {
       "name": "github.com/getkin/kin-openapi",
@@ -34,6 +26,12 @@
       "version": "v1.12.0",
       "license": "MIT",
       "url": "https://github.com/gin-gonic/gin"
+    },
+    {
+      "name": "github.com/golang-jwt/jwt/v5",
+      "version": "v5.3.1",
+      "license": "MIT",
+      "url": "https://github.com/golang-jwt/jwt"
     },
     {
       "name": "github.com/google/uuid",
@@ -92,52 +90,22 @@
   ],
   "frontend": [
     {
-      "name": "@astrojs/check",
-      "version": "0.9.9",
-      "license": "MIT",
-      "url": "https://github.com/withastro/astro"
-    },
-    {
-      "name": "@astrojs/node",
-      "version": "10.1.4",
-      "license": "MIT",
-      "url": "https://github.com/withastro/astro"
-    },
-    {
-      "name": "@tailwindcss/vite",
-      "version": "4.3.0",
-      "license": "MIT",
-      "url": "https://github.com/tailwindlabs/tailwindcss"
-    },
-    {
-      "name": "astro",
-      "version": "6.4.6",
-      "license": "MIT",
-      "url": "https://github.com/withastro/astro"
-    },
-    {
       "name": "openapi-fetch",
       "version": "0.17.0",
       "license": "MIT",
       "url": "https://github.com/openapi-ts/openapi-typescript"
     },
     {
-      "name": "tailwindcss",
-      "version": "4.3.0",
+      "name": "vue",
+      "version": "3.5.38",
       "license": "MIT",
-      "url": "https://github.com/tailwindlabs/tailwindcss"
+      "url": "https://github.com/vuejs/core"
     },
     {
-      "name": "typescript",
-      "version": "5.9.3",
-      "license": "Apache-2.0",
-      "url": "https://github.com/microsoft/TypeScript"
-    },
-    {
-      "name": "@iconify-json/fa7-solid",
-      "version": "1.2.4",
-      "license": "CC-BY-4.0",
-      "url": "https://www.npmjs.com/package/@iconify-json/fa7-solid"
+      "name": "vue-router",
+      "version": "5.1.0",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/router"
     },
     {
       "name": "@playwright/test",
@@ -152,10 +120,10 @@
       "url": "https://github.com/DefinitelyTyped/DefinitelyTyped"
     },
     {
-      "name": "astro-icon",
-      "version": "1.1.5",
+      "name": "@vitejs/plugin-vue",
+      "version": "6.0.7",
       "license": "MIT",
-      "url": "https://github.com/natemoo-re/astro-icon"
+      "url": "https://github.com/vitejs/vite-plugin-vue"
     },
     {
       "name": "jsdom",
@@ -170,10 +138,28 @@
       "url": "https://github.com/openapi-ts/openapi-typescript"
     },
     {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "url": "https://github.com/microsoft/TypeScript"
+    },
+    {
+      "name": "vite",
+      "version": "8.0.16",
+      "license": "MIT",
+      "url": "https://github.com/vitejs/vite"
+    },
+    {
       "name": "vitest",
-      "version": "3.2.6",
+      "version": "4.1.8",
       "license": "MIT",
       "url": "https://github.com/vitest-dev/vitest"
+    },
+    {
+      "name": "vue-tsc",
+      "version": "3.3.4",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/language-tools"
     }
   ]
 }

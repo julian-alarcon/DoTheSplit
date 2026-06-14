@@ -100,6 +100,21 @@ const settledMessages = [
 const settledMessage =
   settledMessages[Math.floor(Math.random() * settledMessages.length)];
 
+const settledIcons = [
+  "champagne-glasses",
+  "face-smile",
+  "thumbs-up",
+  "star",
+  "heart",
+  "trophy",
+  "hand-peace",
+  "mug-hot",
+  "check-double",
+  "face-grin-stars",
+];
+const settledIcon =
+  settledIcons[Math.floor(Math.random() * settledIcons.length)];
+
 // --- Transaction feed --------------------------------------------------------
 const feedRows = computed(() =>
   withMonthHeaders(
@@ -321,7 +336,7 @@ watch(groupId, loadGroup);
         <div class="bal-head">
           <div class="bal-list">
             <p v-if="myDebts.length === 0" class="settled">
-              <Icon name="check" :size="16" />
+              <Icon :name="settledIcon" :size="16" />
               <span class="settled-msg">{{ settledMessage }}</span>
             </p>
             <ul v-else class="debts">
@@ -806,7 +821,11 @@ watch(groupId, loadGroup);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--primary);
+  color: oklch(0.508 0.118 165.612);
+}
+:root[data-theme="dark"] .settled,
+:root[data-theme="high-contrast"] .settled {
+  color: oklch(0.765 0.177 163.223);
 }
 .settled-msg {
   font-weight: 500;

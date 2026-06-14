@@ -155,6 +155,14 @@ jq -n \
       licensePageUrl: "https://fontawesome.com/license/free",
       modificationStatement: "Icons used unmodified."
     },
+    interFont: {
+      creator: "The Inter Project Authors",
+      creatorUrl: "https://github.com/rsms/inter",
+      license: "SIL Open Font License 1.1",
+      licenseUrl: "https://scripts.sil.org/OFL",
+      licensePath: "frontend/src/assets/fonts/inter/OFL.txt",
+      modificationStatement: "Font used unmodified (Regular/SemiBold subset)."
+    },
     backend: $backend,
     frontend: $frontend
   }' >"$OUT_JSON"
@@ -189,6 +197,14 @@ EOF
   echo "DoTheSplit uses icons from [Font Awesome](https://fontawesome.com), the Free"
   echo "tier, distributed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/)."
   echo "License page: <https://fontawesome.com/license/free>. Icons are used unmodified."
+  echo
+
+  echo "## Inter Font (SIL Open Font License 1.1)"
+  echo
+  echo "DoTheSplit self-hosts the [Inter](https://github.com/rsms/inter) typeface by"
+  echo "The Inter Project Authors, distributed under the [SIL Open Font License 1.1](https://scripts.sil.org/OFL)."
+  echo "License text: [frontend/src/assets/fonts/inter/OFL.txt](frontend/src/assets/fonts/inter/OFL.txt)."
+  echo "Font is used unmodified (Regular/SemiBold subset)."
   echo
 
   echo "## Backend (Go modules)"

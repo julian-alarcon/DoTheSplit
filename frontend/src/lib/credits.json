@@ -14,6 +14,14 @@
     "licensePageUrl": "https://fontawesome.com/license/free",
     "modificationStatement": "Icons used unmodified."
   },
+  "interFont": {
+    "creator": "The Inter Project Authors",
+    "creatorUrl": "https://github.com/rsms/inter",
+    "license": "SIL Open Font License 1.1",
+    "licenseUrl": "https://scripts.sil.org/OFL",
+    "licensePath": "frontend/src/assets/fonts/inter/OFL.txt",
+    "modificationStatement": "Font used unmodified (Regular/SemiBold subset)."
+  },
   "backend": [
     {
       "name": "github.com/getkin/kin-openapi",

@@ -32,12 +32,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Open http://localhost:3000.
+Open http://localhost:8080.
 
 ## Layout
 
-- `/api`: Go 1.26 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
-- `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
+- `/api`: Go 1.26 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses. The api binary also serves the embedded SPA.
+- `/app`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
@@ -62,19 +62,18 @@ the GitHub Container Registry:
 | Image                                   | Tags                                    |
 | --------------------------------------- | --------------------------------------- |
 | `ghcr.io/julian-alarcon/dothesplit-api` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
-| `ghcr.io/julian-alarcon/dothesplit-web` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
 
-`:dev` always points at the latest commit on `main`. The api image hosts both
-the `/api` and `/worker` entrypoints; in compose, override `entrypoint:
-["/worker"]` to run the worker. Pull a pinned release for production:
+`:dev` always points at the latest commit on `main`. The api image embeds the
+SPA and hosts both the `/api` and `/worker` entrypoints; in compose, override
+`entrypoint: ["/worker"]` to run the worker. Pull a pinned release for
+production:
 
 ```bash
 docker pull ghcr.io/julian-alarcon/dothesplit-api:0.3.0
-docker pull ghcr.io/julian-alarcon/dothesplit-web:0.3.0
 ```
 
-The running version is reported by `GET /healthz` (api) and the page footer
-(web), so you can confirm what's deployed at a glance.
+The running version is reported by `GET /healthz` (api) and the page footer,
+so you can confirm what's deployed at a glance.
 
 ## Secrets you must back up
 
@@ -129,7 +128,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 - Extend search filters with date range and member.
 - Add **Filter** to expenses transaction list by category, member, date range.
-- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled). (Mind the strict CSP: self-host the service worker at `/sw.js` and register it via an imported module so Astro hashes it, rather than an inline `<script>` block that would need a hand-maintained hash in `astro.config.mjs`; add `manifest-src`/`worker-src` only if a `default-src` is ever introduced.)
+- **Native mobile** via the PWA path (the Vue SPA is client-rendered and mobile-first styled). The service worker is served same-origin by the Go binary so it's covered by `script-src 'self'`; add `manifest-src`/`worker-src` to the CSP only if a `default-src` is ever introduced. Capacitor wraps the same bundle for app-store builds.
 
 ### Medium term
 

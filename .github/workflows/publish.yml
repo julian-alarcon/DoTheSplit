@@ -26,11 +26,8 @@ jobs:
       matrix:
         include:
           - image: api
-            context: ./api
-            dockerfile: ./api/Dockerfile
-          - image: web
             context: .
-            dockerfile: ./web/Dockerfile
+            dockerfile: ./api/Dockerfile
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -40,9 +37,9 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
-            # web/package.json is the single source of truth for the version;
+            # app/package.json is the single source of truth for the version;
             # release-please bumps it on every Release PR merge.
-            base=$(node -p "require('./web/package.json').version" 2>/dev/null || echo 0.0.0)
+            base=$(node -p "require('./app/package.json').version" 2>/dev/null || echo 0.0.0)
             short=$(echo "${GITHUB_SHA}" | cut -c1-7)
             echo "version=${base}-dev+${short}" >> "$GITHUB_OUTPUT"
           fi

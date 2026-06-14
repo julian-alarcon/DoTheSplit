@@ -6,7 +6,7 @@ How to check, build, test, and deploy DoTheSplit. See [../BLUEPRINT.md](../BLUEP
 
 - **Docker** + **Docker Compose v2** (only strict requirement for running the stack)
 - **Go 1.26+** (for local dev and unit tests outside Docker)
-- **Node 24+** and **npm 10+** (for local dev and `astro check`)
+- **Node 24+** and **npm 10+** (for local dev and the SPA build / type-check)
 - `make`, `openssl` (for key generation), `curl` and `python3` (used in smoke scripts)
 
 ## First-time setup
@@ -20,17 +20,17 @@ echo "PASSWORD_PEPPER=$(openssl rand -base64 32)" >> .env
 docker compose up -d --build
 ```
 
-Web is served at <http://localhost:3000>. API at <http://localhost:8080>. Health probes: `/healthz`, `/readyz`.
+The app and API are both served by the api binary at <http://localhost:8080> (the Vue SPA is embedded in the Go binary). Health probes: `/healthz`, `/readyz`.
 
 ## The contract-first workflow
 
 Any change that touches the HTTP surface goes through the same loop:
 
 1. Edit [docs/openapi.yaml](openapi.yaml) first.
-2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`web/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
+2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`app/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
 3. If the DB schema changes, add a migration under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`. Migrations are append-only.
 4. Backend order: **repo → service → handlers → router**.
-5. Frontend: rebuild pages against the new types, add/adjust Astro pages and SSR API routes under `web/src/pages/api/`.
+5. Frontend: add a typed call in a composable under `app/src/composables/` and the view/route that uses it. Never hand-write fetch/URLs - go through the `openapi-fetch` client.
 6. Tests, rebuild containers, smoke.
 
 ## Check (fast, no containers needed)
@@ -39,11 +39,11 @@ Any change that touches the HTTP surface goes through the same loop:
 make gen            # regenerate Go + TS types from docs/openapi.yaml
 cd api && go vet ./...
 cd api && go build ./...
-cd web && npm run check    # astro check (TypeScript + Astro diagnostics)
-cd web && npm run build    # astro build (also catches CSP-bundling issues)
+cd app && npm run check    # vue-tsc type-check
+cd app && npm run build    # vite build (static bundle the api embeds)
 ```
 
-`astro check` / `astro build` should produce 0 errors. One harmless hint (`ts(7027) unreachable code`) may appear on DOM event-handler scripts - it's a known TypeScript quirk, not a regression.
+`vue-tsc` / `vite build` should produce 0 errors.
 
 ## Test
 
@@ -57,35 +57,34 @@ cd api && go test ./internal/server/ -run TestGoldenPath -v    # one test
 
 The E2E suite in [api/internal/server/server_test.go](../api/internal/server/server_test.go) covers the full golden path (register, login, group, members, expense split modes, balances, settlements, soft-delete, category + revision log, payer swap, logout).
 
-**Web**: two layers.
+**App (Vue SPA)**: two layers.
 
-- Unit (vitest, jsdom) under `web/src/**/*.test.ts`. Pure helpers only - the canvas-touching avatar pipeline isn't exercised here, only its color math. Run with `cd web && npm test` (or `npm run test:watch`).
-- E2E (Playwright, Chromium) under `web/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs api`:
+- Unit (vitest, jsdom) under `app/src/**/*.test.ts`. Pure helpers only - the canvas-touching avatar pipeline isn't exercised here, only its color math. Run with `cd app && npm test` (or `npm run test:watch`).
+- E2E (Playwright, Chromium) under `app/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs api`. The SPA is served by the api on `:8080`, so there's a single origin to target:
 
   ```bash
   docker compose up -d --build
   TOKEN=$(docker compose logs api | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
-  cd web && SETUP_TOKEN=$TOKEN npm run test:e2e
+  cd app && SETUP_TOKEN=$TOKEN npm run test:e2e
   ```
 
-  CI runs the same flow on every PR; locally it's optional, useful when changing SSR-to-API wiring.
+  CI runs the same flow on every PR; locally it's optional, useful when changing SPA-to-API wiring.
 
 ## Build the container images
 
 For local dev, build via compose. **Production deployments should pull pinned images from GHCR** (see "Releasing" below) - never build from `main` on a deployment host.
 
 ```bash
-docker compose build                 # build all three images (api, web, worker shares api)
-docker compose build api             # rebuild just one
+docker compose build                 # build the api image (worker shares it)
+docker compose build api             # rebuild just the api
 make up                              # rebuild + start, stamping BUILD_COMMIT + BUILD_VERSION
 ```
 
 Images:
 
-- `dothesplit-api` - multi-stage Go build → distroless final stage (serves `/api` and the `/worker` command). `-ldflags` stamps `main.version` and `main.commit` from the build args, surfaced at `/healthz`.
-- `dothesplit-web` - multi-stage Node 24 build → Astro SSR standalone server. `BUILD_COMMIT` + `BUILD_VERSION` reach the SSR runtime as `process.env.*` and feed the page footer.
+- `dothesplit-api` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage serves `/api` and the `/worker` command. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image now serves both the API and the frontend.
 
-The `make up` target reads the top-level `VERSION` file (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
+The `make up` target reads `app/package.json` (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
 
 ## Releasing
 
@@ -98,16 +97,16 @@ Releases are automated by [release-please](https://github.com/googleapis/release
    | Type                       | Bump  | Example                                            |
    | -------------------------- | ----- | -------------------------------------------------- |
    | `fix:`                     | patch | `fix(api): reject empty currency on group create`  |
-   | `feat:`                    | minor | `feat(web): currency picker flag glyphs`           |
+   | `feat:`                    | minor | `feat(app): currency picker flag glyphs`           |
    | `feat!:` / `BREAKING CHANGE` footer | major | `feat(api)!: drop /v1/legacy/expenses` |
    | `chore:`, `docs:`, `style:`, `test:`, `ci:`, `refactor:` | none | (still appears in CHANGELOG under their section)   |
 
-2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `web/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.0.0`) and push - the PR will rewrite itself.
+2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `app/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.0.0`) and push - the PR will rewrite itself.
 
 3. **Merging the Release PR** auto-creates the git tag `vX.Y.Z` and a GitHub Release with the changelog body.
 
 4. **The tag triggers two workflows in parallel**:
-   - [`publish.yml`](../.github/workflows/publish.yml) builds multi-arch (`linux/amd64,linux/arm64`) images for `api` and `web`, pushes to `ghcr.io/julian-alarcon/dothesplit-{api,web}` with tags `:X.Y.Z`, `:X.Y`, `:X`, `:latest`, plus a build provenance attestation.
+   - [`publish.yml`](../.github/workflows/publish.yml) builds the multi-arch (`linux/amd64,linux/arm64`) `api` image (which embeds the SPA), pushes to `ghcr.io/julian-alarcon/dothesplit-api` with tags `:X.Y.Z`, `:X.Y`, `:X`, `:latest`, plus a build provenance attestation.
    - [`compliance.yml`](../.github/workflows/compliance.yml) regenerates SBOMs + `THIRD_PARTY_LICENSES.md` and attaches them to the GitHub Release.
 
 5. **Every push to `main`** (including merges that are not the Release PR) also triggers `publish.yml`, which pushes `:dev`, `:main`, and `:sha-<short>` tags. The `:dev` tag tracks the latest `main` and is appropriate for a staging environment.
@@ -116,18 +115,18 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 
 | Location                                  | Source                                                |
 | ----------------------------------------- | ----------------------------------------------------- |
-| `web/package.json` `version`              | release-please bump on merge (single source of truth) |
+| `app/package.json` `version`              | release-please bump on merge (single source of truth) |
 | GitHub Release page                       | release-please on PR merge                            |
-| `ghcr.io/.../dothesplit-{api,web}:X.Y.Z`  | `publish.yml` on tag                                  |
+| `ghcr.io/.../dothesplit-api:X.Y.Z`        | `publish.yml` on tag                                  |
 | API `GET /healthz` JSON                   | `-ldflags` baked in by `api/Dockerfile`               |
-| Web page footer                           | `BUILD_VERSION` env baked in by `web/Dockerfile`      |
+| SPA page footer                           | `VITE_BUILD_VERSION` baked in by `api/Dockerfile`     |
 
 ### Emergency manual release
 
 Only when release-please is broken or the queued Release PR can't be merged in time:
 
 ```bash
-# 1. Bump web/package.json + .release-please-manifest.json BY HAND, commit.
+# 1. Bump app/package.json + .release-please-manifest.json BY HAND, commit.
 # 2. Tag and push.
 git tag -a v1.2.3 -m "v1.2.3"
 git push origin v1.2.3
@@ -140,7 +139,7 @@ The tag still triggers `publish.yml` and `compliance.yml`. The CHANGELOG entry w
 ```bash
 docker compose up -d                 # start/resume the stack
 docker compose up -d --build         # rebuild only stale images, then start
-docker compose up -d --build web     # rebuild + restart just the web service
+docker compose up -d --build api     # rebuild + restart just the api (also rebuilds the embedded SPA)
 docker compose logs -f api           # follow api logs
 docker compose ps                    # service status
 docker compose down                  # stop (keeps the Postgres volume)
@@ -153,9 +152,8 @@ docker compose down -v               # stop AND destroy the Postgres volume
 | ---------- | ------------------- | ------------------------------------------------- |
 | `postgres` | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
 | `migrate`  | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
-| `api`      | `dothesplit-api`    | HTTP API on `:8080`, session cookies              |
+| `api`      | `dothesplit-api`    | HTTP API + embedded Vue SPA on `:8080`            |
 | `worker`   | `dothesplit-api`    | Same image, runs `/worker` - materializes recurring expenses |
-| `web`      | `dothesplit-web`    | Astro SSR on `:3000`                              |
 
 ## Smoke test the running stack
 
@@ -174,7 +172,7 @@ curl -sS -b $JAR http://localhost:8080/v1/me
 curl -sS -b $JAR http://localhost:8080/v1/categories | python3 -m json.tool
 ```
 
-Then open <http://localhost:3000/login>, log in with the credentials you just created, and walk through create-group → add-expense → edit-expense.
+Then open <http://localhost:8080/login>, log in with the credentials you just created, and walk through create-group → add-expense → edit-expense.
 
 ## Deploy (LAN / TrueNAS)
 
@@ -266,31 +264,21 @@ The compose file mounts the volume at `/var/lib/postgresql` (not `/var/lib/postg
 
 ## Troubleshooting
 
-### `process` is undefined in Astro SSR routes
+### Login does nothing / bounces back to /login
 
-Our SSR handlers under `web/src/pages/api/*.ts` read `process.env.API_BASE_URL_INTERNAL`. Astro's `import.meta.env` only exposes variables prefixed with `PUBLIC_`, so anything server-only must use `process.env`. This also means `@types/node` is a required dev dependency (`astro check` needs it).
+The SPA logs in via `POST /v1/auth/token` (bearer), keeping the access token in memory and a rotating refresh token in the httpOnly `dts_refresh` cookie. On reload, `useAuth.boot()` calls `/v1/auth/refresh` to restore the session. If login appears to no-op: check the network tab for a failing `/v1/auth/token` (bad credentials → 401, unverified email → 403) and confirm the `dts_refresh` cookie is being set (it won't be over plain HTTP if `COOKIE_SECURE=true`).
 
-### Login form does nothing / redirects back to /login
+### A form control doesn't "do" anything / a script didn't run
 
-Almost always a cookie problem. The session cookie name switches between `dts_session` (HTTP) and `__Host-dts_session` (HTTPS). If you flip `COOKIE_SECURE` but the frontend middleware is still looking for the old name, middleware won't find the session. Both sides should already handle this transparently - if not, grep for `dts_session` in `api/internal/middleware/` and `web/src/middleware.ts`.
-
-### A form control doesn't "do" anything (e.g. the category picker doesn't close on select)
-
-CSP is blocking an inline script. We have `security.csp: true` enabled in [../web/astro.config.mjs](../web/astro.config.mjs). Any client-side JS must live in a real module under `web/src/scripts/` and be imported from a `<script>` tag - not written as `<script is:inline>` or a raw inline block inside an `.astro` page. External bundled scripts are covered by `script-src 'self'`; inline scripts need per-hash allowlisting that's brittle across build/serve paths.
-
-### `astro check` complains that it can't find `process`
-
-Run `npm install --save-dev @types/node` in `/web`. This started being required with Astro 6.
+The SPA ships a strict CSP (`script-src 'self'`, no inline scripts). All JS is bundled by Vite and served same-origin, so this should never bite normal Vue code. The one hand-placed script is [app/public/theme-boot.js](../app/public/theme-boot.js), referenced from `index.html` without `defer` - it must stay a same-origin file, never an inline block. Inline SVG markup (the `Icon`/`CategoryIcon` components) is allowed; only inline `<script>`/`<style>` are blocked.
 
 ### Test container fails to pull Postgres image
 
 `testcontainers-go` uses the same Docker daemon as compose. If compose works, tests will too. If not: `docker info` and `docker pull postgres:18-alpine` to prime the image cache.
 
-### Shiki warning during `astro build` about CSP
+### The api serves a stale SPA / a placeholder page
 
-> "Shiki syntax highlighting uses inline styles that are not compatible with Content Security Policy"
-
-Harmless for us - we don't render Markdown code blocks anywhere. Ignore.
+The Go binary embeds whatever is in `api/internal/webui/dist/` at compile time. A fresh `go build` without the bundle serves a code fallback page. `make build` (and the Docker build) rebuild the SPA and copy it in first; if you built the binary by hand, run `make embed-app` then rebuild.
 
 ## Useful targets
 
@@ -302,9 +290,9 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | `make migrate-up` | Apply all pending migrations                                       |
 | `make test-go`    | Full Go test suite (unit + integration via testcontainers)         |
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
-| `make dev-web`    | Run Astro dev server                                               |
-| `make build`      | Build Go binaries (`bin/api`, `bin/worker`)                        |
+| `make dev-app`    | Run the Vite dev server (proxies `/v1` to the local API)           |
+| `make build`      | Build the SPA, embed it, then build Go binaries (`bin/api`, `bin/worker`) |
 | `make up`         | `docker compose up -d --build`, baking current SHA in              |
 | `make compliance` | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/` |
 
-**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(cat VERSION)` and passes both to every Dockerfile as build args. The web image gets them in `process.env.*` and the shared [`Base.astro`](../web/src/layouts/Base.astro) layout renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout (`docker compose build` directly, a tarball, etc.), both default to `dev` and the surfaces show `dev` with no links.
+**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./app/package.json').version")` and passes both to the api Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../app/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.

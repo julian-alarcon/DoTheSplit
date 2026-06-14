@@ -14,7 +14,7 @@ import (
 type Config struct {
 	HTTPAddr    string `envconfig:"API_HTTP_ADDR"        default:":8080"`
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	WebOrigin   string `envconfig:"WEB_ORIGIN"           default:"http://localhost:3000"`
+	WebOrigin   string `envconfig:"WEB_ORIGIN"           default:"http://localhost:8080"`
 	LogLevel    string `envconfig:"LOG_LEVEL"            default:"info"`
 
 	CookieSecure  bool   `envconfig:"COOKIE_SECURE"         default:"false"`
@@ -56,7 +56,7 @@ type Config struct {
 func Load() (*Config, error) {
 	var raw struct {
 		HTTPAddr           string `envconfig:"API_HTTP_ADDR"            default:":8080"`
-		WebOrigin          string `envconfig:"WEB_ORIGIN"               default:"http://localhost:3000"`
+		WebOrigin          string `envconfig:"WEB_ORIGIN"               default:"http://localhost:8080"`
 		LogLevel           string `envconfig:"LOG_LEVEL"                default:"info"`
 		CookieSecure       bool   `envconfig:"COOKIE_SECURE"            default:"false"`
 		CookieDomain       string `envconfig:"SESSION_COOKIE_DOMAIN"    default:""`

@@ -8,25 +8,26 @@ See also: [BLUEPRINT.md](BLUEPRINT.md) for product scope and [README.md](README.
 
 DoTheSplit - a expense-sharing app.
 
-- **Backend**: Go 1.26, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/).
-- **Frontend**: Astro 6 (SSR, `@astrojs/node`) + Tailwind v4. No React islands, no component library - pages are pure `.astro` + tiny ES-module scripts under [web/src/scripts/](web/src/scripts/). Source in [web/](web/).
+- **Backend**: Go 1.26, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
+- **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. Plain CSS (no Tailwind, no UI library) - design tokens + the `.field-*`/`.btn-*` system live in [app/src/styles/global.css](app/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [app/](app/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
+- **Auth**: JWT bearer tokens for the SPA/native clients (`POST /v1/auth/token` + rotating refresh in an httpOnly cookie), running alongside the original cookie session. Bearer middleware sets the same context key as the session middleware, so `RequireSession`/`RequireAdmin` work for both.
 - **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
 - **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only - see "Cookie naming" below).
 
 ## The golden rule: contract-first
 
-**[docs/openapi.yaml](docs/openapi.yaml) is the source of truth.** Go server types, a Go client for integration tests, and TypeScript types for the web client are all generated from it.
+**[docs/openapi.yaml](docs/openapi.yaml) is the source of truth.** Go server types, a Go client for integration tests, and TypeScript types for the SPA client are all generated from it.
 
 **Order for any user-facing change:**
 
 1. Edit [docs/openapi.yaml](docs/openapi.yaml) first - schemas, paths, responses.
-2. Run `make gen` to regenerate Go (`api/internal/apigen/`) and TypeScript (`web/src/lib/api/schema.d.ts`) types. The build won't compile until the code matches.
+2. Run `make gen` to regenerate Go (`api/internal/apigen/`) and TypeScript (`app/src/lib/api/schema.d.ts`) types. The build won't compile until the code matches.
 3. Add a migration if the DB schema changes ([api/migrations/NNNN\_\*.up.sql](api/migrations/) + matching `.down.sql`).
 4. Wire the backend in this exact order: **repo → service → handlers → router**.
-5. Regenerate / rebuild the frontend against the new types; add/adjust Astro pages and SSR API routes.
+5. Wire the SPA against the new generated types: add a typed call in a composable ([app/src/composables/](app/src/composables/)) and the view/route that uses it. Never hand-write fetch calls or URLs - go through the `openapi-fetch` client in [app/src/lib/api/client.ts](app/src/lib/api/client.ts).
 6. Update the worker only if the recurring flow is affected - it reuses services, so most changes propagate for free.
-7. Build, test, rebuild the affected containers.
+7. Build, test, rebuild the affected containers (the SPA is embedded in the api image, so a frontend change means rebuilding `api`).
 
 Don't change generated files by hand - re-run `make gen` instead.
 
@@ -71,17 +72,17 @@ Rules of thumb:
 
 ## Frontend conventions
 
-- **Pages under [web/src/pages/](web/src/pages/) render on the server** via `@astrojs/node`. Auth state comes from [middleware.ts](web/src/middleware.ts), which reads the session cookie and calls `/me`.
-- **SSR API routes (`web/src/pages/api/*.ts`) must use `process.env`**, not `import.meta.env`, for server-only env vars like `API_BASE_URL_INTERNAL`. `import.meta.env` only exposes `PUBLIC_`-prefixed vars - other values compile to `undefined` and silently fall back to defaults.
-- **Money formatting**: always `Intl.NumberFormat(undefined, { style: "currency", currency: <iso>, currencyDisplay: "narrowSymbol" })` with the group's `default_currency` (or the expense's own `currency` for per-expense display). Never hardcode `$`.
-- **Currency dropdowns**: default to `EUR`; use the short canonical list (`EUR, USD, GBP, CHF, CAD, AUD, JPY, SEK, NOK, DKK`).
-- **Form endpoints post to `/api/*.ts` SSR handlers**, which forward to the Go API with the cookie. Don't call the Go API from client islands if a form-post pattern works - keeps the session on the Astro origin.
-- **Optimistic UI / react-query** is planned for richer islands; static forms are fine for CRUD pages.
-- Astro's `security.checkOrigin` is disabled - we rely on `SameSite=Lax` on the session cookie for CSRF protection (see [astro.config.mjs](web/astro.config.mjs)).
-- **Single-column layout, capped at 768px (default)**: the main wrapper in [Base.astro](web/src/layouts/Base.astro) is `max-w-3xl` (= 48rem / 768px) and pages stack vertically at every viewport - no `md:grid-cols-2` / `lg:grid-cols-2` for page-level columns. On ultrawide screens the content stays centered at 768px instead of expanding. Design every page mobile-first, then verify it still reads well at 768px. Tailwind's `sm:flex-row` is fine _inside_ a row item (e.g. flipping a label/value pair from stacked to inline at ≥640px) - that's not page layout, that's local readability. Forms in particular keep one field per row so the floating-label + `:user-invalid` + `.field-error` chain stays predictable.
-- **Opt-in wide layout for triptych pages**: pass `wide` to `<Base>` to switch the wrapper to `max-w-6xl` (= 72rem / 1152px). Reserved for pages where three sibling sections genuinely earn their own column at ≥1024px - currently only the group dashboard ([groups/[id].astro](web/src/pages/groups/[id].astro)) where Balances / Transactions / Add expense form a triptych. The grid template is `lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]` (328px fixed sides + flexible center, sides equal by construction); `lg:order-{1,2,3}` reshuffles the markup-mobile-order (Balances → Add expense → Transactions) into the desktop visual order (Balances | Transactions | Add expense). Below `lg` everything stacks single-column, same as the default layout.
-- **Validation feedback**: rely on native HTML constraint validation (`required`, `pattern`, `type="email"`, `minlength`) plus `:user-invalid` styling in [global.css](web/src/styles/global.css). Don't call `event.preventDefault()` in submit handlers, don't wire JS-based validation. For each `required` input, add a sibling `<p class="field-error">…</p>` with the user-facing hint - the CSS toggles it via `.field:has(.field-input:user-invalid) + .field-error`. This is the only visible cue on Firefox for Android, which doesn't render the native constraint-validation tooltip.
-- **Native form controls**: keep them. We polish the closed/inert state via `.field-*` classes (custom chevron on `.field-select`, panel-matching colors, `color-scheme: light dark` cascade) but never replace `<select>`, `<input type="checkbox|radio|number">` with custom JS widgets. Reasons: accessibility (focus trap, keyboard nav, screen readers, IME), offline reliability, and PWA install size. The Android open dropdown sheet stays Material You - that's a deliberate trade. Exception: `<input type="date">` is replaced by [DatePicker.astro](web/src/components/DatePicker.astro) because the native popup sizes inconsistently and we need a today-overlay glyph.
+- **Client-side-rendered Vue SPA** ([app/src/](app/src/)). Routes in [app/src/router/index.ts](app/src/router/index.ts); the `beforeEach` guard mirrors the old Astro middleware (first-run setup funnel, boot-refresh wait, auth gate, admin gate). Auth state is a module-singleton reactive composable, [useAuth.ts](app/src/composables/useAuth.ts) - the one piece of genuinely shared cross-route state. No Pinia, no TanStack Query: hand-rolled composables wrap the typed client until that becomes painful.
+- **Typed API access only**: every call goes through the `openapi-fetch` client ([app/src/lib/api/client.ts](app/src/lib/api/client.ts)), which injects the bearer token and does a single-flight refresh + replay on 401. Wrap calls in a composable; never hand-write `fetch`/URLs. `import.meta.env.VITE_*` is the only env surface (e.g. `VITE_API_BASE_URL`, empty = same origin).
+- **Bearer auth, not cookies**: the access token lives in memory ([token-store.ts](app/src/lib/api/token-store.ts)), the rotating refresh token in an httpOnly cookie set by the API. On boot, `useAuth.boot()` calls `/v1/auth/refresh` to restore the session. Bearer-authed binary endpoints (avatars, CSV export) can't be loaded via a plain `<img src>`/link - fetch the bytes through the client and use a blob URL (see [useAvatarUrl.ts](app/src/composables/useAvatarUrl.ts) and `exportCsv`).
+- **Money formatting**: always `Intl.NumberFormat(undefined, { style: "currency", currency: <iso>, currencyDisplay: "narrowSymbol" })` via [currencies.ts](app/src/lib/currencies.ts) (`moneyFormatter`/`formatMoney`) with the group's `default_currency` (or the expense's own `currency`). Never hardcode `$`.
+- **Currency dropdowns**: use [CurrencySelect.vue](app/src/components/CurrencySelect.vue) - defaults to `EUR`, common short list first, full Intl list second.
+- **Plain CSS, no Tailwind**: shared design tokens (OKLCH), the three themes (light/dark/high-contrast via `:root[data-theme=…]`), and the `.field-*`/`.btn-*`/`.toggle`/`.avatar-*` systems live in [global.css](app/src/styles/global.css) under `@layer`. Per-view styling is a scoped `<style>` block in the SFC. The theme is applied pre-paint by [app/public/theme-boot.js](app/public/theme-boot.js) (a same-origin classic script, since the strict CSP forbids inline scripts).
+- **Single-column layout, capped at 768px (default)**: `<AppLayout>` ([app/src/components/AppLayout.vue](app/src/components/AppLayout.vue)) caps `<main>` at 48rem. Pages stack vertically at every viewport; design mobile-first and verify at 768px. A `sm:`-style inline flip inside a row item is fine; page-level multi-column is not.
+- **Opt-in wide layout for triptych pages**: pass `wide` to `<AppLayout>` to cap at 72rem / 1152px. Reserved for the group dashboard ([GroupDashboardView.vue](app/src/views/GroupDashboardView.vue)) where Balances / Transactions / Add-expense form a triptych: `grid-template-columns: 20.5rem minmax(0,1fr) 20.5rem` at ≥1024px, reordered Balances | Transactions | Add-expense, stacking single-column below.
+- **Validation feedback**: rely on native HTML constraint validation (`required`, `pattern`, `type="email"`, `minlength`) plus `:user-invalid` styling. Use [Field.vue](app/src/components/Field.vue), which renders the floating-label + sibling `.field-error` (the only visible cue on Firefox for Android). Don't call `event.preventDefault()` for validation; for cross-field rules (password match) use `setCustomValidity` on the exposed input ref. Submit with `@submit.prevent` and call the composable.
+- **Native form controls**: keep them. We polish the closed/inert state via `.field-*` classes but never replace `<select>`, `<input type="checkbox|radio|number">` with custom JS widgets (accessibility, IME, offline, install size). Exception: `<input type="date">` is replaced by [DatePicker.vue](app/src/components/DatePicker.vue) because the native popup sizes inconsistently and we need a today-overlay glyph + cadence dropdown.
+- **Icons**: inline SVG via [Icon.vue](app/src/components/Icon.vue), which renders Font Awesome 7 path data from the generated [app/src/lib/icons.ts](app/src/lib/icons.ts). Inline SVG markup is CSP-clean (only inline `<script>`/`<style>` are blocked); to add a glyph, extend the generator's name list and re-run it.
 
 ## Cookie naming (important)
 
@@ -90,7 +91,7 @@ The session cookie's name depends on transport:
 - **HTTPS** (`COOKIE_SECURE=true`): `__Host-dts_session` - the `__Host-` prefix enforces `Secure` + no `Domain`.
 - **Plain HTTP** (LAN deployment, `COOKIE_SECURE=false`): `dts_session`. The `__Host-` prefix is browser-rejected without `Secure`, so we drop it.
 
-On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never hardcode the name. On the frontend ([web/src/middleware.ts](web/src/middleware.ts)), match with the substring `dts_session=`, which covers both variants.
+On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never hardcode the name. The Vue SPA doesn't read the session cookie at all (it uses bearer tokens + the httpOnly `dts_refresh` cookie), so there's no frontend cookie-name matching to keep in sync anymore.
 
 ## Account invariants
 
@@ -101,9 +102,9 @@ On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never har
 
 ## Avatar invariants
 
-- Avatars are **uploaded as an 8×8 PNG, ≤ 1024 bytes** (64 color samples). Client-side pipeline in [web/src/scripts/avatar-pixelate.ts](web/src/scripts/avatar-pixelate.ts) center-crops any source image to square, downsamples with `imageSmoothingEnabled = false` (nearest-neighbour), and pushes saturation to 1.0 before base64-encoding a PNG. The server **re-encodes from a fresh RGBA canvas and nearest-neighbour upscales to `AvatarRenderSize`** (currently 256×256 = 8 × 32) before storing in `users.avatar BYTEA`. The pre-scaled bitmap renders crisp at any CSS size without `image-rendering: pixelated` hints, which have inconsistent browser support.
+- Avatars are **uploaded as an 8×8 PNG, ≤ 1024 bytes** (64 color samples). Client-side pipeline in [app/src/lib/avatar-pixelate.ts](app/src/lib/avatar-pixelate.ts) center-crops any source image to square, downsamples with `imageSmoothingEnabled = false` (nearest-neighbour), and pushes saturation to 1.0 before base64-encoding a PNG. Its color math is pinned by [avatar-pixelate.test.ts](app/src/lib/avatar-pixelate.test.ts) - keep that suite green. The server **re-encodes from a fresh RGBA canvas and nearest-neighbour upscales to `AvatarRenderSize`** (currently 256×256 = 8 × 32) before storing in `users.avatar BYTEA`. The pre-scaled bitmap renders crisp at any CSS size without `image-rendering: pixelated` hints, which have inconsistent browser support.
 - GDPR-safe by construction: 64 pixels can't identify a human. Never add a "keep original" option without legal sign-off.
-- Fallback when `has_avatar=false` is handled by [web/src/components/Avatar.astro](web/src/components/Avatar.astro) - initials from the display name + a deterministic HSL color seeded on the UUID. Don't store initials or the color anywhere; they're pure derivations.
+- Fallback when `has_avatar=false` is handled by [Avatar.vue](app/src/components/Avatar.vue) - initials from the display name. The bearer-authed PNG is fetched into a blob URL by [MemberAvatar.vue](app/src/components/MemberAvatar.vue) + [useAvatarUrl.ts](app/src/composables/useAvatarUrl.ts); use `MemberAvatar` for any member avatar so the token is carried correctly.
 
 ## Security invariants (don't regress)
 
@@ -121,8 +122,8 @@ Three layers, all run in CI on every PR:
 - **Go integration tests** spin up real Postgres via `testcontainers-go/postgres`. Two homes:
   - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, cookie naming switch).
   - [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) for schema-only invariants (up/down round-trip, group-delete FK cascades).
-- **Web unit tests** via [vitest](https://vitest.dev) under [web/src/scripts/\*.test.ts](web/src/scripts/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math.
-- **End-to-end** via [Playwright](https://playwright.dev) under [web/tests/e2e/](web/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the SSR Astro pages. Catches contract drift between the web bridge and the Go API.
+- **SPA unit tests** via [vitest](https://vitest.dev) under [app/src/\*\*/\*.test.ts](app/src/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math; currency/short-name suites pin formatting.
+- **End-to-end** via [Playwright](https://playwright.dev) under [app/tests/e2e/](app/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the Vue SPA on the single api origin (`:8080`). Catches contract drift between the SPA and the Go API.
 
 Invariants for adding tests:
 
@@ -131,15 +132,15 @@ Invariants for adding tests:
 - **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
 - **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
 
-Run everything with `make test`. Go alone: `cd api && go test ./... -race`. Web unit alone: `cd web && npm test`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `cd web && SETUP_TOKEN=... npm run test:e2e`.
+Run everything with `make test`. Go alone: `cd api && go test ./... -race`. SPA unit alone: `cd app && npm test`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `cd app && SETUP_TOKEN=... npm run test:e2e`.
 
 ## Running the app
 
-- `docker compose up -d --build` - full LAN stack on `http://localhost:3000` (web) and `http://localhost:8080` (api).
-- `make up` - same, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `web/package.json`) into the images so `/healthz` and the web footer self-identify.
-- `make dev-api` / `make dev-web` for local non-Docker dev.
-- After any change that affects the API contract: `make gen`, then rebuild the containers whose code changed (`api`, `worker`, `web`).
-- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit-{api,web}:X.Y.Z`). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
+- `docker compose up -d --build` - full stack; the api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`. (postgres, migrate, api, worker - there is no separate web container.)
+- `make up` - same, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `app/package.json`) into the image so `/healthz` and the page footer self-identify.
+- Local non-Docker dev: `make dev-api` (Go API on `:8080`) + `make dev-app` (Vite dev server on `:4321`, proxying `/v1` to `:8080`).
+- `make build` builds the SPA, copies it into the embed dir, then builds the Go binaries. After any change that affects the API contract: `make gen`, then rebuild the `api` + `worker` images (a frontend-only change still means rebuilding `api`, since the SPA is embedded).
+- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit-api:X.Y.Z` - one image now). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
 
 ## Scope boundaries (don't build these without asking)
 

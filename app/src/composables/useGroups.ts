@@ -121,6 +121,19 @@ export async function listCategories(): Promise<components["schemas"]["Category"
   return error || !data ? [] : data;
 }
 
+export type ActivityItem = components["schemas"]["ActivityItem"];
+
+export async function listActivity(
+  groupId: string,
+  cursor?: string,
+): Promise<{ items: ActivityItem[]; nextCursor: string }> {
+  const { data, error } = await api.GET("/v1/groups/{id}/activity", {
+    params: { path: { id: groupId }, query: cursor ? { cursor } : {} },
+  });
+  if (error || !data) return { items: [], nextCursor: "" };
+  return { items: data.items, nextCursor: data.next_cursor ?? "" };
+}
+
 export async function createGroup(input: {
   name: string;
   default_currency?: string;

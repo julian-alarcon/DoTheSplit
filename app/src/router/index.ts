@@ -66,6 +66,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import("@/views/SettleView.vue"),
   },
   {
+    path: "/groups/:id/activity",
+    name: "group-activity",
+    component: () => import("@/views/ActivityView.vue"),
+  },
+  {
     path: "/groups/:id/recurring",
     name: "group-recurring",
     component: () => import("@/views/RecurringView.vue"),

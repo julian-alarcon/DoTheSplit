@@ -64,38 +64,6 @@ jobs:
           path: api/coverage.out
           if-no-files-found: ignore
 
-  build-web:
-    name: build / web
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: web/.nvmrc
-          cache: "npm"
-          cache-dependency-path: web/package-lock.json
-
-      - name: install
-        working-directory: web
-        run: npm ci
-
-      - name: generate api types
-        working-directory: web
-        run: npx openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts
-
-      - name: astro check
-        working-directory: web
-        run: npm run check
-
-      - name: vitest
-        working-directory: web
-        run: npm test
-
-      - name: build
-        working-directory: web
-        run: npm run build
-
   build-app:
     name: build / app (vue spa)
     runs-on: ubuntu-24.04
@@ -142,13 +110,9 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version-file: web/.nvmrc
+          node-version-file: app/.nvmrc
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
-
-      - name: install web deps (needed for openapi-typescript)
-        working-directory: web
-        run: npm ci
+          cache-dependency-path: app/package-lock.json
 
       - name: install app deps (needed for openapi-typescript)
         working-directory: app
@@ -159,7 +123,7 @@ jobs:
 
       - name: fail if generated files changed
         run: |
-          if ! git diff --exit-code -- api/internal/apigen web/src/lib/api/schema.d.ts app/src/lib/api/schema.d.ts; then
+          if ! git diff --exit-code -- api/internal/apigen app/src/lib/api/schema.d.ts; then
             echo "::error::Generated API bindings are out of date. Run 'make gen' and commit."
             exit 1
           fi
@@ -172,16 +136,16 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version-file: web/.nvmrc
+          node-version-file: app/.nvmrc
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: app/package-lock.json
 
-      - name: install web deps
-        working-directory: web
+      - name: install app deps
+        working-directory: app
         run: npm ci
 
       - name: install playwright browsers
-        working-directory: web
+        working-directory: app
         run: npx playwright install --with-deps chromium
 
       - name: generate stack secrets
@@ -208,24 +172,22 @@ jobs:
             echo "POSTGRES_DB=dts"
             echo "DATABASE_URL=postgres://dts:${PWD}@postgres:5432/dts?sslmode=disable"
             echo "API_HTTP_ADDR=:8080"
-            echo "WEB_ORIGIN=http://localhost:3000"
+            echo "WEB_ORIGIN=http://localhost:8080"
             echo "LOG_LEVEL=info"
             echo "COOKIE_SECURE=false"
             echo "SESSION_COOKIE_DOMAIN="
-            echo "PUBLIC_API_BASE_URL=http://localhost:8080"
-            echo "API_BASE_URL_INTERNAL=http://api:8080"
           } >> .env
 
       - name: boot stack
         run: docker compose up -d --build
 
       - name: wait for health
-        # api healthcheck is on /healthz; web has its own. Poll until both
-        # are ready, fail fast if anything else regresses.
+        # The api serves both /healthz and the embedded SPA on :8080. Poll
+        # until ready, fail fast if anything regresses.
         run: |
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:8080/healthz >/dev/null \
-               && curl -fsS http://localhost:3000/ >/dev/null; then
+               && curl -fsS http://localhost:8080/ >/dev/null; then
               echo "stack ready"
               exit 0
             fi
@@ -255,9 +217,9 @@ jobs:
           echo "::add-mask::$tok"
 
       - name: run playwright
-        working-directory: web
+        working-directory: app
         env:
-          WEB_BASE_URL: http://localhost:3000
+          APP_BASE_URL: http://localhost:8080
           SETUP_TOKEN: ${{ steps.token.outputs.token }}
         run: npm run test:e2e
 
@@ -270,7 +232,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: web/playwright-report/
+          path: app/playwright-report/
           if-no-files-found: ignore
 
       - name: tear down
@@ -285,11 +247,8 @@ jobs:
       matrix:
         include:
           - image: api
-            context: ./api
-            dockerfile: ./api/Dockerfile
-          - image: web
             context: .
-            dockerfile: ./web/Dockerfile
+            dockerfile: ./api/Dockerfile
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 

@@ -2,7 +2,17 @@
 import AppLayout from "@/components/AppLayout.vue";
 import credits from "@/lib/credits.json";
 
-const { project, fontAwesome, inter, backend, frontend } = credits;
+// `inter` is optional: the SPA uses system fonts, so newer credits.json files
+// drop the self-hosted-Inter block. Read it defensively so the page renders
+// whether or not the key is present.
+const { project, fontAwesome, backend, frontend } = credits;
+const inter = (credits as { inter?: {
+  creator: string;
+  creatorUrl: string;
+  license: string;
+  licenseUrl: string;
+  modificationStatement: string;
+} }).inter;
 </script>
 
 <template>
@@ -42,7 +52,7 @@ const { project, fontAwesome, inter, backend, frontend } = credits;
         </p>
       </section>
 
-      <section class="panel">
+      <section v-if="inter" class="panel">
         <h2 class="h2">Inter Font</h2>
         <p class="body">
           Body type by

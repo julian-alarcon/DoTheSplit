@@ -6,11 +6,10 @@
 *.test
 *.out
 
-# Node / Astro
+# Node / Vue SPA
 node_modules/
-.astro/
-/web/dist/
-/web/.output/
+/app/dist/
+*.tsbuildinfo
 
 # Env
 .env
@@ -27,7 +26,8 @@ docker-compose.override.yml
 
 # Generated code (uncomment if you want to keep generated out of VCS)
 # /api/internal/apigen/*.gen.go
-# /web/src/lib/api/schema.d.ts
+# /app/src/lib/api/schema.d.ts
+# (the embedded SPA bundle under api/internal/webui/dist/ has its own .gitignore)
 
 # SBOM artifacts (regenerated via `make sbom`, published per release)
 /sbom/

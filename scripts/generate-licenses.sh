@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates THIRD_PARTY_LICENSES.md and web/src/lib/credits.json from the
+# Regenerates THIRD_PARTY_LICENSES.md and app/src/lib/credits.json from the
 # current dependency manifests. Idempotent; safe to run any time.
 #
 # Usage: ./scripts/generate-licenses.sh
@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 OUT_MD="$ROOT/THIRD_PARTY_LICENSES.md"
-OUT_JSON="$ROOT/web/src/lib/credits.json"
+OUT_JSON="$ROOT/app/src/lib/credits.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -27,12 +27,12 @@ echo "→ Collecting Go module licenses (api + worker)"
     | sort -u >"$TMP/go.csv"
 )
 
-echo "→ Collecting npm package licenses (web)"
+echo "→ Collecting npm package licenses (app)"
 (
-  cd "$ROOT/web"
+  cd "$ROOT/app"
   npx --yes license-checker-rseidelsohn@4.4.2 \
     --json --start . \
-    --excludePackages "dothesplit-web@$(jq -r .version package.json)" \
+    --excludePackages "dothesplit-app@$(jq -r .version package.json)" \
     >"$TMP/npm.json" 2>"$TMP/npm.err"
 )
 
@@ -102,7 +102,7 @@ FRONTEND_PKGS="$(jq -r '
   ((.dependencies // {}) + (.devDependencies // {}))
   | to_entries[]
   | "\(.key)\t\(.value)"
-' "$ROOT/web/package.json")"
+' "$ROOT/app/package.json")"
 
 # Resolve installed version + license from npm.json.
 npm_meta_for() {
@@ -155,14 +155,6 @@ jq -n \
       licensePageUrl: "https://fontawesome.com/license/free",
       modificationStatement: "Icons used unmodified."
     },
-    inter: {
-      creator: "Rasmus Andersson",
-      creatorUrl: "https://rsms.me/inter/",
-      license: "SIL Open Font License 1.1",
-      licenseUrl: "https://openfontlicense.org/",
-      licensePath: "web/src/assets/fonts/inter/OFL.txt",
-      modificationStatement: "Files used unmodified."
-    },
     backend: $backend,
     frontend: $frontend
   }' >"$OUT_JSON"
@@ -199,14 +191,6 @@ EOF
   echo "License page: <https://fontawesome.com/license/free>. Icons are used unmodified."
   echo
 
-  echo "## Inter Font (SIL Open Font License 1.1)"
-  echo
-  echo "DoTheSplit ships [Inter](https://rsms.me/inter/) by Rasmus Andersson,"
-  echo "self-hosted under the [SIL Open Font License 1.1](https://openfontlicense.org/)."
-  echo "License text: [web/src/assets/fonts/inter/OFL.txt](web/src/assets/fonts/inter/OFL.txt)."
-  echo "Files used unmodified."
-  echo
-
   echo "## Backend (Go modules)"
   echo
   echo "Generated from \`go-licenses csv ./cmd/api ./cmd/worker\` against [api/go.mod](api/go.mod)."
@@ -218,7 +202,7 @@ EOF
 
   echo "## Frontend (npm packages)"
   echo
-  echo "Generated from \`license-checker-rseidelsohn --json\` against [web/package.json](web/package.json)."
+  echo "Generated from \`license-checker-rseidelsohn --json\` against [app/package.json](app/package.json)."
   echo
   echo "| Package | License | Source |"
   echo "|---|---|---|"

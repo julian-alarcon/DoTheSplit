@@ -23,7 +23,7 @@ func (s *Server) UpdateMe(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	if req.DisplayName == nil && req.WeekStart == nil && req.Timezone == nil {
+	if req.DisplayName == nil && req.WeekStart == nil {
 		writeErr(c, http.StatusBadRequest, "bad_request", "nothing to update")
 		return
 	}
@@ -43,19 +43,6 @@ func (s *Server) UpdateMe(c *gin.Context) {
 			switch {
 			case errors.Is(err, repo.ErrNotFound):
 				writeErr(c, http.StatusNotFound, "not_found", "user not found")
-			default:
-				writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
-			}
-			return
-		}
-	}
-	if req.Timezone != nil {
-		if err := s.MeSvc.SetTimezone(c.Request.Context(), u.ID, *req.Timezone); err != nil {
-			switch {
-			case errors.Is(err, repo.ErrNotFound):
-				writeErr(c, http.StatusNotFound, "not_found", "user not found")
-			case errors.Is(err, service.ErrBadTimezone):
-				writeErr(c, http.StatusBadRequest, "bad_request", "unknown timezone")
 			default:
 				writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
 			}

@@ -113,23 +113,11 @@ async function confirmEmail() {
   }
 }
 
-// --- Preferences + timezone --------------------------------------------------
+// --- Preferences -------------------------------------------------------------
 const weekStart = ref<0 | 1>(user.value.week_start === 0 ? 0 : 1);
 async function savePrefs() {
   const res = await updateProfile({ week_start: weekStart.value });
   flash(res.ok ? "Preferences updated." : null, res.ok ? null : "Could not update your preferences.");
-}
-
-const timezone = ref(user.value.timezone ?? "");
-const allTimezones = (() => {
-  const fn = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
-  return typeof fn === "function"
-    ? fn("timeZone")
-    : ["UTC", "Europe/Madrid", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Asia/Tokyo"];
-})();
-async function saveTimezone() {
-  const res = await updateProfile({ timezone: timezone.value });
-  flash(res.ok ? "Timezone updated." : null, res.ok ? null : "Could not update your timezone.");
 }
 
 // --- Delete account ----------------------------------------------------------
@@ -250,24 +238,6 @@ async function onDelete(password: string) {
           </label>
           <p class="hint">Used by the calendar in date pickers across the app.</p>
           <div class="right"><button type="submit" class="btn-primary">Save preferences</button></div>
-        </form>
-      </section>
-
-      <!-- Timezone -->
-      <section class="panel">
-        <h2 class="panel-title">Timezone</h2>
-        <form class="form" @submit.prevent="saveTimezone">
-          <label class="field-select-row">
-            <span>Display times in</span>
-            <select v-model="timezone" class="field-select">
-              <option value="">Use device timezone</option>
-              <option v-for="z in allTimezones" :key="z" :value="z">{{ z }}</option>
-            </select>
-          </label>
-          <p class="hint">
-            "Use device timezone" follows your browser/OS automatically. Override only if you want a fixed zone.
-          </p>
-          <div class="right"><button type="submit" class="btn-primary">Save timezone</button></div>
         </form>
       </section>
 

@@ -136,7 +136,6 @@ type User struct {
 	AvatarUpdatedAt *time.Time
 	DeletedAt       *time.Time
 	WeekStart       int16
-	Timezone        *string
 	IsAdmin         bool
 	EmailVerifiedAt *time.Time
 }
@@ -155,7 +154,6 @@ func (s *AuthService) toUser(u *repo.User) (*User, error) {
 		AvatarUpdatedAt: u.AvatarUpdatedAt,
 		DeletedAt:       u.DeletedAt,
 		WeekStart:       u.WeekStart,
-		Timezone:        u.Timezone,
 		IsAdmin:         u.Role == "admin",
 		EmailVerifiedAt: u.EmailVerifiedAt,
 	}, nil

@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/png"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
@@ -39,7 +38,6 @@ var (
 	ErrWrongPassword = errors.New("old password does not match")
 	ErrBadAvatar     = errors.New("avatar must be an 8x8 PNG under 1024 bytes")
 	ErrUserDeleted   = errors.New("account is already deleted")
-	ErrBadTimezone   = errors.New("unknown timezone")
 )
 
 type MeService struct {
@@ -85,24 +83,6 @@ func (s *MeService) SetWeekStart(ctx context.Context, userID uuid.UUID, v int16)
 		return errors.New("week_start must be 0 (Sunday) or 1 (Monday)")
 	}
 	return s.users.UpdateWeekStart(ctx, userID, v)
-}
-
-// SetTimezone sets (or clears) the user's IANA timezone override. An empty
-// string clears the override; any non-empty value is validated against the
-// system's tzdata via time.LoadLocation before persisting. UTC is also a
-// valid override.
-func (s *MeService) SetTimezone(ctx context.Context, userID uuid.UUID, tz string) error {
-	tz = strings.TrimSpace(tz)
-	if tz == "" {
-		return s.users.UpdateTimezone(ctx, userID, nil)
-	}
-	if len(tz) > 64 {
-		return ErrBadTimezone
-	}
-	if _, err := time.LoadLocation(tz); err != nil {
-		return ErrBadTimezone
-	}
-	return s.users.UpdateTimezone(ctx, userID, &tz)
 }
 
 // ChangePassword rotates the password after verifying the old one and revokes

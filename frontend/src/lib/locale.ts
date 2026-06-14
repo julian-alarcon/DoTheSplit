@@ -1,8 +1,7 @@
 // Resolve a BCP-47 locale tag from an Accept-Language header. Returns the
 // highest-q-value tag the runtime can honor (i.e. has CLDR data for), with
 // a hard fallback to "en-US". Designed so future i18n work can layer a
-// stored per-user override on top - mirrors the 3-tier shape used by
-// timezone resolution in lib/timezone.ts.
+// stored per-user override on top.
 
 function isUsable(tag: string): boolean {
   try {

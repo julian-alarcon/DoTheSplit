@@ -108,7 +108,7 @@ make test           # unit + integration tests
 
 See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short:
 
-- **Accounts**: register / login, display name + password change, personal timezone, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
+- **Accounts**: register / login, display name + password change, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.

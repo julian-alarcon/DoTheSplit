@@ -74,7 +74,7 @@ The complete contract lives in [docs/openapi.yaml](docs/openapi.yaml) - that's t
 
 - **Auth**: register, login, logout, email verification, password reset by code.
 - **Setup**: first-run install ceremony (token-gated admin bootstrap).
-- **Me**: profile, password change, email change, timezone, avatar (8x8 PNG), notification prefs, soft-delete.
+- **Me**: profile, password change, email change, avatar (8x8 PNG), notification prefs, soft-delete.
 - **Groups**: CRUD, membership (add/remove), default split for 2-member groups.
 - **Expenses**: CRUD per group, edit-history (revisions), three split modes (equal/exact/percent).
 - **Balances & settlements**: net balances, simplified "X owes Y", settlement CRUD.

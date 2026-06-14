@@ -155,38 +155,6 @@ func TestMeFlows(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestSetTimezone(t *testing.T) {
-	ts := setup(t)
-	base := ts.srv.URL
-
-	_, cookie := registerUser(t, base, "tz@test.dev", "passwordpassword", "Tz")
-
-	// Default: timezone is null/absent.
-	_, me := request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Nil(t, me["timezone"], "fresh account must have null timezone")
-
-	// Valid IANA name → 200 and persisted.
-	resp, _ := request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": "Europe/Madrid"}, cookie)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Equal(t, "Europe/Madrid", me["timezone"])
-
-	// Bogus name → 400 and previous value is preserved.
-	resp, _ = request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": "Mars/Phobos"}, cookie)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Equal(t, "Europe/Madrid", me["timezone"])
-
-	// Empty string clears the override (revert to device detection).
-	resp, _ = request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": ""}, cookie)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Nil(t, me["timezone"])
-}
-
 func TestDeleteMe(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL

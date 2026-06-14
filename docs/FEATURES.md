@@ -6,8 +6,7 @@ Detailed reference for what currently ships in DoTheSplit. The
 ## Accounts
 
 Register, log in, log out, change display name, change password (old password
-required). Set a personal **timezone** override (otherwise resolved from a
-device-detected `dts_tz` cookie, falls back to UTC). Upload an **8×8 pixel
+required). Dates render in the viewer's device timezone. Upload an **8×8 pixel
 avatar** generated in-browser from any image: pixelated PNG ≤ 1024 bytes,
 re-encoded server-side; falls back to deterministic initials when absent.
 Soft-delete your account with a stable `Deleted user #<short-uuid>` tombstone so
@@ -153,8 +152,8 @@ move ledgers in and out of the app without lock-in.
 
 ## Settings & about
 
-The personal area is at `/settings` (display name, password, timezone,
-avatar, account deletion). The third-party attribution and license summary
+The personal area is at `/settings` (display name, password, week-start
+preference, avatar, account deletion). The third-party attribution and license summary
 lives at `/about`, linked from the header user menu. The header itself
 exposes a collapsible user menu so navigation, theme switcher, and search
 share one row on small screens.

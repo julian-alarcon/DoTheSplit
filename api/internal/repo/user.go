@@ -22,7 +22,6 @@ type User struct {
 	Avatar          []byte
 	AvatarUpdatedAt *time.Time
 	WeekStart       int16
-	Timezone        *string
 	Role            string
 	EmailVerifiedAt *time.Time
 	// NotificationPrefs is the raw JSONB blob; service layer parses it into
@@ -36,11 +35,11 @@ type UserRepo struct {
 
 func NewUserRepo(p *pgxpool.Pool) *UserRepo { return &UserRepo{pool: p} }
 
-const userCols = `id, email_hash, email_encrypted, display_name, password_hash, created_at, deleted_at, avatar_updated_at, week_start, timezone, role, email_verified_at, notification_prefs`
+const userCols = `id, email_hash, email_encrypted, display_name, password_hash, created_at, deleted_at, avatar_updated_at, week_start, role, email_verified_at, notification_prefs`
 
 func scanUser(row pgx.Row, u *User) error {
 	return row.Scan(&u.ID, &u.EmailHash, &u.EmailEncrypted, &u.DisplayName,
-		&u.PasswordHash, &u.CreatedAt, &u.DeletedAt, &u.AvatarUpdatedAt, &u.WeekStart, &u.Timezone,
+		&u.PasswordHash, &u.CreatedAt, &u.DeletedAt, &u.AvatarUpdatedAt, &u.WeekStart,
 		&u.Role, &u.EmailVerifiedAt, &u.NotificationPrefs)
 }
 
@@ -107,23 +106,6 @@ func (r *UserRepo) UpdateWeekStart(ctx context.Context, id uuid.UUID, v int16) e
 		UPDATE users SET week_start = $2
 		WHERE id = $1 AND deleted_at IS NULL
 	`, id, v)
-	if err != nil {
-		return err
-	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// UpdateTimezone sets the user's IANA timezone override. Pass nil to clear the
-// override (which means "use device-detected zone" on the client). Caller must
-// validate the IANA name before persisting.
-func (r *UserRepo) UpdateTimezone(ctx context.Context, id uuid.UUID, tz *string) error {
-	ct, err := r.pool.Exec(ctx, `
-		UPDATE users SET timezone = $2
-		WHERE id = $1 AND deleted_at IS NULL
-	`, id, tz)
 	if err != nil {
 		return err
 	}

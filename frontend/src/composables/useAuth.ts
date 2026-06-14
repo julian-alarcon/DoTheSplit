@@ -139,7 +139,6 @@ async function confirmPasswordReset(
 async function updateProfile(patch: {
   display_name?: string;
   week_start?: 0 | 1;
-  timezone?: string;
 }): Promise<{ ok: boolean }> {
   const { error } = await api.PATCH("/v1/me", { body: patch });
   if (!error) await fetchMe();

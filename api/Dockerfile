@@ -1,14 +1,14 @@
 # Build context is the repo ROOT (see docker-compose.yml), because the API
-# binary now embeds the Vue SPA built from app/ and typed against docs/.
+# binary now embeds the Vue SPA built from frontend/ and typed against docs/.
 
 # --- Stage 1: build the Vue SPA static bundle -------------------------------
 ARG NODE_VERSION=24.16.0
 ARG ALPINE_VERSION=3.22
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS web
 WORKDIR /app
-COPY app/package.json app/package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --ignore-scripts
-COPY app ./
+COPY frontend ./
 COPY docs/openapi.yaml /openapi/openapi.yaml
 RUN npx openapi-typescript /openapi/openapi.yaml -o src/lib/api/schema.d.ts \
  && npm run build

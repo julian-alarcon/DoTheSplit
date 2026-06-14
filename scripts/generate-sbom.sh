@@ -24,16 +24,16 @@ echo "→ CycloneDX SBOM: worker"
     -main ./cmd/worker -json -output "$OUT/worker.cdx.json" .
 )
 
-echo "→ CycloneDX SBOM: app"
+echo "→ CycloneDX SBOM: frontend"
 (
-  cd "$ROOT/app"
+  cd "$ROOT/frontend"
   npx --yes @cyclonedx/cyclonedx-npm@4.2.1 \
-    --output-file "$OUT/app.cdx.json" \
+    --output-file "$OUT/frontend.cdx.json" \
     --output-format JSON
 )
 
 echo "→ Verifying CycloneDX format"
-for f in "$OUT/api.cdx.json" "$OUT/worker.cdx.json" "$OUT/app.cdx.json"; do
+for f in "$OUT/api.cdx.json" "$OUT/worker.cdx.json" "$OUT/frontend.cdx.json"; do
   if ! jq -e '.bomFormat == "CycloneDX"' "$f" >/dev/null; then
     echo "✗ $f is not a valid CycloneDX document" >&2
     exit 1

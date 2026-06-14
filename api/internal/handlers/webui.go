@@ -31,7 +31,7 @@ func (s *Server) NewSPAHandler() (gin.HandlerFunc, error) {
 	index, err := fs.ReadFile(files, "index.html")
 	if err != nil {
 		// No built bundle in this binary (e.g. a Go-only `go build` without
-		// `make embed-app`). Serve a helpful placeholder rather than failing
+		// `make embed-frontend`). Serve a helpful placeholder rather than failing
 		// to boot, so the API is still usable for development.
 		index = []byte(webui.FallbackHTML)
 	}

@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, toRef } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { pixelateFile, toBase64NoPrefix } from "@/lib/avatar-pixelate";
 import { useAvatarUrl } from "@/composables/useAvatarUrl";
-import { toRef } from "vue";
 import AppLayout from "@/components/AppLayout.vue";
 import Alert from "@/components/Alert.vue";
 import Icon from "@/components/Icon.vue";

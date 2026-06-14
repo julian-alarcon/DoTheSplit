@@ -1,4 +1,4 @@
-# Built SPA bundle is copied in at image-build time (make embed-app); never
+# Built SPA bundle is copied in at image-build time (make embed-frontend); never
 # commit it. Keep this .gitignore and the .gitkeep so the embed dir exists and
 # //go:embed stays valid in a fresh checkout.
 *

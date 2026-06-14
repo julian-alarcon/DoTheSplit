@@ -37,7 +37,7 @@ Open http://localhost:8080.
 ## Layout
 
 - `/api`: Go 1.26 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses. The api binary also serves the embedded SPA.
-- `/app`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
+- `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one

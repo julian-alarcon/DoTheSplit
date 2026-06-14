@@ -27,10 +27,10 @@ The app and API are both served by the api binary at <http://localhost:8080> (th
 Any change that touches the HTTP surface goes through the same loop:
 
 1. Edit [docs/openapi.yaml](openapi.yaml) first.
-2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`app/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
+2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`frontend/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
 3. If the DB schema changes, add a migration under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`. Migrations are append-only.
 4. Backend order: **repo → service → handlers → router**.
-5. Frontend: add a typed call in a composable under `app/src/composables/` and the view/route that uses it. Never hand-write fetch/URLs - go through the `openapi-fetch` client.
+5. Frontend: add a typed call in a composable under `frontend/src/composables/` and the view/route that uses it. Never hand-write fetch/URLs - go through the `openapi-fetch` client.
 6. Tests, rebuild containers, smoke.
 
 ## Check (fast, no containers needed)
@@ -39,8 +39,8 @@ Any change that touches the HTTP surface goes through the same loop:
 make gen            # regenerate Go + TS types from docs/openapi.yaml
 cd api && go vet ./...
 cd api && go build ./...
-cd app && npm run check    # vue-tsc type-check
-cd app && npm run build    # vite build (static bundle the api embeds)
+cd frontend && npm run check    # vue-tsc type-check
+cd frontend && npm run build    # vite build (static bundle the api embeds)
 ```
 
 `vue-tsc` / `vite build` should produce 0 errors.
@@ -59,13 +59,13 @@ The E2E suite in [api/internal/server/server_test.go](../api/internal/server/ser
 
 **App (Vue SPA)**: two layers.
 
-- Unit (vitest, jsdom) under `app/src/**/*.test.ts`. Pure helpers only - the canvas-touching avatar pipeline isn't exercised here, only its color math. Run with `cd app && npm test` (or `npm run test:watch`).
-- E2E (Playwright, Chromium) under `app/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs api`. The SPA is served by the api on `:8080`, so there's a single origin to target:
+- Unit (vitest, jsdom) under `frontend/src/**/*.test.ts`. Pure helpers only - the canvas-touching avatar pipeline isn't exercised here, only its color math. Run with `cd frontend && npm test` (or `npm run test:watch`).
+- E2E (Playwright, Chromium) under `frontend/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs api`. The SPA is served by the api on `:8080`, so there's a single origin to target:
 
   ```bash
   docker compose up -d --build
   TOKEN=$(docker compose logs api | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
-  cd app && SETUP_TOKEN=$TOKEN npm run test:e2e
+  cd frontend && SETUP_TOKEN=$TOKEN npm run test:e2e
   ```
 
   CI runs the same flow on every PR; locally it's optional, useful when changing SPA-to-API wiring.
@@ -84,7 +84,7 @@ Images:
 
 - `dothesplit-api` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage serves `/api` and the `/worker` command. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image now serves both the API and the frontend.
 
-The `make up` target reads `app/package.json` (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
+The `make up` target reads `frontend/package.json` (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
 
 ## Releasing
 
@@ -101,7 +101,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
    | `feat!:` / `BREAKING CHANGE` footer | major | `feat(api)!: drop /v1/legacy/expenses` |
    | `chore:`, `docs:`, `style:`, `test:`, `ci:`, `refactor:` | none | (still appears in CHANGELOG under their section)   |
 
-2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `app/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.0.0`) and push - the PR will rewrite itself.
+2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `frontend/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.0.0`) and push - the PR will rewrite itself.
 
 3. **Merging the Release PR** auto-creates the git tag `vX.Y.Z` and a GitHub Release with the changelog body.
 
@@ -115,7 +115,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 
 | Location                                  | Source                                                |
 | ----------------------------------------- | ----------------------------------------------------- |
-| `app/package.json` `version`              | release-please bump on merge (single source of truth) |
+| `frontend/package.json` `version`              | release-please bump on merge (single source of truth) |
 | GitHub Release page                       | release-please on PR merge                            |
 | `ghcr.io/.../dothesplit-api:X.Y.Z`        | `publish.yml` on tag                                  |
 | API `GET /healthz` JSON                   | `-ldflags` baked in by `api/Dockerfile`               |
@@ -126,7 +126,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 Only when release-please is broken or the queued Release PR can't be merged in time:
 
 ```bash
-# 1. Bump app/package.json + .release-please-manifest.json BY HAND, commit.
+# 1. Bump frontend/package.json + .release-please-manifest.json BY HAND, commit.
 # 2. Tag and push.
 git tag -a v1.2.3 -m "v1.2.3"
 git push origin v1.2.3
@@ -270,7 +270,7 @@ The SPA logs in via `POST /v1/auth/token` (bearer), keeping the access token in 
 
 ### A form control doesn't "do" anything / a script didn't run
 
-The SPA ships a strict CSP (`script-src 'self'`, no inline scripts). All JS is bundled by Vite and served same-origin, so this should never bite normal Vue code. The one hand-placed script is [app/public/theme-boot.js](../app/public/theme-boot.js), referenced from `index.html` without `defer` - it must stay a same-origin file, never an inline block. Inline SVG markup (the `Icon`/`CategoryIcon` components) is allowed; only inline `<script>`/`<style>` are blocked.
+The SPA ships a strict CSP (`script-src 'self'`, no inline scripts). All JS is bundled by Vite and served same-origin, so this should never bite normal Vue code. The one hand-placed script is [frontend/public/theme-boot.js](../frontend/public/theme-boot.js), referenced from `index.html` without `defer` - it must stay a same-origin file, never an inline block. Inline SVG markup (the `Icon`/`CategoryIcon` components) is allowed; only inline `<script>`/`<style>` are blocked.
 
 ### Test container fails to pull Postgres image
 
@@ -278,7 +278,7 @@ The SPA ships a strict CSP (`script-src 'self'`, no inline scripts). All JS is b
 
 ### The api serves a stale SPA / a placeholder page
 
-The Go binary embeds whatever is in `api/internal/webui/dist/` at compile time. A fresh `go build` without the bundle serves a code fallback page. `make build` (and the Docker build) rebuild the SPA and copy it in first; if you built the binary by hand, run `make embed-app` then rebuild.
+The Go binary embeds whatever is in `api/internal/webui/dist/` at compile time. A fresh `go build` without the bundle serves a code fallback page. `make build` (and the Docker build) rebuild the SPA and copy it in first; if you built the binary by hand, run `make embed-frontend` then rebuild.
 
 ## Useful targets
 
@@ -290,9 +290,9 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | `make migrate-up` | Apply all pending migrations                                       |
 | `make test-go`    | Full Go test suite (unit + integration via testcontainers)         |
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
-| `make dev-app`    | Run the Vite dev server (proxies `/v1` to the local API)           |
+| `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |
 | `make build`      | Build the SPA, embed it, then build Go binaries (`bin/api`, `bin/worker`) |
 | `make up`         | `docker compose up -d --build`, baking current SHA in              |
 | `make compliance` | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/` |
 
-**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./app/package.json').version")` and passes both to the api Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../app/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.
+**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./frontend/package.json').version")` and passes both to the api Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../frontend/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.

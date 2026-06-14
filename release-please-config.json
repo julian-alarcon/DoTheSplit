@@ -12,7 +12,7 @@
       "extra-files": [
         {
           "type": "json",
-          "path": "app/package.json",
+          "path": "frontend/package.json",
           "jsonpath": "$.version"
         }
       ]

@@ -11,7 +11,7 @@ import (
 
 // dist holds the built SPA. A committed .gitkeep keeps `go:embed all:dist`
 // valid in a checkout that hasn't run the web build yet; the real assets
-// (gitignored) are copied in at image-build time by `make embed-app`.
+// (gitignored) are copied in at image-build time by `make embed-frontend`.
 //
 //go:embed all:dist
 var dist embed.FS
@@ -21,7 +21,7 @@ var dist embed.FS
 // index.html to fall back to.
 const FallbackHTML = `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><title>DoTheSplit</title></head>
-<body><p>Frontend bundle not built. Run <code>make embed-app</code> before building the API binary.</p></body></html>`
+<body><p>Frontend bundle not built. Run <code>make embed-frontend</code> before building the API binary.</p></body></html>`
 
 // FS returns the embedded SPA filesystem rooted at dist/ (so paths look like
 // "index.html", "assets/...").

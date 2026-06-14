@@ -37,9 +37,9 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
-            # app/package.json is the single source of truth for the version;
+            # frontend/package.json is the single source of truth for the version;
             # release-please bumps it on every Release PR merge.
-            base=$(node -p "require('./app/package.json').version" 2>/dev/null || echo 0.0.0)
+            base=$(node -p "require('./frontend/package.json').version" 2>/dev/null || echo 0.0.0)
             short=$(echo "${GITHUB_SHA}" | cut -c1-7)
             echo "version=${base}-dev+${short}" >> "$GITHUB_OUTPUT"
           fi

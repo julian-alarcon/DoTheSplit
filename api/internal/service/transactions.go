@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
-
 )
 
 var ErrBadCursor = errors.New("invalid cursor")
@@ -22,7 +21,7 @@ const (
 
 type TransactionService struct {
 	groups      *GroupService
-	transaction    *repo.TransactionRepo
+	transaction *repo.TransactionRepo
 	expenses    *repo.ExpenseRepo
 	settlements *repo.SettlementRepo
 	recurring   *repo.RecurringRepo

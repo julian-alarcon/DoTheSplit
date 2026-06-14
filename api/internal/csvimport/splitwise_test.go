@@ -341,12 +341,12 @@ func TestDecomposeSettlement_HappyPath(t *testing.T) {
 
 func TestDecomposeSettlement_RejectsBadShape(t *testing.T) {
 	cases := map[string]Row{
-		"all zero":            {CostCents: 100, SignedCents: []int64{0, 0, 0, 0}},
-		"two payers":          {CostCents: 100, SignedCents: []int64{50, 50, -100, 0}},
-		"two recipients":      {CostCents: 100, SignedCents: []int64{100, -50, -50, 0}},
-		"asymmetric":          {CostCents: 100, SignedCents: []int64{100, -50, 0, 0}},
-		"cost mismatch":       {CostCents: 200, SignedCents: []int64{100, -100, 0, 0}},
-		"single column user":  {CostCents: 100, SignedCents: []int64{100}},
+		"all zero":           {CostCents: 100, SignedCents: []int64{0, 0, 0, 0}},
+		"two payers":         {CostCents: 100, SignedCents: []int64{50, 50, -100, 0}},
+		"two recipients":     {CostCents: 100, SignedCents: []int64{100, -50, -50, 0}},
+		"asymmetric":         {CostCents: 100, SignedCents: []int64{100, -50, 0, 0}},
+		"cost mismatch":      {CostCents: 200, SignedCents: []int64{100, -100, 0, 0}},
+		"single column user": {CostCents: 100, SignedCents: []int64{100}},
 	}
 	for name, row := range cases {
 		t.Run(name, func(t *testing.T) {

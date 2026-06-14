@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrLastAdmin     = errors.New("cannot remove the last admin")
+	ErrLastAdmin        = errors.New("cannot remove the last admin")
 	ErrCannotTargetSelf = errors.New("admins cannot target their own account here")
 )
 

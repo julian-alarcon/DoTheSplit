@@ -250,4 +250,3 @@ func (s *GroupExpenseImporter) resolvePayer(name string, actorID uuid.UUID, idx 
 	}
 	return uuid.Nil, false
 }
-

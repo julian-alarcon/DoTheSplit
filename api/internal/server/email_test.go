@@ -333,4 +333,3 @@ func TestPasswordResetEnumerationSafe(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, n, "no password_reset token should be created for an unknown email")
 }
-

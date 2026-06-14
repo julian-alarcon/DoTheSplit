@@ -30,14 +30,14 @@ type SmtpConfig struct {
 }
 
 type SmtpUpdateInput struct {
-	Host                       string
-	Port                       int
-	Username                   *string
-	FromAddress                string
-	TLSMode                    string
-	Password                   *string // nil = leave; "" = clear; non-empty = set
-	AllowPlaintextCredentials  bool
-	UpdatedBy                  uuid.UUID
+	Host                      string
+	Port                      int
+	Username                  *string
+	FromAddress               string
+	TLSMode                   string
+	Password                  *string // nil = leave; "" = clear; non-empty = set
+	AllowPlaintextCredentials bool
+	UpdatedBy                 uuid.UUID
 }
 
 var (

@@ -19,29 +19,29 @@ import (
 
 // Server bundles dependencies for all handlers.
 type Server struct {
-	Cfg         *config.Config
-	Pool        *pgxpool.Pool
-	Auth        *service.AuthService
-	MeSvc       *service.MeService
-	Groups      *service.GroupService
-	Categories  *service.CategoryService
-	Expenses    *service.ExpenseService
-	Balances    *service.BalanceService
-	Settlements *service.SettlementService
-	Recurring   *service.RecurringService
-	Transactions    *service.TransactionService
-	Activity    *service.ActivityService
-	SearchSvc   *service.SearchService
+	Cfg              *config.Config
+	Pool             *pgxpool.Pool
+	Auth             *service.AuthService
+	MeSvc            *service.MeService
+	Groups           *service.GroupService
+	Categories       *service.CategoryService
+	Expenses         *service.ExpenseService
+	Balances         *service.BalanceService
+	Settlements      *service.SettlementService
+	Recurring        *service.RecurringService
+	Transactions     *service.TransactionService
+	Activity         *service.ActivityService
+	SearchSvc        *service.SearchService
 	Imports          *service.SplitwiseImporter
 	GroupExpenseImps *service.GroupExpenseImporter
 	Exporter         *service.GroupCSVExporter
-	Admin         *service.AdminService
-	Smtp          *service.SmtpService
-	Setup         *service.SetupService
-	Mailer        *service.MailerService
-	Notifications *service.NotificationService
-	Users         *repo.UserRepo
-	Audit         *repo.AuditRepo
+	Admin            *service.AdminService
+	Smtp             *service.SmtpService
+	Setup            *service.SetupService
+	Mailer           *service.MailerService
+	Notifications    *service.NotificationService
+	Users            *repo.UserRepo
+	Audit            *repo.AuditRepo
 
 	// Version and Commit are stamped into the binary at build time and
 	// reported by /healthz so deployments can self-identify.

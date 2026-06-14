@@ -23,16 +23,16 @@ const (
 // address (hash + AES-GCM ciphertext) so confirm has everything it needs in
 // one row without a separate scratch table.
 type VerificationToken struct {
-	ID            uuid.UUID
-	UserID        uuid.UUID
-	Purpose       VerificationPurpose
-	CodeHash      []byte
-	NewEmailHash  []byte
-	NewEmailEnc   []byte
-	Attempts      int16
-	ExpiresAt     time.Time
-	ConsumedAt    *time.Time
-	CreatedAt     time.Time
+	ID           uuid.UUID
+	UserID       uuid.UUID
+	Purpose      VerificationPurpose
+	CodeHash     []byte
+	NewEmailHash []byte
+	NewEmailEnc  []byte
+	Attempts     int16
+	ExpiresAt    time.Time
+	ConsumedAt   *time.Time
+	CreatedAt    time.Time
 }
 
 type VerificationRepo struct {

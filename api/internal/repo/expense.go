@@ -621,4 +621,3 @@ func rescaleSplits(existing []Split, oldTotal, newTotal int64) []Split {
 	}
 	return out
 }
-

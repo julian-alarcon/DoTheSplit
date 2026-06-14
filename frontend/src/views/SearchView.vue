@@ -188,8 +188,8 @@ watch(
 
 onMounted(async () => {
   filtersOpen.value = Boolean(groupFilter.value || categoryFilter.value);
-  const [groups, cats] = await Promise.all([listGroups(), listCategories()]);
-  allGroups.value = groups.map((g) => ({
+  const [groupsRes, cats] = await Promise.all([listGroups(), listCategories()]);
+  allGroups.value = groupsRes.groups.map((g) => ({
     id: g.id,
     name: g.name,
     default_currency: g.default_currency,
@@ -653,7 +653,7 @@ onMounted(async () => {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 .filter-dialog::backdrop {
-  background: rgba(20, 20, 20, 0.4);
+  background: var(--backdrop);
 }
 .filter-dialog-body {
   display: flex;

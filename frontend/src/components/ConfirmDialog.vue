@@ -88,7 +88,7 @@ function onClose() {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 .confirm::backdrop {
-  background: rgba(20, 20, 20, 0.4);
+  background: var(--backdrop);
 }
 .confirm-body {
   display: flex;

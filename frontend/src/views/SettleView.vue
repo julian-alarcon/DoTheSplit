@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { getBalances, getGroup, type Group, type SimplifiedDebt } from "@/composables/useGroups";
@@ -62,18 +62,26 @@ async function onSubmit() {
   }
 }
 
-onMounted(async () => {
-  const g = await getGroup(groupId.value);
+async function load() {
+  loaded.value = false;
+  const target = groupId.value;
+  const { group: g } = await getGroup(target);
+  if (groupId.value !== target) return;
   if (!g) {
     await router.replace("/groups");
     return;
   }
   group.value = g;
-  const bal = await getBalances(groupId.value);
+  const bal = await getBalances(target);
+  if (groupId.value !== target) return;
   simplified.value = bal.simplified;
   form.value.fromUserId = state.user?.id ?? members.value[0]?.user_id ?? "";
   loaded.value = true;
-});
+}
+
+onMounted(load);
+// vue-router reuses this instance when only :id changes; reload on id change.
+watch(groupId, load);
 </script>
 
 <template>

@@ -68,6 +68,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="shell">
+    <a href="#main" class="skip-link">Skip to content</a>
     <header class="hdr">
       <div class="hdr-inner">
         <RouterLink :to="user ? '/groups' : '/'" class="brand">
@@ -142,7 +143,7 @@ onBeforeUnmount(() => {
       </RouterLink>
     </div>
 
-    <main class="main" :class="wide ? 'main-wide' : 'main-default'">
+    <main id="main" class="main" :class="wide ? 'main-wide' : 'main-default'">
       <slot />
     </main>
 
@@ -196,7 +197,8 @@ onBeforeUnmount(() => {
   max-width: 72rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: max(0.75rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    0.75rem max(1rem, env(safe-area-inset-left));
 }
 .brand {
   display: flex;
@@ -289,7 +291,8 @@ onBeforeUnmount(() => {
 .ftr {
   border-top: 1px solid var(--border);
   background: color-mix(in oklch, var(--card) 70%, transparent);
-  padding-block: 0.75rem;
+  padding-top: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
@@ -301,7 +304,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  padding-inline: 1rem;
+  padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
 }
 .mono {
   font-family: var(--font-mono);

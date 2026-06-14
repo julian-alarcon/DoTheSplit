@@ -35,7 +35,7 @@ async function onExport() {
 }
 
 onMounted(async () => {
-  const g = await getGroup(groupId.value);
+  const { group: g } = await getGroup(groupId.value);
   if (!g) {
     await router.replace("/groups");
     return;

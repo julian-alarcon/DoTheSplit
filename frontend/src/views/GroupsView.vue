@@ -4,12 +4,14 @@ import { RouterLink } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { listGroups, type Group } from "@/composables/useGroups";
 import AppLayout from "@/components/AppLayout.vue";
+import Alert from "@/components/Alert.vue";
 
 const { state } = useAuth();
 const myId = computed(() => state.user?.id ?? "");
 
 const groups = ref<Group[]>([]);
 const loaded = ref(false);
+const loadError = ref(false);
 
 function ownerName(g: Group): string {
   const owner = g.members.find((m) => m.user_id === g.created_by);
@@ -17,7 +19,9 @@ function ownerName(g: Group): string {
 }
 
 onMounted(async () => {
-  groups.value = await listGroups();
+  const res = await listGroups();
+  groups.value = res.groups;
+  loadError.value = res.error;
   loaded.value = true;
 });
 </script>
@@ -30,7 +34,11 @@ onMounted(async () => {
       <RouterLink to="/groups/new" class="btn-primary btn-sm new-btn">New group</RouterLink>
     </div>
 
-    <p v-if="loaded && groups.length === 0" class="empty">
+    <Alert v-if="loaded && loadError" tone="error">
+      Couldn't load your groups. Check your connection and try again.
+    </Alert>
+
+    <p v-else-if="loaded && groups.length === 0" class="empty">
       No groups yet. <RouterLink to="/groups/new" class="link">Create one</RouterLink>.
     </p>
 

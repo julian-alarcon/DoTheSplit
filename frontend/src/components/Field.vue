@@ -43,12 +43,16 @@ defineExpose({ input });
         v-model="model"
         class="field-input"
         placeholder=" "
+        :aria-invalid="error ? 'true' : undefined"
+        :aria-describedby="error ? `${inputId}-error` : undefined"
         v-bind="$attrs"
       />
       <span class="field-label" :data-required="($attrs.required ?? false) !== false ? '' : undefined">
         {{ label }}
       </span>
     </label>
-    <p v-if="error" class="field-error">{{ error }}</p>
+    <p v-if="error" :id="`${inputId}-error`" class="field-error" role="alert" aria-live="polite">
+      {{ error }}
+    </p>
   </div>
 </template>

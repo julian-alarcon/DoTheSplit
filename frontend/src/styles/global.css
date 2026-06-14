@@ -103,6 +103,10 @@
     --ring: var(--primary);
     --radius: 0.5rem;
 
+    /* Modal scrim behind native <dialog>::backdrop. Per-theme so the overlay
+       keeps enough contrast on dark/AMOLED surfaces. */
+    --backdrop: rgb(20 20 20 / 0.4);
+
     /* Form-field tones. neutral-500 stays >= 4.5:1 against white and
        near-black bodies, clearing WCAG 1.4.11 (3:1 for non-text UI). */
     --field-color: var(--color-neutral-500);
@@ -158,6 +162,7 @@
 
     --field-color: var(--border);
     --field-focus: var(--foreground);
+    --backdrop: rgb(0 0 0 / 0.6);
   }
 
   /* Shared dark-surface category tints, lifted ~15% over light-mode values
@@ -198,6 +203,7 @@
 
     --field-color: var(--color-neutral-500);
     --field-focus: var(--color-neutral-100);
+    --backdrop: rgb(0 0 0 / 0.8);
   }
 }
 
@@ -231,11 +237,45 @@
     border: 0;
   }
 
+  /* Keyboard skip-to-content: offscreen until focused, then pinned top-left.
+     First focusable element in the layout so Tab from page load reveals it. */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 100;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    transition: top 150ms ease;
+  }
+  .skip-link:focus-visible {
+    top: 0.5rem;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   /* Background-scroll lock is handled in JS. overscroll-behavior: contain
      belt-and-braces against rubber-band chaining inside scrollable dialogs. */
   dialog[open],
   dialog[open] .overflow-auto {
     overscroll-behavior: contain;
+  }
+
+  /* WCAG 2.3.3: honour the OS "reduce motion" preference. !important beats the
+     unlayered scoped <style> transitions in SFCs too, so this is the single
+     place motion is neutralised; individual components need no edits. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

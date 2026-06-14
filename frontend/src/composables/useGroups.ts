@@ -8,17 +8,21 @@ import type { components } from "@/lib/api/schema";
 export type Group = components["schemas"]["Group"];
 export type GroupMember = components["schemas"]["GroupMember"];
 
-export async function listGroups(): Promise<Group[]> {
+// Returns `error: true` on a network/5xx failure so callers can distinguish a
+// genuine "no groups" empty state from a transient fetch failure.
+export async function listGroups(): Promise<{ groups: Group[]; error: boolean }> {
   const { data, error } = await api.GET("/v1/groups");
-  if (error || !data) return [];
-  return data;
+  if (error || !data) return { groups: [], error: true };
+  return { groups: data, error: false };
 }
 
 // There is no single-group GET endpoint; the list response embeds members, so
 // the dashboard resolves its group from the list (matches the Astro page).
-export async function getGroup(groupId: string): Promise<Group | null> {
-  const groups = await listGroups();
-  return groups.find((g) => g.id === groupId) ?? null;
+export async function getGroup(
+  groupId: string,
+): Promise<{ group: Group | null; error: boolean }> {
+  const { groups, error } = await listGroups();
+  return { group: groups.find((g) => g.id === groupId) ?? null, error };
 }
 
 export type Balance = components["schemas"]["Balance"];
@@ -26,12 +30,12 @@ export type SimplifiedDebt = components["schemas"]["SimplifiedDebt"];
 
 export async function getBalances(
   groupId: string,
-): Promise<{ net: Balance[]; simplified: SimplifiedDebt[] }> {
+): Promise<{ net: Balance[]; simplified: SimplifiedDebt[]; error: boolean }> {
   const { data, error } = await api.GET("/v1/groups/{id}/balances", {
     params: { path: { id: groupId } },
   });
-  if (error || !data) return { net: [], simplified: [] };
-  return { net: data.net, simplified: data.simplified };
+  if (error || !data) return { net: [], simplified: [], error: true };
+  return { net: data.net, simplified: data.simplified, error: false };
 }
 
 // True when the group's ledger has at least one transaction (the currency is

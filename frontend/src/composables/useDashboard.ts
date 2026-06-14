@@ -19,6 +19,9 @@ export interface DashboardData {
   recurring: RecurringExpense[];
   transactions: TransactionItem[];
   nextCursor: string;
+  // True if any of the four parallel reads failed, so the view can show an
+  // error banner instead of a misleading empty dashboard.
+  error: boolean;
 }
 
 export async function loadDashboard(groupId: string): Promise<DashboardData> {
@@ -34,17 +37,24 @@ export async function loadDashboard(groupId: string): Promise<DashboardData> {
     recurring: recurringRes.data ?? [],
     transactions: transactionsRes.data?.items ?? [],
     nextCursor: transactionsRes.data?.next_cursor ?? "",
+    error: Boolean(
+      balancesRes.error || categoriesRes.error || recurringRes.error || transactionsRes.error,
+    ),
   };
 }
 
 export async function loadMoreTransactions(
   groupId: string,
   cursor: string,
-): Promise<{ items: TransactionItem[]; nextCursor: string }> {
-  const { data } = await api.GET("/v1/groups/{id}/transactions", {
+): Promise<{ items: TransactionItem[]; nextCursor: string; error: boolean }> {
+  const { data, error } = await api.GET("/v1/groups/{id}/transactions", {
     params: { path: { id: groupId }, query: { cursor } },
   });
-  return { items: data?.items ?? [], nextCursor: data?.next_cursor ?? "" };
+  return {
+    items: data?.items ?? [],
+    nextCursor: data?.next_cursor ?? "",
+    error: Boolean(error),
+  };
 }
 
 function isValidCadence(c: string): c is Cadence {

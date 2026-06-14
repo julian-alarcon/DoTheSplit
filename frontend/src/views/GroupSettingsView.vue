@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import {
@@ -57,7 +57,7 @@ const transferConfirm = ref(false);
 const deleteConfirm = ref(false);
 
 async function reload() {
-  const g = await getGroup(groupId.value);
+  const { group: g } = await getGroup(groupId.value);
   if (!g) {
     await router.replace("/groups");
     return;
@@ -145,16 +145,23 @@ async function onDeleteGroup() {
   if (res.ok) await router.replace("/groups");
 }
 
-onMounted(async () => {
+async function load() {
+  loaded.value = false;
+  const target = groupId.value;
   await reload();
   const [locked, bal] = await Promise.all([
-    hasTransactions(groupId.value),
-    getBalances(groupId.value),
+    hasTransactions(target),
+    getBalances(target),
   ]);
+  if (groupId.value !== target) return;
   currencyLocked.value = locked;
   myNetCents.value = bal.net.find((b) => b.user_id === myId.value)?.net_cents ?? 0;
   loaded.value = true;
-});
+}
+
+onMounted(load);
+// vue-router reuses this instance when only :id changes; reload on id change.
+watch(groupId, load);
 </script>
 
 <template>

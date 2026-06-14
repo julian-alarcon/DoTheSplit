@@ -476,7 +476,7 @@ watch(value, (v) => {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 .dp-dialog::backdrop {
-  background: rgba(20, 20, 20, 0.4);
+  background: var(--backdrop);
 }
 .dp-body {
   display: flex;

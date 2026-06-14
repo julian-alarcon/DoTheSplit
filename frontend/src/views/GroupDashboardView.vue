@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { getGroup, type Group } from "@/composables/useGroups";
@@ -38,6 +38,7 @@ const recurring = ref<RecurringExpense[]>([]);
 const transactions = ref<TransactionItem[]>([]);
 const nextCursor = ref("");
 const loaded = ref(false);
+const loadError = ref(false);
 const formError = ref<string | null>(null);
 
 const inviteFailed = computed(() => {
@@ -47,11 +48,15 @@ const inviteFailed = computed(() => {
 
 const currency = computed(() => group.value?.default_currency ?? "EUR");
 const members = computed(() => group.value?.members ?? []);
-const memberByID = computed(() => new Map(members.value.map((m) => [m.user_id, m])));
+const memberByID = computed(
+  () => new Map(members.value.map((m) => [m.user_id, m])),
+);
 const nameByID = computed(
   () => new Map(members.value.map((m) => [m.user_id, m.display_name])),
 );
-const categoryByID = computed(() => new Map(categories.value.map((c) => [c.id, c])));
+const categoryByID = computed(
+  () => new Map(categories.value.map((c) => [c.id, c])),
+);
 
 const cadenceLabels: Record<string, string> = {
   daily: "daily",
@@ -68,9 +73,13 @@ const localeFmtDay = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
 type ViewerDebt = { otherID: string; amountCents: number; theyOweMe: boolean };
 const myDebts = computed<ViewerDebt[]>(() =>
   simplified.value
-    .filter((d) => d.from_user_id === viewerId.value || d.to_user_id === viewerId.value)
+    .filter(
+      (d) =>
+        d.from_user_id === viewerId.value || d.to_user_id === viewerId.value,
+    )
     .map((d) => ({
-      otherID: d.from_user_id === viewerId.value ? d.to_user_id : d.from_user_id,
+      otherID:
+        d.from_user_id === viewerId.value ? d.to_user_id : d.from_user_id,
       amountCents: d.amount_cents,
       theyOweMe: d.to_user_id === viewerId.value,
     })),
@@ -88,7 +97,8 @@ const settledMessages = [
   "All paid up. Smooth sailing!",
   "Perfectly balanced, as all things should be.",
 ];
-const settledMessage = settledMessages[Math.floor(Math.random() * settledMessages.length)];
+const settledMessage =
+  settledMessages[Math.floor(Math.random() * settledMessages.length)];
 
 // --- Transaction feed --------------------------------------------------------
 const feedRows = computed(() =>
@@ -157,7 +167,9 @@ const split = ref<SplitPayload | null>(null);
 const submitting = ref(false);
 const categoryDialog = ref<HTMLDialogElement | null>(null);
 
-const selectedCategory = computed(() => categoryByID.value.get(form.value.categoryId));
+const selectedCategory = computed(() =>
+  categoryByID.value.get(form.value.categoryId),
+);
 
 function openCategoryPicker() {
   categoryDialog.value?.showModal();
@@ -168,7 +180,10 @@ function pickCategory(c: Category) {
 }
 
 function isNewGroupRow(i: number): boolean {
-  return i === 0 || categories.value[i - 1].group_label !== categories.value[i].group_label;
+  return (
+    i === 0 ||
+    categories.value[i - 1].group_label !== categories.value[i].group_label
+  );
 }
 
 async function onSubmit() {
@@ -209,7 +224,12 @@ function resetForm() {
 const weekStart = computed<0 | 1>(() => (state.user?.week_start === 0 ? 0 : 1));
 
 async function reload() {
-  const data = await loadDashboard(groupId.value);
+  // Capture the group the load was started for; if the user navigates to a
+  // different group before the request resolves, drop the stale result.
+  const target = groupId.value;
+  const data = await loadDashboard(target);
+  if (groupId.value !== target) return;
+  loadError.value = data.error;
   simplified.value = data.simplified;
   categories.value = data.categories;
   recurring.value = data.recurring;
@@ -217,9 +237,19 @@ async function reload() {
   nextCursor.value = data.nextCursor;
 }
 
-onMounted(async () => {
-  const g = await getGroup(groupId.value);
+async function loadGroup() {
+  loaded.value = false;
+  const target = groupId.value;
+  const { group: g, error } = await getGroup(target);
+  if (groupId.value !== target) return;
   if (!g) {
+    // A real fetch failure shouldn't bounce the user to /groups; only a
+    // confirmed "group not found" (successful list without this id) does.
+    if (error) {
+      loadError.value = true;
+      loaded.value = true;
+      return;
+    }
     await router.replace("/groups");
     return;
   }
@@ -228,7 +258,14 @@ onMounted(async () => {
   form.value.payerId = viewerId.value || members.value[0]?.user_id || "";
   form.value.categoryId = defaultCategory.value?.id ?? "";
   loaded.value = true;
-});
+}
+
+onMounted(loadGroup);
+
+// vue-router reuses this component instance when only :id changes (no remount),
+// so reload when the resolved group id changes. Watching the computed fires
+// after navigation settles, so groupId.value is already the new id.
+watch(groupId, loadGroup);
 </script>
 
 <template>
@@ -244,7 +281,9 @@ onMounted(async () => {
         >
           <Icon name="arrows-rotate" />
           <span class="head-btn-label">Recurring</span>
-          <span v-if="recurring.length > 0" class="tnum">({{ recurring.length }})</span>
+          <span v-if="recurring.length > 0" class="tnum"
+            >({{ recurring.length }})</span
+          >
         </RouterLink>
         <RouterLink
           :to="`/groups/${groupId}/settings`"
@@ -258,8 +297,8 @@ onMounted(async () => {
       </div>
     </div>
     <p class="subhead">
-      {{ members.length }} member{{ members.length === 1 ? "" : "s" }} ·
-      default currency {{ currency }}
+      {{ members.length }} member{{ members.length === 1 ? "" : "s" }} · default
+      currency {{ currency }}
     </p>
 
     <Alert v-if="formError" tone="error" class="banner">{{ formError }}</Alert>
@@ -271,7 +310,9 @@ onMounted(async () => {
             : `${inviteFailed} invites were skipped: those emails aren't registered users yet.`
         }}
       </span>
-      <RouterLink :to="`/groups/${groupId}/settings`" class="link">Add members</RouterLink>
+      <RouterLink :to="`/groups/${groupId}/settings`" class="link"
+        >Add members</RouterLink
+      >
     </Alert>
 
     <div class="triptych">
@@ -291,10 +332,14 @@ onMounted(async () => {
                       :user-id="d.otherID"
                       :display-name="nameByID.get(d.otherID) ?? '?'"
                       :has-avatar="memberByID.get(d.otherID)?.has_avatar"
-                      :avatar-updated-at="memberByID.get(d.otherID)?.avatar_updated_at"
+                      :avatar-updated-at="
+                        memberByID.get(d.otherID)?.avatar_updated_at
+                      "
                       :size="18"
                     />
-                    <span class="who-name">{{ shortName(nameByID.get(d.otherID)) }}</span>
+                    <span class="who-name">{{
+                      shortName(nameByID.get(d.otherID))
+                    }}</span>
                   </span>
                   <span class="muted">owes you</span>
                 </template>
@@ -305,10 +350,14 @@ onMounted(async () => {
                       :user-id="d.otherID"
                       :display-name="nameByID.get(d.otherID) ?? '?'"
                       :has-avatar="memberByID.get(d.otherID)?.has_avatar"
-                      :avatar-updated-at="memberByID.get(d.otherID)?.avatar_updated_at"
+                      :avatar-updated-at="
+                        memberByID.get(d.otherID)?.avatar_updated_at
+                      "
                       :size="18"
                     />
-                    <span class="who-name">{{ shortName(nameByID.get(d.otherID)) }}</span>
+                    <span class="who-name">{{
+                      shortName(nameByID.get(d.otherID))
+                    }}</span>
                   </span>
                 </template>
                 <span class="amount" :class="d.theyOweMe ? 'pos' : 'neg'">
@@ -317,131 +366,12 @@ onMounted(async () => {
               </li>
             </ul>
           </div>
-          <RouterLink :to="`/groups/${groupId}/settle`" class="btn-secondary btn-sm settle-btn">
+          <RouterLink
+            :to="`/groups/${groupId}/settle`"
+            class="btn-secondary btn-sm settle-btn"
+          >
             Settle up
           </RouterLink>
-        </div>
-      </section>
-
-      <!-- Transactions -->
-      <section class="col-transactions">
-        <RouterLink :to="`/groups/${groupId}/activity`" class="activity-link">
-          <Icon name="clock-rotate-left" :size="12" />
-          <span>See activity</span>
-        </RouterLink>
-
-        <p v-if="loaded && transactions.length === 0" class="empty">
-          No expenses or settlements yet.
-        </p>
-
-        <ul v-else class="feed">
-          <template v-for="(row, i) in feedRows" :key="i">
-            <li v-if="row.kind === 'month-header'" class="month-header">
-              {{ row.label }}
-            </li>
-            <li v-else-if="row.item.kind === 'expense' && row.item.expense">
-              <RouterLink
-                :to="`/groups/${groupId}/expenses/${row.item.expense.id}`"
-                class="tx tx-expense"
-              >
-                <div class="tx-left">
-                  <span class="tx-date" :title="categoryByID.get(row.item.expense.category_id)?.label ?? ''">
-                    <CategoryIcon
-                      :slug="categoryByID.get(row.item.expense.category_id)?.slug"
-                      :group-label="categoryByID.get(row.item.expense.category_id)?.group_label"
-                      :size="28"
-                    />
-                    <span class="tx-month">{{ dayParts(row.item.expense.incurred_at).month }}</span>
-                    <span class="tx-day">{{ dayParts(row.item.expense.incurred_at).day }}</span>
-                  </span>
-                  <div class="tx-body">
-                    <div class="tx-title">
-                      <span class="tx-desc">{{ row.item.expense.description }}</span>
-                      <span
-                        v-if="row.item.cadence"
-                        class="cadence-badge"
-                        :title="`Repeats ${cadenceLabels[row.item.cadence] ?? row.item.cadence}`"
-                      >
-                        <Icon name="arrows-rotate" :size="9" />
-                        {{ cadenceLabels[row.item.cadence] ?? row.item.cadence }}
-                      </span>
-                    </div>
-                    <div class="tx-sub">
-                      <span>paid by</span>
-                      <MemberAvatar
-                        :user-id="row.item.expense.payer_id"
-                        :display-name="nameByID.get(row.item.expense.payer_id) ?? '?'"
-                        :has-avatar="memberByID.get(row.item.expense.payer_id)?.has_avatar"
-                        :avatar-updated-at="memberByID.get(row.item.expense.payer_id)?.avatar_updated_at"
-                        :size="12"
-                      />
-                      <span class="tx-payer">{{ shortName(nameByID.get(row.item.expense.payer_id)) }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="tx-right">
-                  <span class="tx-stake">
-                    <template v-if="viewerStake(row.item.expense).kind === 'lent'">
-                      <span class="stake-lent">you lent </span>
-                      <span class="stake-amt">{{ rowMoney((viewerStake(row.item.expense) as { cents: number }).cents, row.item.expense.currency) }}</span>
-                    </template>
-                    <template v-else-if="viewerStake(row.item.expense).kind === 'owes'">
-                      <span class="stake-owes">you owe </span>
-                      <span class="stake-amt">{{ rowMoney((viewerStake(row.item.expense) as { cents: number }).cents, row.item.expense.currency) }}</span>
-                    </template>
-                    <span v-else class="muted">not involved</span>
-                  </span>
-                  <span class="tx-amount">{{ rowMoney(row.item.expense.amount_cents, row.item.expense.currency) }}</span>
-                </div>
-              </RouterLink>
-            </li>
-            <li v-else-if="row.item.settlement">
-              <RouterLink
-                :to="`/groups/${groupId}/settlements/${row.item.settlement.id}`"
-                class="tx tx-settlement"
-              >
-                <div class="tx-left">
-                  <span class="tx-date" title="Settlement">
-                    <span class="settle-icon"><Icon name="arrow-right" :size="14" /></span>
-                    <span class="tx-month">{{ dayParts(row.item.settlement.settled_at).month }}</span>
-                    <span class="tx-day">{{ dayParts(row.item.settlement.settled_at).day }}</span>
-                  </span>
-                  <div class="tx-body">
-                    <div class="tx-title settle-title">
-                      <MemberAvatar
-                        :user-id="row.item.settlement.from_user_id"
-                        :display-name="nameByID.get(row.item.settlement.from_user_id) ?? '?'"
-                        :has-avatar="memberByID.get(row.item.settlement.from_user_id)?.has_avatar"
-                        :avatar-updated-at="memberByID.get(row.item.settlement.from_user_id)?.avatar_updated_at"
-                        :size="16"
-                      />
-                      <span class="tx-payer">{{ shortName(nameByID.get(row.item.settlement.from_user_id)) }}</span>
-                      <span class="muted">paid</span>
-                      <MemberAvatar
-                        :user-id="row.item.settlement.to_user_id"
-                        :display-name="nameByID.get(row.item.settlement.to_user_id) ?? '?'"
-                        :has-avatar="memberByID.get(row.item.settlement.to_user_id)?.has_avatar"
-                        :avatar-updated-at="memberByID.get(row.item.settlement.to_user_id)?.avatar_updated_at"
-                        :size="16"
-                      />
-                      <span class="tx-payer">{{ shortName(nameByID.get(row.item.settlement.to_user_id)) }}</span>
-                    </div>
-                    <div class="tx-sub">
-                      <span>settlement</span>
-                      <span v-if="row.item.settlement.note" class="tx-note">· {{ row.item.settlement.note }}</span>
-                    </div>
-                  </div>
-                </div>
-                <span class="tx-amount">{{ formatMoney(row.item.settlement.amount_cents, currency) }}</span>
-              </RouterLink>
-            </li>
-          </template>
-        </ul>
-
-        <div v-if="nextCursor" class="load-more">
-          <button type="button" class="btn-secondary btn-sm" :disabled="loadingMore" @click="onLoadMore">
-            Load more
-          </button>
         </div>
       </section>
 
@@ -459,7 +389,9 @@ onMounted(async () => {
             >
               <CategoryIcon
                 :slug="selectedCategory?.slug ?? defaultCategory?.slug"
-                :group-label="selectedCategory?.group_label ?? defaultCategory?.group_label"
+                :group-label="
+                  selectedCategory?.group_label ?? defaultCategory?.group_label
+                "
                 :size="38"
               />
             </button>
@@ -513,27 +445,257 @@ onMounted(async () => {
               show-cadence
               :week-start="weekStart"
             />
-            <button type="submit" class="btn-primary" :disabled="submitting">Add expense</button>
+            <button type="submit" class="btn-primary" :disabled="submitting">
+              Add expense
+            </button>
           </div>
         </form>
+      </section>
+
+      <!-- Transactions -->
+      <section class="col-transactions">
+        <RouterLink :to="`/groups/${groupId}/activity`" class="activity-link">
+          <Icon name="clock-rotate-left" :size="12" />
+          <span>See activity</span>
+        </RouterLink>
+
+        <p v-if="loaded && transactions.length === 0" class="empty">
+          No expenses or settlements yet.
+        </p>
+
+        <ul v-else class="feed">
+          <template v-for="(row, i) in feedRows" :key="i">
+            <li v-if="row.kind === 'month-header'" class="month-header">
+              {{ row.label }}
+            </li>
+            <li v-else-if="row.item.kind === 'expense' && row.item.expense">
+              <RouterLink
+                :to="`/groups/${groupId}/expenses/${row.item.expense.id}`"
+                class="tx tx-expense"
+              >
+                <div class="tx-left">
+                  <span
+                    class="tx-date"
+                    :title="
+                      categoryByID.get(row.item.expense.category_id)?.label ??
+                      ''
+                    "
+                  >
+                    <CategoryIcon
+                      :slug="
+                        categoryByID.get(row.item.expense.category_id)?.slug
+                      "
+                      :group-label="
+                        categoryByID.get(row.item.expense.category_id)
+                          ?.group_label
+                      "
+                      :size="28"
+                    />
+                    <span class="tx-month">{{
+                      dayParts(row.item.expense.incurred_at).month
+                    }}</span>
+                    <span class="tx-day">{{
+                      dayParts(row.item.expense.incurred_at).day
+                    }}</span>
+                  </span>
+                  <div class="tx-body">
+                    <div class="tx-title">
+                      <span class="tx-desc">{{
+                        row.item.expense.description
+                      }}</span>
+                      <span
+                        v-if="row.item.cadence"
+                        class="cadence-badge"
+                        :title="`Repeats ${cadenceLabels[row.item.cadence] ?? row.item.cadence}`"
+                      >
+                        <Icon name="arrows-rotate" :size="9" />
+                        {{
+                          cadenceLabels[row.item.cadence] ?? row.item.cadence
+                        }}
+                      </span>
+                    </div>
+                    <div class="tx-sub">
+                      <span>paid by</span>
+                      <MemberAvatar
+                        :user-id="row.item.expense.payer_id"
+                        :display-name="
+                          nameByID.get(row.item.expense.payer_id) ?? '?'
+                        "
+                        :has-avatar="
+                          memberByID.get(row.item.expense.payer_id)?.has_avatar
+                        "
+                        :avatar-updated-at="
+                          memberByID.get(row.item.expense.payer_id)
+                            ?.avatar_updated_at
+                        "
+                        :size="12"
+                      />
+                      <span class="tx-payer">{{
+                        shortName(nameByID.get(row.item.expense.payer_id))
+                      }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="tx-right">
+                  <span class="tx-stake">
+                    <template
+                      v-if="viewerStake(row.item.expense).kind === 'lent'"
+                    >
+                      <span class="stake-lent">you lent </span>
+                      <span class="stake-amt">{{
+                        rowMoney(
+                          (viewerStake(row.item.expense) as { cents: number })
+                            .cents,
+                          row.item.expense.currency,
+                        )
+                      }}</span>
+                    </template>
+                    <template
+                      v-else-if="viewerStake(row.item.expense).kind === 'owes'"
+                    >
+                      <span class="stake-owes">you owe </span>
+                      <span class="stake-amt">{{
+                        rowMoney(
+                          (viewerStake(row.item.expense) as { cents: number })
+                            .cents,
+                          row.item.expense.currency,
+                        )
+                      }}</span>
+                    </template>
+                    <span v-else class="muted">not involved</span>
+                  </span>
+                  <span class="tx-amount">{{
+                    rowMoney(
+                      row.item.expense.amount_cents,
+                      row.item.expense.currency,
+                    )
+                  }}</span>
+                </div>
+              </RouterLink>
+            </li>
+            <li v-else-if="row.item.settlement">
+              <RouterLink
+                :to="`/groups/${groupId}/settlements/${row.item.settlement.id}`"
+                class="tx tx-settlement"
+              >
+                <div class="tx-left">
+                  <span class="tx-date" title="Settlement">
+                    <span class="settle-icon"
+                      ><Icon name="arrow-right" :size="14"
+                    /></span>
+                    <span class="tx-month">{{
+                      dayParts(row.item.settlement.settled_at).month
+                    }}</span>
+                    <span class="tx-day">{{
+                      dayParts(row.item.settlement.settled_at).day
+                    }}</span>
+                  </span>
+                  <div class="tx-body">
+                    <div class="tx-title settle-title">
+                      <MemberAvatar
+                        :user-id="row.item.settlement.from_user_id"
+                        :display-name="
+                          nameByID.get(row.item.settlement.from_user_id) ?? '?'
+                        "
+                        :has-avatar="
+                          memberByID.get(row.item.settlement.from_user_id)
+                            ?.has_avatar
+                        "
+                        :avatar-updated-at="
+                          memberByID.get(row.item.settlement.from_user_id)
+                            ?.avatar_updated_at
+                        "
+                        :size="16"
+                      />
+                      <span class="tx-payer">{{
+                        shortName(
+                          nameByID.get(row.item.settlement.from_user_id),
+                        )
+                      }}</span>
+                      <span class="muted">paid</span>
+                      <MemberAvatar
+                        :user-id="row.item.settlement.to_user_id"
+                        :display-name="
+                          nameByID.get(row.item.settlement.to_user_id) ?? '?'
+                        "
+                        :has-avatar="
+                          memberByID.get(row.item.settlement.to_user_id)
+                            ?.has_avatar
+                        "
+                        :avatar-updated-at="
+                          memberByID.get(row.item.settlement.to_user_id)
+                            ?.avatar_updated_at
+                        "
+                        :size="16"
+                      />
+                      <span class="tx-payer">{{
+                        shortName(nameByID.get(row.item.settlement.to_user_id))
+                      }}</span>
+                    </div>
+                    <div class="tx-sub">
+                      <span>settlement</span>
+                      <span v-if="row.item.settlement.note" class="tx-note"
+                        >· {{ row.item.settlement.note }}</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <span class="tx-amount">{{
+                  formatMoney(row.item.settlement.amount_cents, currency)
+                }}</span>
+              </RouterLink>
+            </li>
+          </template>
+        </ul>
+
+        <div v-if="nextCursor" class="load-more">
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            :disabled="loadingMore"
+            @click="onLoadMore"
+          >
+            Load more
+          </button>
+        </div>
       </section>
     </div>
 
     <!-- Category picker dialog -->
-    <dialog ref="categoryDialog" class="cat-dialog" aria-modal="true" aria-label="Choose category">
+    <dialog
+      ref="categoryDialog"
+      class="cat-dialog"
+      aria-modal="true"
+      aria-label="Choose category"
+    >
       <div class="cat-dialog-body">
         <div class="cat-dialog-head">
           <h3 class="cat-dialog-title">Choose category</h3>
-          <button type="button" class="cat-close" aria-label="Close" @click="categoryDialog?.close()">
+          <button
+            type="button"
+            class="cat-close"
+            aria-label="Close"
+            @click="categoryDialog?.close()"
+          >
             <Icon name="xmark" :size="14" />
           </button>
         </div>
         <ul class="cat-list">
           <template v-for="(c, i) in categories" :key="c.id">
-            <li v-if="isNewGroupRow(i)" class="field-category-group">{{ c.group_label }}</li>
+            <li v-if="isNewGroupRow(i)" class="field-category-group">
+              {{ c.group_label }}
+            </li>
             <li>
-              <button type="button" class="field-category-option" @click="pickCategory(c)">
-                <CategoryIcon :slug="c.slug" :group-label="c.group_label" :size="28" />
+              <button
+                type="button"
+                class="field-category-option"
+                @click="pickCategory(c)"
+              >
+                <CategoryIcon
+                  :slug="c.slug"
+                  :group-label="c.group_label"
+                  :size="28"
+                />
                 <span>{{ c.label }}</span>
               </button>
             </li>
@@ -541,6 +703,12 @@ onMounted(async () => {
         </ul>
       </div>
     </dialog>
+  </AppLayout>
+
+  <AppLayout v-else-if="loaded && loadError" :back="{ to: '/groups', label: 'Groups' }">
+    <Alert tone="error">
+      Couldn't load this group. Check your connection and try again.
+    </Alert>
   </AppLayout>
 </template>
 
@@ -923,7 +1091,7 @@ onMounted(async () => {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 .cat-dialog::backdrop {
-  background: rgba(20, 20, 20, 0.4);
+  background: var(--backdrop);
 }
 .cat-dialog-body {
   display: flex;

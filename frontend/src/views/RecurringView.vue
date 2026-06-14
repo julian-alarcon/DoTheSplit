@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   deleteRecurring,
@@ -61,19 +61,26 @@ async function onConfirmStop() {
   templates.value = templates.value.filter((t) => t.id !== id);
 }
 
-onMounted(async () => {
-  const g = await getGroup(groupId.value);
+async function load() {
+  loaded.value = false;
+  const target = groupId.value;
+  const { group: g } = await getGroup(target);
+  if (groupId.value !== target) return;
   if (!g) {
     await router.replace("/groups");
     return;
   }
   group.value = g;
-  [templates.value, categories.value] = await Promise.all([
-    listRecurring(groupId.value),
-    listCategories(),
-  ]);
+  const [tpls, cats] = await Promise.all([listRecurring(target), listCategories()]);
+  if (groupId.value !== target) return;
+  templates.value = tpls;
+  categories.value = cats;
   loaded.value = true;
-});
+}
+
+onMounted(load);
+// vue-router reuses this instance when only :id changes; reload on id change.
+watch(groupId, load);
 </script>
 
 <template>

@@ -233,7 +233,7 @@ onMounted(load);
 }
 @media (min-width: 640px) {
   .profile {
-    grid-template-columns: 10rem 1fr;
+    grid-template-columns: 10rem minmax(0, 1fr);
   }
 }
 .role-badge {

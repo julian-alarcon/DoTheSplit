@@ -769,7 +769,7 @@ watch(groupId, loadGroup);
 
 .triptych {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 0.75rem;
 }
@@ -975,6 +975,7 @@ watch(groupId, loadGroup);
   font-weight: 500;
 }
 .tx-desc {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

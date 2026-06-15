@@ -2,7 +2,7 @@
 // Currency-aware amount input. While focused it shows the raw editable number
 // ("1234.5"); on blur it shows a fully localized formatted string ("1,234.50
 // €"). v-model is the canonical amount in CENTS (integer), so parents post
-// amount_cents directly. Ported from the Astro tier's currency-input.ts.
+// amount_cents directly.
 //
 // Rendered inside a .field wrapper with a floating label, matching the
 // add-expense form. Native constraint validation still applies (required).

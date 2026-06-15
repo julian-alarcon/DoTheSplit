@@ -54,7 +54,7 @@ async function onSave() {
   errMsg.value = null;
   testMsg.value = null;
   // Empty string clears the password; we always send the field's current
-  // value as the source of truth (matching the Astro reveal-and-resave model).
+  // value as the source of truth (reveal-and-resave model).
   const res = await updateSmtp({
     host: form.value.host,
     port: Number(form.value.port),
@@ -70,7 +70,7 @@ async function onSave() {
   }
   okMsg.value = "Saved.";
   notConfigured.value = false;
-  // Save-and-test in one go, matching the Astro button label.
+  // Save-and-test in one go.
   const t = await testSmtp();
   testMsg.value = t.success
     ? { ok: true, msg: "SMTP test connection succeeded." }

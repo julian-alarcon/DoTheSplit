@@ -1,7 +1,7 @@
 // Group dashboard data access. Loads the group, balances, categories,
-// recurring templates, and the first page of the transaction feed in parallel
-// (mirroring the Astro page's Promise.all), and exposes create-expense +
-// load-more helpers. Plain functions returning typed data; the view owns its
+// recurring templates, and the first page of the transaction feed in parallel,
+// and exposes create-expense + load-more helpers. Plain functions returning
+// typed data; the view owns its
 // own reactive state.
 import { api } from "@/lib/api/client";
 import type { components } from "@/lib/api/schema";
@@ -99,7 +99,7 @@ export interface CreateExpenseInput {
 /**
  * Create an expense and, when a cadence is chosen, a matching recurring
  * template anchored at the next occurrence. Returns a status code on partial
- * failure mirroring the Astro forwarder's ?error= codes.
+ * failure.
  */
 export async function createExpense(
   groupId: string,

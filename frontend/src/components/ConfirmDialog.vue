@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Confirmation modal. Controlled via v-model:open. Emits `confirm` when the
-// accept button is pressed. Ported from the Astro tier's ConfirmDialog +
-// confirm-dialog.ts; the parent owns the action that runs on confirm.
+// accept button is pressed; the parent owns the action that runs on confirm.
 import { ref, watch } from "vue";
 import Icon from "@/components/Icon.vue";
 

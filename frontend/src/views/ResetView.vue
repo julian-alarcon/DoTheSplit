@@ -32,7 +32,7 @@ const errorMessages: Record<string, string> = {
 };
 
 // Live confirmation match via native constraint validation (no preventDefault),
-// mirroring the Astro reset page's setCustomValidity behaviour.
+// using setCustomValidity on the confirm field.
 watch([newPassword, confirmPassword], () => {
   const el = confirmField.value?.input;
   if (el) {

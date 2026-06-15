@@ -1,8 +1,6 @@
-/* Global stylesheet for the Vue SPA. Ported from the Astro tier's
-   global.css (Tailwind v4) to plain CSS: every @apply utility is expanded
-   to real declarations, and Tailwind's neutral/red ramps are inlined as
-   custom-property tokens so the semantic theme tokens keep resolving. No
-   Tailwind, no CSS framework - see CLAUDE.md.
+/* Global stylesheet for the Vue SPA. Plain CSS, no Tailwind: the
+   neutral/red ramps are inlined as custom-property tokens so the semantic
+   theme tokens keep resolving. No CSS framework - see CLAUDE.md.
 
    Layered so component-scoped SFC styles (which Vue injects unlayered, i.e.
    at the highest precedence) can always override these shared base rules. */

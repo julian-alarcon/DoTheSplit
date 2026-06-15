@@ -7,8 +7,7 @@ import { COMMON_CURRENCIES, currencyLabel, otherCurrencies } from "@/lib/currenc
 
 const model = defineModel<string>({ default: "EUR" });
 
-// Resolve labels against the runtime's locale; SSR locale negotiation is gone
-// in the SPA, so the browser's own locale is the right source.
+// Resolve labels against the browser's own locale.
 const locale = typeof navigator !== "undefined" ? navigator.language : "en-US";
 const others = computed(() => otherCurrencies());
 </script>

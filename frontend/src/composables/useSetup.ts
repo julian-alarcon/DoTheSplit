@@ -1,5 +1,5 @@
-// First-run setup state. Mirrors the Astro middleware's setup probe: the
-// instance is "locked" once the install ceremony has produced the first admin.
+// First-run setup state. The instance is "locked" once the install ceremony
+// has produced the first admin.
 // While unlocked, the router funnels every route to /setup. Defaults to locked
 // if the API is unreachable so a network blip never exposes the install flow.
 import { reactive, readonly } from "vue";

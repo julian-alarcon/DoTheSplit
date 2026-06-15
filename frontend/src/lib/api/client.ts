@@ -9,7 +9,7 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // Endpoints that must NOT carry the Authorization header or trigger the
 // refresh-retry loop (they ARE the auth flow). Matched by pathname suffix.
-const AUTH_PATHS = ["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/token/revoke", "/v1/auth/login"];
+const AUTH_PATHS = ["/v1/auth/token", "/v1/auth/refresh", "/v1/auth/token/revoke"];
 
 function isAuthPath(url: string): boolean {
   return AUTH_PATHS.some((p) => url.includes(p));

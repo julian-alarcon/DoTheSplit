@@ -59,7 +59,6 @@ func main() {
 	}
 
 	users := repo.NewUserRepo(pool)
-	sessions := repo.NewSessionRepo(pool)
 	refreshTokens := repo.NewRefreshTokenRepo(pool)
 	groups := repo.NewGroupRepo(pool)
 	expenses := repo.NewExpenseRepo(pool)
@@ -76,14 +75,13 @@ func main() {
 	verificationRepo := repo.NewVerificationRepo(pool)
 	outboxRepo := repo.NewEmailOutboxRepo(pool)
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, logger)
-	auth := service.NewAuthService(pool, users, sessions, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper,
-		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
+	auth := service.NewAuthService(pool, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
 	auth.SetTokenAuth(refreshTokens, cfg.JWTSigningKey,
 		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
 		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 
-	meSvc := service.NewMeService(users, sessions, email, cfg.PasswordPepper)
+	meSvc := service.NewMeService(users, email, cfg.PasswordPepper)
 	meSvc.SetAuth(auth)
 	categorySvc := service.NewCategoryService(categories)
 	groupSvc := service.NewGroupService(groups, users, balances, email)
@@ -97,7 +95,7 @@ func main() {
 	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, auth, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
-	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, auth, email, cfg.PasswordPepper)
+	adminSvc := service.NewAdminService(pool, users, groups, auditRepo, auth, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
 	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
 

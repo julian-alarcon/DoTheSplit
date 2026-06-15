@@ -41,20 +41,19 @@ var (
 )
 
 type MeService struct {
-	users    *repo.UserRepo
-	sessions *repo.SessionRepo
-	auth     *AuthService
-	email    *crypto.EmailCipher
-	pepper   []byte
+	users  *repo.UserRepo
+	auth   *AuthService
+	email  *crypto.EmailCipher
+	pepper []byte
 }
 
-func NewMeService(users *repo.UserRepo, sessions *repo.SessionRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
-	return &MeService{users: users, sessions: sessions, email: email, pepper: pepper}
+func NewMeService(users *repo.UserRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
+	return &MeService{users: users, email: email, pepper: pepper}
 }
 
 // SetAuth threads the AuthService in so password change / account delete can
-// revoke refresh tokens alongside cookie sessions. Optional: when unset (e.g.
-// cookie-only tests) refresh revocation is simply skipped.
+// revoke the user's refresh tokens. Optional: when unset (e.g. tests that don't
+// exercise auth) refresh revocation is simply skipped.
 func (s *MeService) SetAuth(auth *AuthService) { s.auth = auth }
 
 func (s *MeService) revokeRefresh(ctx context.Context, userID uuid.UUID) error {
@@ -86,7 +85,8 @@ func (s *MeService) SetWeekStart(ctx context.Context, userID uuid.UUID, v int16)
 }
 
 // ChangePassword rotates the password after verifying the old one and revokes
-// every session the user has (the caller issues a fresh cookie).
+// every refresh token the user has (the caller mints a fresh token pair so the
+// current client stays logged in).
 func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	if len(newPassword) < 10 {
 		return errors.New("new password must be at least 10 characters")
@@ -112,10 +112,7 @@ func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPas
 	if err := s.users.UpdatePasswordHash(ctx, userID, newHash); err != nil {
 		return err
 	}
-	// Nuke all other sessions for this user; caller will issue a fresh one.
-	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
-		return err
-	}
+	// Revoke all token chains for this user; the caller mints a fresh pair.
 	return s.revokeRefresh(ctx, userID)
 }
 
@@ -194,7 +191,7 @@ func (s *MeService) GetAvatar(ctx context.Context, userID uuid.UUID) ([]byte, er
 // SoftDelete tombstones the account: scrambles email_hash / email_encrypted /
 // password_hash so no one can re-discover the deleted user by re-registering
 // or by dump inspection, renames the user to a stable tombstone derived from
-// the first 8 hex chars of their UUID, and destroys every active session.
+// the first 8 hex chars of their UUID, and revokes every active refresh token.
 //
 // Existing expenses / splits / settlements keep pointing at this row, so the
 // ledger stays intact; UI renders "Deleted user #xxxxxxxx" for these entries.
@@ -217,9 +214,6 @@ func (s *MeService) SoftDelete(ctx context.Context, userID uuid.UUID) error {
 	}
 
 	if err := s.users.SoftDelete(ctx, userID, tombstone, scrambled, scrambled, "!deleted:"+u.ID.String()); err != nil {
-		return err
-	}
-	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
 		return err
 	}
 	return s.revokeRefresh(ctx, userID)

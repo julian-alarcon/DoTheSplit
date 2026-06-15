@@ -42,8 +42,8 @@ export async function createUser(input: {
   return { ok: true };
 }
 
-// Map the API status codes for step-up flows to the banner codes the Astro
-// pages used (step_up / locked / last_admin / smtp).
+// Map the API status codes for step-up flows to banner codes
+// (step_up / locked / last_admin / smtp).
 function stepUpCode(status: number): string {
   if (status === 401) return "step_up";
   if (status === 423) return "locked";

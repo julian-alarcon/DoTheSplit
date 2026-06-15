@@ -34,7 +34,7 @@ func (s *Server) CompleteSetup(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	u, token, err := s.Setup.CompleteWithToken(
+	u, err := s.Setup.CompleteWithToken(
 		c.Request.Context(),
 		req.Token,
 		string(req.Email),
@@ -54,6 +54,5 @@ func (s *Server) CompleteSetup(c *gin.Context) {
 		}
 		return
 	}
-	s.setSessionCookie(c, token)
 	c.JSON(http.StatusCreated, toAPIUser(u))
 }

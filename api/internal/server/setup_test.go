@@ -38,11 +38,12 @@ func TestSetupHappyPath(t *testing.T) {
 	}, nil)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, body)
 	require.Equal(t, true, body["is_admin"])
-	cookie := sessionCookie(resp)
-	require.NotNil(t, cookie)
+
+	// The SPA follows setup with a token login; do the same for a bearer cred.
+	cred := tokenLogin(t, base, "admin@test.dev", "passwordpassword")
 
 	// /v1/me confirms the admin role.
-	resp, body = request(t, "GET", base+"/v1/me", nil, cookie)
+	resp, body = request(t, "GET", base+"/v1/me", nil, cred)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Equal(t, true, body["is_admin"])
 

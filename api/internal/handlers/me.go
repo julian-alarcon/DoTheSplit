@@ -50,7 +50,7 @@ func (s *Server) UpdateMe(c *gin.Context) {
 		}
 	}
 	// Reload through AuthService so the response reflects any newly-set fields.
-	fresh, err := s.Auth.Resolve(c.Request.Context(), currentSessionToken(c, s))
+	fresh, err := s.Auth.GetUser(c.Request.Context(), u.ID)
 	if err != nil {
 		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
 		return
@@ -58,9 +58,9 @@ func (s *Server) UpdateMe(c *gin.Context) {
 	c.JSON(http.StatusOK, toAPIUser(fresh))
 }
 
-// ChangePassword verifies the old password and rotates to a new one. All other
-// sessions are revoked; the caller's current session is refreshed with a new
-// cookie so the user stays logged in.
+// ChangePassword verifies the old password and rotates to a new one. Every
+// other token chain is revoked; a fresh token pair is minted and returned (with
+// a rotated refresh cookie) so the current client stays logged in.
 func (s *Server) ChangePassword(c *gin.Context) {
 	u := middleware.User(c)
 	if u == nil {
@@ -82,15 +82,15 @@ func (s *Server) ChangePassword(c *gin.Context) {
 		}
 		return
 	}
-	// Every session (including ours) was revoked. Issue a fresh one so the
+	// All token chains (including ours) were revoked. Mint a fresh pair so the
 	// user doesn't have to log in again from the same browser.
-	token, err := s.Auth.IssueSession(c.Request.Context(), u.ID)
+	pair, err := s.Auth.MintTokenPairForUser(c.Request.Context(), u.ID)
 	if err != nil {
 		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	s.setSessionCookie(c, token)
-	c.Status(http.StatusNoContent)
+	s.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTTL)
+	c.JSON(http.StatusOK, tokenResponse(pair))
 }
 
 // SetAvatar validates and stores an 8x8 PNG.
@@ -129,9 +129,9 @@ func (s *Server) DeleteAvatar(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// DeleteMe soft-deletes the calling account, scrubs PII, nukes sessions, and
-// clears the session cookie. Requires the caller to re-enter their password
-// (step-up) to make session hijack → instant account loss harder.
+// DeleteMe soft-deletes the calling account, scrubs PII, revokes refresh
+// tokens, and clears the refresh cookie. Requires the caller to re-enter their
+// password (step-up) to make session hijack → instant account loss harder.
 func (s *Server) DeleteMe(c *gin.Context) {
 	u := middleware.User(c)
 	if u == nil {
@@ -159,7 +159,7 @@ func (s *Server) DeleteMe(c *gin.Context) {
 		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	s.clearSessionCookie(c)
+	s.clearRefreshCookie(c)
 	c.Status(http.StatusNoContent)
 }
 
@@ -198,13 +198,6 @@ func (s *Server) GetUserAvatar(c *gin.Context) {
 	c.Data(http.StatusOK, "image/png", png)
 }
 
-// currentSessionToken is a helper that reads the raw cookie used to identify
-// the caller. Used when we need to re-Resolve() to see freshly-updated fields.
-func currentSessionToken(c *gin.Context, s *Server) string {
-	tok, _ := c.Cookie(middleware.SessionCookieName(s.Cfg.CookieSecure))
-	return tok
-}
-
 // ChangeEmailRequest begins the change-email flow: re-verifies the password
 // (step-up), persists a token row keyed on the *new* email, and enqueues a
 // 6-digit code to that new address. The caller's email is unchanged until
@@ -236,8 +229,9 @@ func (s *Server) ChangeEmailRequest(c *gin.Context) {
 	c.Status(http.StatusAccepted)
 }
 
-// ChangeEmailConfirm consumes the code, swaps the email, revokes other
-// sessions, and refreshes the caller's cookie.
+// ChangeEmailConfirm consumes the code, swaps the email, revokes the user's
+// other token chains, and mints a fresh pair (rotating the refresh cookie) so
+// the current browser stays logged in.
 func (s *Server) ChangeEmailConfirm(c *gin.Context) {
 	u := middleware.User(c)
 	if u == nil {
@@ -248,7 +242,7 @@ func (s *Server) ChangeEmailConfirm(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	user, token, err := s.Auth.ConfirmEmailChange(c.Request.Context(), u.ID, req.Code)
+	user, err := s.Auth.ConfirmEmailChange(c.Request.Context(), u.ID, req.Code)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCode):
@@ -264,7 +258,9 @@ func (s *Server) ChangeEmailConfirm(c *gin.Context) {
 		}
 		return
 	}
-	s.setSessionCookie(c, token)
+	if pair, err := s.Auth.MintTokenPairForUser(c.Request.Context(), u.ID); err == nil {
+		s.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTTL)
+	}
 	c.JSON(http.StatusOK, toAPIUser(user))
 }
 

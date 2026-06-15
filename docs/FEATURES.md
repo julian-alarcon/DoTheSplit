@@ -168,10 +168,11 @@ share one row on small screens.
 - CSP headers with SHA-256 hashes on inline scripts; no inline event handlers
   (e.g. `onchange`): auto-submit forms use a `data-auto-submit` attribute and
   a shared module.
-- HSTS only when `COOKIE_SECURE=true`. Session cookie is `__Host-dts_session`
-  on HTTPS, plain `dts_session` on the HTTP LAN profile.
+- HSTS only when `COOKIE_SECURE=true`, which also adds the `Secure` flag to the
+  `dts_refresh` refresh cookie. Access tokens are stateless JWTs sent as
+  `Authorization: Bearer`, never cookies.
 - Step-up password prompt for destructive admin actions, and password
-  confirmation before self-delete (with all sessions revoked on success).
+  confirmation before self-delete (with all refresh tokens revoked on success).
 
 ## API contract
 

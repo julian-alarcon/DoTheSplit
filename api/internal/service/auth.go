@@ -46,7 +46,6 @@ type SetupLocker interface {
 
 type AuthService struct {
 	users        *repo.UserRepo
-	sessions     *repo.SessionRepo
 	refresh      *repo.RefreshTokenRepo
 	audit        *repo.AuditRepo
 	verification *repo.VerificationRepo
@@ -55,10 +54,9 @@ type AuthService struct {
 	pool         *pgxpool.Pool
 	email        *crypto.EmailCipher
 	pepper       []byte
-	sessTTL      time.Duration
 	// jwtKey signs/verifies bearer access tokens; accessTTL/refreshTTL govern
 	// the bearer-token flow. Set via SetTokenAuth; zero values disable the
-	// token endpoints (tests that only exercise cookie auth can skip it).
+	// token endpoints (tests that don't exercise auth can skip it).
 	jwtKey     []byte
 	accessTTL  time.Duration
 	refreshTTL time.Duration
@@ -89,10 +87,9 @@ const (
 // to HTTP 423 Locked.
 var ErrStepUpRateLimited = errors.New("step-up rate limited")
 
-func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, verification *repo.VerificationRepo, mailer *MailerService, setupLock SetupLocker, email *crypto.EmailCipher, pepper []byte, sessTTL time.Duration) *AuthService {
+func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, audit *repo.AuditRepo, verification *repo.VerificationRepo, mailer *MailerService, setupLock SetupLocker, email *crypto.EmailCipher, pepper []byte) *AuthService {
 	return &AuthService{
 		users:        users,
-		sessions:     sessions,
 		audit:        audit,
 		verification: verification,
 		mailer:       mailer,
@@ -100,15 +97,13 @@ func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, sessions *repo.Ses
 		pool:         pool,
 		email:        email,
 		pepper:       pepper,
-		sessTTL:      sessTTL,
 	}
 }
 
-// SetTokenAuth enables the bearer-token flow (SPA / Capacitor clients). The
-// refresh repo is also threaded into the session-revocation paths so that
-// password change, account delete, and email-change confirm revoke refresh
-// tokens alongside cookie sessions. Wired in cmd/api; tests that exercise only
-// cookie auth may leave it unset.
+// SetTokenAuth enables the bearer-token flow (SPA / Capacitor clients). It also
+// threads the refresh repo into the token-revocation paths so that password
+// change, account delete, and email-change confirm revoke refresh tokens.
+// Wired in cmd/api; tests that don't exercise auth may leave it unset.
 func (s *AuthService) SetTokenAuth(refresh *repo.RefreshTokenRepo, jwtKey []byte, accessTTL, refreshTTL time.Duration) {
 	s.refresh = refresh
 	s.jwtKey = jwtKey
@@ -118,7 +113,7 @@ func (s *AuthService) SetTokenAuth(refresh *repo.RefreshTokenRepo, jwtKey []byte
 
 // RevokeRefreshForUser revokes all refresh tokens for a user. Safe to call
 // when token auth is disabled (no-op). Exposed so the Me / Admin services can
-// revoke refresh tokens at the same points they wipe cookie sessions.
+// end every other logged-in session on password change / account delete.
 func (s *AuthService) RevokeRefreshForUser(ctx context.Context, userID uuid.UUID) error {
 	if s.refresh == nil {
 		return nil
@@ -160,14 +155,12 @@ func (s *AuthService) toUser(u *repo.User) (*User, error) {
 }
 
 // RegisterResult is what /v1/auth/register returns to the handler. When the
-// instance has SMTP configured the new account is unverified and no session
-// is issued: SessionToken is "" and VerificationRequired is true. When SMTP
-// is unconfigured the account is auto-verified and a session is issued, just
-// like the historical behaviour (so the first bootstrap admin can register
-// before SMTP exists).
+// instance has SMTP configured the new account is unverified and
+// VerificationRequired is true. When SMTP is unconfigured the account is
+// auto-verified so the caller can immediately log in via /v1/auth/token (so
+// the first bootstrap admin can register before SMTP exists).
 type RegisterResult struct {
 	User                 *User
-	SessionToken         string
 	VerificationRequired bool
 }
 
@@ -224,16 +217,12 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		token, err := s.issueSession(ctx, out.ID)
-		if err != nil {
-			return nil, err
-		}
 		out.EmailVerifiedAt = ptrNow()
-		return &RegisterResult{User: out, SessionToken: token, VerificationRequired: false}, nil
+		return &RegisterResult{User: out, VerificationRequired: false}, nil
 	}
 
-	// SMTP is configured - issue a 6-digit code, enqueue the email, do NOT
-	// open a session. The user must call /v1/auth/verify with the code.
+	// SMTP is configured - issue a 6-digit code, enqueue the email. The user
+	// must call /v1/auth/verify with the code, then log in via /v1/auth/token.
 	code, err := generateNumericCode(6)
 	if err != nil {
 		return nil, err
@@ -257,7 +246,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return &RegisterResult{User: out, SessionToken: "", VerificationRequired: true}, nil
+	return &RegisterResult{User: out, VerificationRequired: true}, nil
 }
 
 func ptrNow() *time.Time { t := time.Now(); return &t }
@@ -340,59 +329,14 @@ func (s *AuthService) RegisterTx(ctx context.Context, tx pgx.Tx, email, password
 	return out, u, nil
 }
 
-// Login verifies credentials and issues a session. Returns (user, token).
-// Authentication-failure errors intentionally share a single sentinel to avoid
-// enumeration of which users exist.
-func (s *AuthService) Login(ctx context.Context, email, password string) (*User, string, error) {
-	emailHash := s.email.HashEmail(email)
-	u, err := s.users.FindByEmailHash(ctx, emailHash)
-	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrInvalidCredentials
-	}
-	if err != nil {
-		return nil, "", err
-	}
-	ok, err := crypto.VerifyPassword(u.PasswordHash, password, s.pepper)
-	if err != nil {
-		return nil, "", err
-	}
-	if !ok {
-		return nil, "", ErrInvalidCredentials
-	}
-	if u.EmailVerifiedAt == nil {
-		return nil, "", ErrEmailUnverified
-	}
-	token, err := s.issueSession(ctx, u.ID)
-	if err != nil {
-		return nil, "", err
-	}
-	out, err := s.toUser(u)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, token, nil
-}
-
-func (s *AuthService) Logout(ctx context.Context, token string) error {
-	if token == "" {
-		return nil
-	}
-	return s.sessions.DeleteByTokenHash(ctx, hashToken(token))
-}
-
-// Resolve returns the user for a raw session token, or ErrInvalidCredentials.
-func (s *AuthService) Resolve(ctx context.Context, token string) (*User, error) {
-	if token == "" {
-		return nil, ErrInvalidCredentials
-	}
-	sess, err := s.sessions.FindByTokenHash(ctx, hashToken(token))
+// GetUser reloads a user by ID and returns the service-level projection (with
+// decrypted email). Returns ErrInvalidCredentials for a missing or soft-deleted
+// user. Used by handlers that need the freshest user fields after an update.
+func (s *AuthService) GetUser(ctx context.Context, userID uuid.UUID) (*User, error) {
+	u, err := s.users.FindByID(ctx, userID)
 	if errors.Is(err, repo.ErrNotFound) {
 		return nil, ErrInvalidCredentials
 	}
-	if err != nil {
-		return nil, err
-	}
-	u, err := s.users.FindByID(ctx, sess.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -400,30 +344,6 @@ func (s *AuthService) Resolve(ctx context.Context, token string) (*User, error) 
 		return nil, ErrInvalidCredentials
 	}
 	return s.toUser(u)
-}
-
-// IssueSession creates a fresh session token for the given user. Exposed for
-// handlers that need to refresh the cookie after wiping all sessions (e.g. on
-// password change).
-func (s *AuthService) IssueSession(ctx context.Context, userID uuid.UUID) (string, error) {
-	return s.issueSession(ctx, userID)
-}
-
-func (s *AuthService) issueSession(ctx context.Context, userID uuid.UUID) (string, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	sess := &repo.Session{
-		UserID:    userID,
-		TokenHash: hashToken(token),
-		ExpiresAt: time.Now().Add(s.sessTTL),
-	}
-	if err := s.sessions.Create(ctx, sess); err != nil {
-		return "", err
-	}
-	return token, nil
 }
 
 func hashToken(token string) []byte {
@@ -448,8 +368,8 @@ type TokenPair struct {
 }
 
 // IssueTokenPair authenticates with a password and returns a JWT access token
-// plus a fresh refresh token. Mirrors Login's credential checks (Argon2id,
-// email-verified gate) so token clients get identical semantics.
+// plus a fresh refresh token. Applies the same credential checks (Argon2id,
+// email-verified gate) for all token clients.
 func (s *AuthService) IssueTokenPair(ctx context.Context, email, password string) (*User, *TokenPair, error) {
 	if s.jwtKey == nil || s.refresh == nil {
 		return nil, nil, ErrTokenAuthDisabled
@@ -562,6 +482,17 @@ func (s *AuthService) ResolveAccessToken(ctx context.Context, token string) (*Us
 		return nil, ErrInvalidBearerToken
 	}
 	return s.toUser(u)
+}
+
+// MintTokenPairForUser issues a fresh access + refresh token pair for a user
+// without re-checking a password. Used after password change, where the caller
+// has already revoked the user's other token chains and just needs to keep the
+// current client logged in. Returns ErrTokenAuthDisabled when token auth is off.
+func (s *AuthService) MintTokenPairForUser(ctx context.Context, userID uuid.UUID) (*TokenPair, error) {
+	if s.jwtKey == nil || s.refresh == nil {
+		return nil, ErrTokenAuthDisabled
+	}
+	return s.mintTokenPair(ctx, userID)
 }
 
 func (s *AuthService) mintTokenPair(ctx context.Context, userID uuid.UUID) (*TokenPair, error) {

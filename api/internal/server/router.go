@@ -27,7 +27,6 @@ func New(s *handlers.Server) http.Handler {
 	r.Use(mw.Logger(slog.Default()))
 	r.Use(mw.SecurityHeaders(s.Cfg.CookieSecure))
 	r.Use(mw.CORS(s.Cfg.WebOrigin, strings.Join(s.Cfg.CapacitorOrigins, ",")))
-	r.Use(mw.Session(s.Auth, s.Cfg.CookieSecure))
 	r.Use(mw.Bearer(s.Auth))
 
 	// Health probes are unversioned infrastructure endpoints.
@@ -45,18 +44,15 @@ func New(s *handlers.Server) http.Handler {
 	v1.GET("/setup/status", s.GetSetupStatus)
 	v1.POST("/setup/admin", mw.SetupRateLimiter(), s.CompleteSetup)
 
-	// Auth (rate-limited register + login; logout is public so a stale
-	// cookie can clear itself without hitting the limiter).
+	// Auth (rate-limited register + token issuance).
 	authG := v1.Group("")
-	authG.Use(mw.LoginRateLimiter())
+	authG.Use(mw.LoginRateLimiter(s.Cfg.AuthRateLimitPerMin))
 	authG.POST("/auth/register", s.Register)
-	authG.POST("/auth/login", s.Login)
 	authG.POST("/auth/verify", s.VerifyEmail)
 	authG.POST("/auth/verify/resend", s.ResendVerification)
 	authG.POST("/auth/password-reset/request", s.RequestPasswordReset)
 	authG.POST("/auth/password-reset/confirm", s.ConfirmPasswordReset)
 	authG.POST("/auth/token", s.IssueToken)
-	v1.POST("/auth/logout", s.Logout)
 	// Refresh + revoke are public (they authenticate via the refresh token
 	// itself) and not rate-limited so a client can always rotate or log out.
 	v1.POST("/auth/refresh", s.RefreshToken)

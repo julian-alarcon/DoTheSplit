@@ -24,26 +24,24 @@ var (
 // repos so destructive ops happen in a single transaction with the audit
 // row, and centralises the last-admin guard.
 type AdminService struct {
-	pool     *pgxpool.Pool
-	users    *repo.UserRepo
-	groups   *repo.GroupRepo
-	sessions *repo.SessionRepo
-	audit    *repo.AuditRepo
-	auth     *AuthService
-	email    *crypto.EmailCipher
-	pepper   []byte
+	pool   *pgxpool.Pool
+	users  *repo.UserRepo
+	groups *repo.GroupRepo
+	audit  *repo.AuditRepo
+	auth   *AuthService
+	email  *crypto.EmailCipher
+	pepper []byte
 }
 
-func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.GroupRepo, sessions *repo.SessionRepo, audit *repo.AuditRepo, auth *AuthService, email *crypto.EmailCipher, pepper []byte) *AdminService {
+func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.GroupRepo, audit *repo.AuditRepo, auth *AuthService, email *crypto.EmailCipher, pepper []byte) *AdminService {
 	return &AdminService{
-		pool:     pool,
-		users:    users,
-		groups:   groups,
-		sessions: sessions,
-		audit:    audit,
-		auth:     auth,
-		email:    email,
-		pepper:   pepper,
+		pool:   pool,
+		users:  users,
+		groups: groups,
+		audit:  audit,
+		auth:   auth,
+		email:  email,
+		pepper: pepper,
 	}
 }
 
@@ -291,9 +289,6 @@ func (s *AdminService) DeleteUser(ctx context.Context, actorID, targetID uuid.UU
 	if err := s.users.SoftDelete(ctx, targetID, tombstone, scrambled, scrambled, "!deleted:"+target.ID.String()); err != nil {
 		return err
 	}
-	if err := s.sessions.DeleteAllForUser(ctx, targetID); err != nil {
-		return err
-	}
 	if err := s.auth.RevokeRefreshForUser(ctx, targetID); err != nil {
 		return err
 	}
@@ -360,11 +355,8 @@ func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID 
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	// Sessions are deleted *after* commit - if the email enqueue rolled
+	// Refresh tokens are revoked *after* commit - if the email enqueue rolled
 	// back we leave the legitimate user logged in.
-	if err := s.sessions.DeleteAllForUser(ctx, targetID); err != nil {
-		return err
-	}
 	return s.auth.RevokeRefreshForUser(ctx, targetID)
 }
 

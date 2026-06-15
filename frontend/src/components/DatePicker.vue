@@ -4,9 +4,9 @@
 // with a custom month grid; the chosen day is committed only on "Done".
 //
 // v-model holds the selected YYYY-MM-DD. An optional cadence v-model adds a
-// "Repeat" dropdown (recurring expenses). Logic ported from the Astro tier's
-// date-picker.ts: roving-tabindex keyboard nav, noon-UTC anchoring so the
-// displayed weekday matches what the server stores, no backdrop-close.
+// "Repeat" dropdown (recurring expenses): roving-tabindex keyboard nav,
+// noon-UTC anchoring so the displayed weekday matches what the server stores,
+// no backdrop-close.
 import { computed, ref, watch } from "vue";
 import Icon from "@/components/Icon.vue";
 

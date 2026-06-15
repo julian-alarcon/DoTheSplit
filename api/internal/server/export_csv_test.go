@@ -14,13 +14,11 @@ import (
 // downloadCSV issues an authenticated GET to the export endpoint and
 // returns the parsed CSV. Helper because the endpoint streams text/csv
 // rather than JSON, so the standard request() helper does not fit.
-func downloadCSV(t *testing.T, base, groupID string, cookie *http.Cookie) (*http.Response, [][]string, []byte) {
+func downloadCSV(t *testing.T, base, groupID string, cred *http.Cookie) (*http.Response, [][]string, []byte) {
 	t.Helper()
 	req, err := http.NewRequest("GET", base+"/v1/groups/"+groupID+"/export.csv", nil)
 	require.NoError(t, err)
-	if cookie != nil {
-		req.AddCookie(cookie)
-	}
+	applyAuth(req, cred)
 	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)

@@ -17,15 +17,18 @@ type Config struct {
 	WebOrigin   string `envconfig:"WEB_ORIGIN"           default:"http://localhost:8080"`
 	LogLevel    string `envconfig:"LOG_LEVEL"            default:"info"`
 
-	CookieSecure  bool   `envconfig:"COOKIE_SECURE"         default:"false"`
-	CookieDomain  string `envconfig:"SESSION_COOKIE_DOMAIN" default:""`
-	SessionTTLDay int    `envconfig:"SESSION_TTL_DAYS"      default:"30"`
+	CookieSecure bool   `envconfig:"COOKIE_SECURE"         default:"false"`
+	CookieDomain string `envconfig:"COOKIE_DOMAIN"         default:""`
 
 	// AccessTokenTTLMin / RefreshTokenTTLDay govern the bearer-token flow used
 	// by the SPA / Capacitor clients. Access tokens are short-lived stateless
 	// JWTs; refresh tokens are long-lived, rotating, and revocable.
 	AccessTokenTTLMin  int `envconfig:"ACCESS_TOKEN_TTL_MINUTES" default:"15"`
 	RefreshTokenTTLDay int `envconfig:"REFRESH_TOKEN_TTL_DAYS"   default:"30"`
+
+	// AuthRateLimitPerMin caps requests/min/IP on the auth endpoints
+	// (/auth/register, /auth/token, /auth/verify*, /auth/password-reset*).
+	AuthRateLimitPerMin int `envconfig:"AUTH_RATE_LIMIT_PER_MIN"  default:"10"`
 
 	// CapacitorOrigins are the extra CORS origins for native WebView clients
 	// (iOS `capacitor://localhost`, Android `https://localhost`). They are
@@ -55,16 +58,16 @@ type Config struct {
 // when both are set so a Docker secret always wins over an inherited env var.
 func Load() (*Config, error) {
 	var raw struct {
-		HTTPAddr           string `envconfig:"API_HTTP_ADDR"            default:":8080"`
-		WebOrigin          string `envconfig:"WEB_ORIGIN"               default:"http://localhost:8080"`
-		LogLevel           string `envconfig:"LOG_LEVEL"                default:"info"`
-		CookieSecure       bool   `envconfig:"COOKIE_SECURE"            default:"false"`
-		CookieDomain       string `envconfig:"SESSION_COOKIE_DOMAIN"    default:""`
-		SessionTTLDay      int    `envconfig:"SESSION_TTL_DAYS"         default:"30"`
-		AccessTokenTTLMin  int    `envconfig:"ACCESS_TOKEN_TTL_MINUTES" default:"15"`
-		RefreshTokenTTLDay int    `envconfig:"REFRESH_TOKEN_TTL_DAYS"   default:"30"`
-		CapacitorOrigins   string `envconfig:"CAPACITOR_ORIGINS"        default:"capacitor://localhost,https://localhost"`
-		TrustedProxies     string `envconfig:"TRUSTED_PROXIES"          default:""`
+		HTTPAddr            string `envconfig:"API_HTTP_ADDR"            default:":8080"`
+		WebOrigin           string `envconfig:"WEB_ORIGIN"               default:"http://localhost:8080"`
+		LogLevel            string `envconfig:"LOG_LEVEL"                default:"info"`
+		CookieSecure        bool   `envconfig:"COOKIE_SECURE"            default:"false"`
+		CookieDomain        string `envconfig:"COOKIE_DOMAIN"            default:""`
+		AccessTokenTTLMin   int    `envconfig:"ACCESS_TOKEN_TTL_MINUTES" default:"15"`
+		RefreshTokenTTLDay  int    `envconfig:"REFRESH_TOKEN_TTL_DAYS"   default:"30"`
+		AuthRateLimitPerMin int    `envconfig:"AUTH_RATE_LIMIT_PER_MIN"  default:"10"`
+		CapacitorOrigins    string `envconfig:"CAPACITOR_ORIGINS"        default:"capacitor://localhost,https://localhost"`
+		TrustedProxies      string `envconfig:"TRUSTED_PROXIES"          default:""`
 	}
 	if err := envconfig.Process("", &raw); err != nil {
 		return nil, fmt.Errorf("envconfig: %w", err)
@@ -111,21 +114,21 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		HTTPAddr:           raw.HTTPAddr,
-		DatabaseURL:        dbURL,
-		WebOrigin:          raw.WebOrigin,
-		LogLevel:           raw.LogLevel,
-		CookieSecure:       raw.CookieSecure,
-		CookieDomain:       raw.CookieDomain,
-		SessionTTLDay:      raw.SessionTTLDay,
-		AccessTokenTTLMin:  raw.AccessTokenTTLMin,
-		RefreshTokenTTLDay: raw.RefreshTokenTTLDay,
-		CapacitorOrigins:   splitList(raw.CapacitorOrigins),
-		TrustedProxies:     splitList(raw.TrustedProxies),
-		EmailEncKey:        enc,
-		EmailHMACKey:       mac,
-		PasswordPepper:     pep,
-		JWTSigningKey:      jwt,
+		HTTPAddr:            raw.HTTPAddr,
+		DatabaseURL:         dbURL,
+		WebOrigin:           raw.WebOrigin,
+		LogLevel:            raw.LogLevel,
+		CookieSecure:        raw.CookieSecure,
+		CookieDomain:        raw.CookieDomain,
+		AccessTokenTTLMin:   raw.AccessTokenTTLMin,
+		RefreshTokenTTLDay:  raw.RefreshTokenTTLDay,
+		AuthRateLimitPerMin: raw.AuthRateLimitPerMin,
+		CapacitorOrigins:    splitList(raw.CapacitorOrigins),
+		TrustedProxies:      splitList(raw.TrustedProxies),
+		EmailEncKey:         enc,
+		EmailHMACKey:        mac,
+		PasswordPepper:      pep,
+		JWTSigningKey:       jwt,
 	}, nil
 }
 

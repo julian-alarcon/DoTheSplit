@@ -175,7 +175,7 @@ jobs:
             echo "WEB_ORIGIN=http://localhost:8080"
             echo "LOG_LEVEL=info"
             echo "COOKIE_SECURE=false"
-            echo "SESSION_COOKIE_DOMAIN="
+            echo "COOKIE_DOMAIN="
           } >> .env
 
       - name: boot stack

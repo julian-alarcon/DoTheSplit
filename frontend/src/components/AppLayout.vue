@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // App chrome: header (brand + admin/search/user menu), optional "Back to X"
 // row, the width-capped <main> slot, and the footer (build info + theme
-// switcher). Ported from the Astro tier's Base.astro.
+// switcher).
 //
 // Layout caps (CLAUDE.md): default single-column at 768px; opt-in `wide`
 // switches to 1152px for the group-dashboard triptych. Below the wide

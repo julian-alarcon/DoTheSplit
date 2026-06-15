@@ -17,7 +17,7 @@ export async function listGroups(): Promise<{ groups: Group[]; error: boolean }>
 }
 
 // There is no single-group GET endpoint; the list response embeds members, so
-// the dashboard resolves its group from the list (matches the Astro page).
+// the dashboard resolves its group from the list.
 export async function getGroup(
   groupId: string,
 ): Promise<{ group: Group | null; error: boolean }> {
@@ -152,8 +152,7 @@ export async function createGroup(input: {
 
 /**
  * Invite a batch of emails to a group. Returns how many failed (unregistered
- * emails 404; the caller surfaces a retry banner). Best-effort, in parallel,
- * mirroring the Astro forwarder.
+ * emails 404; the caller surfaces a retry banner). Best-effort, in parallel.
  */
 export async function inviteMembers(
   groupId: string,

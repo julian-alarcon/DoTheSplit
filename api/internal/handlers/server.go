@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
-	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
@@ -68,20 +67,6 @@ func bindStrictJSON(c *gin.Context, dst any) bool {
 		return false
 	}
 	return true
-}
-
-// setSessionCookie writes the canonical session cookie.
-func (s *Server) setSessionCookie(c *gin.Context, token string) {
-	maxAge := int(time.Duration(s.Cfg.SessionTTLDay) * 24 * time.Hour / time.Second)
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(middleware.SessionCookieName(s.Cfg.CookieSecure), token, maxAge,
-		"/", s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
-}
-
-func (s *Server) clearSessionCookie(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(middleware.SessionCookieName(s.Cfg.CookieSecure), "", -1,
-		"/", s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
 }
 
 // refreshCookieName is the httpOnly cookie carrying the rotating refresh token

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Status banner. Replaces the Astro tier's inline role="status" message
-// blocks. `tone` picks the color treatment; the slot holds the message.
+// Status banner. `tone` picks the color treatment; the slot holds the message.
 withDefaults(
   defineProps<{
     tone?: "error" | "success" | "info";

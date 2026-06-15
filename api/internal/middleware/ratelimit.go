@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,9 +10,13 @@ import (
 	"github.com/ulule/limiter/v3/drivers/store/memory"
 )
 
-// LoginRateLimiter returns a middleware limiting auth endpoints to 10 req/min/IP.
-func LoginRateLimiter() gin.HandlerFunc {
-	return ipRateLimiter("auth", "10-M")
+// LoginRateLimiter returns a middleware limiting auth endpoints to perMin
+// req/min/IP. perMin <= 0 falls back to the production default of 10.
+func LoginRateLimiter(perMin int) gin.HandlerFunc {
+	if perMin <= 0 {
+		perMin = 10
+	}
+	return ipRateLimiter("auth", fmt.Sprintf("%d-M", perMin))
 }
 
 // SetupRateLimiter returns a middleware limiting /v1/setup/admin to 5

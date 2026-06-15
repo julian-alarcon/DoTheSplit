@@ -10,18 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRateLimitIgnoresForgedXFF proves the login limiter can't be bypassed by
+// TestRateLimitIgnoresForgedXFF proves the auth limiter can't be bypassed by
 // rotating X-Forwarded-For. The test server configures no trusted proxies, so
 // c.ClientIP() ignores the header and keys every request on the real
 // (loopback) RemoteAddr. The 10-per-minute bucket must therefore trip even
 // though each request carries a distinct forged IP.
 func TestRateLimitIgnoresForgedXFF(t *testing.T) {
-	ts := setup(t)
+	ts := setup(t, withAuthRateLimit(10))
 	base := ts.srv.URL
 
 	var got429 bool
 	for i := 0; i < 12; i++ {
-		req, err := http.NewRequest(http.MethodPost, base+"/v1/auth/login",
+		req, err := http.NewRequest(http.MethodPost, base+"/v1/auth/token",
 			strings.NewReader(`{"email":"nobody@test.dev","password":"wrongpassword"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -47,7 +47,7 @@ func TestRequestBodyTooLarge(t *testing.T) {
 	huge := bytes.Repeat([]byte("a"), 2<<20)
 	body := []byte(`{"email":"big@test.dev","password":"` + string(huge) + `"}`)
 
-	req, err := http.NewRequest(http.MethodPost, base+"/v1/auth/login", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, base+"/v1/auth/token", bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := testHTTPClient.Do(req)

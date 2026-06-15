@@ -441,7 +441,7 @@ The app ships HTTP-only by default; see [Deployment note: HTTPS deviation](READM
 4. Stop publishing port 8080 on the host and instead attach the app to the proxy's Docker network.
 5. Restart the stack.
 
-When `COOKIE_SECURE=true` the session cookie is renamed to `__Host-dts_session` (browsers reject the `__Host-` prefix without `Secure`); the backend handles the switch automatically.
+When `COOKIE_SECURE=true` the `dts_refresh` cookie gains the `Secure` flag (sent only over HTTPS) and the API emits HSTS; the backend handles this automatically.
 
 ## Rootless posture
 

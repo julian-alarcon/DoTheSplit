@@ -3,8 +3,7 @@
 // which use byte-identical request/response shapes). Phase 1 picks a CSV and
 // runs a dry-run preview with placeholder member emails to discover the member
 // columns. Phase 2 maps each CSV name to a real email, re-previews live, and
-// commits to create the new group. Ported from the Astro import-csv-common +
-// import-splitwise flow; the Go service remains the source of truth.
+// commits to create the new group. The Go service remains the source of truth.
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import {

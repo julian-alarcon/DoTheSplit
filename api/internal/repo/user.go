@@ -343,7 +343,7 @@ func (r *UserRepo) FindOrCreateStub(ctx context.Context, q Querier, emailHash, e
 
 // SoftDelete marks the account as deleted, scrubs identifying fields, and
 // renames the user to a tombstone referencing their own UUID so historical
-// ledger entries stay traceable. Sessions should be cleared separately.
+// ledger entries stay traceable. Refresh tokens are revoked separately.
 func (r *UserRepo) SoftDelete(ctx context.Context, id uuid.UUID, tombstone string, scrambledHash, scrambledEnc []byte, scrambledPwHash string) error {
 	ct, err := r.pool.Exec(ctx, `
 		UPDATE users SET

@@ -30,9 +30,6 @@ func (s *Server) Register(c *gin.Context) {
 		}
 		return
 	}
-	if !res.VerificationRequired && res.SessionToken != "" {
-		s.setSessionCookie(c, res.SessionToken)
-	}
 	user := toAPIUser(res.User)
 	c.JSON(http.StatusCreated, apigen.RegisterResponse{
 		User:                 user,
@@ -45,7 +42,7 @@ func (s *Server) VerifyEmail(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	u, token, err := s.Auth.VerifyEmail(c.Request.Context(), string(req.Email), req.Code)
+	u, err := s.Auth.VerifyEmail(c.Request.Context(), string(req.Email), req.Code)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCode):
@@ -59,7 +56,6 @@ func (s *Server) VerifyEmail(c *gin.Context) {
 		}
 		return
 	}
-	s.setSessionCookie(c, token)
 	c.JSON(http.StatusOK, toAPIUser(u))
 }
 
@@ -88,7 +84,7 @@ func (s *Server) ConfirmPasswordReset(c *gin.Context) {
 	if !bindStrictJSON(c, &req) {
 		return
 	}
-	u, token, err := s.Auth.ConfirmPasswordReset(c.Request.Context(), string(req.Email), req.Code, req.NewPassword)
+	u, err := s.Auth.ConfirmPasswordReset(c.Request.Context(), string(req.Email), req.Code, req.NewPassword)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCode):
@@ -102,35 +98,7 @@ func (s *Server) ConfirmPasswordReset(c *gin.Context) {
 		}
 		return
 	}
-	s.setSessionCookie(c, token)
 	c.JSON(http.StatusOK, toAPIUser(u))
-}
-
-func (s *Server) Login(c *gin.Context) {
-	var req apigen.LoginRequest
-	if !bindStrictJSON(c, &req) {
-		return
-	}
-	u, token, err := s.Auth.Login(c.Request.Context(), string(req.Email), req.Password)
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrEmailUnverified):
-			writeErr(c, http.StatusForbidden, "email_unverified", "email address not yet verified")
-		default:
-			writeErr(c, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
-		}
-		return
-	}
-	s.setSessionCookie(c, token)
-	c.JSON(http.StatusOK, toAPIUser(u))
-}
-
-func (s *Server) Logout(c *gin.Context) {
-	if token, err := c.Cookie(middleware.SessionCookieName(s.Cfg.CookieSecure)); err == nil {
-		_ = s.Auth.Logout(c.Request.Context(), token)
-	}
-	s.clearSessionCookie(c)
-	c.Status(http.StatusNoContent)
 }
 
 // IssueToken exchanges credentials for a JWT access token + rotating refresh

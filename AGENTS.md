@@ -9,11 +9,11 @@ See also: [BLUEPRINT.md](BLUEPRINT.md) for product scope and [README.md](README.
 DoTheSplit - a expense-sharing app.
 
 - **Backend**: Go 1.26, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
-- **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. Plain CSS (no Tailwind, no UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
-- **Auth**: JWT bearer tokens for the SPA/native clients (`POST /v1/auth/token` + rotating refresh in an httpOnly cookie), running alongside the original cookie session. Bearer middleware sets the same context key as the session middleware, so `RequireSession`/`RequireAdmin` work for both.
+- **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
+- **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware sets the `dts_user` context key, so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
 - **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
 - **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).
-- **Infra**: Docker Compose on TrueNAS LAN (HTTP-only - see "Cookie naming" below).
+- **Infra**: Docker Compose on TrueNAS LAN (HTTP-only).
 
 ## The golden rule: contract-first
 
@@ -84,21 +84,16 @@ Rules of thumb:
 - **Native form controls**: keep them. We polish the closed/inert state via `.field-*` classes but never replace `<select>`, `<input type="checkbox|radio|number">` with custom JS widgets (accessibility, IME, offline, install size). Exception: `<input type="date">` is replaced by [DatePicker.vue](frontend/src/components/DatePicker.vue) because the native popup sizes inconsistently and we need a today-overlay glyph + cadence dropdown.
 - **Icons**: inline SVG via [Icon.vue](frontend/src/components/Icon.vue), which renders Font Awesome 7 path data from the generated [frontend/src/lib/icons.ts](frontend/src/lib/icons.ts). Inline SVG markup is CSP-clean (only inline `<script>`/`<style>` are blocked); to add a glyph, extend the generator's name list and re-run it.
 
-## Cookie naming (important)
+## Refresh cookie (important)
 
-The session cookie's name depends on transport:
-
-- **HTTPS** (`COOKIE_SECURE=true`): `__Host-dts_session` - the `__Host-` prefix enforces `Secure` + no `Domain`.
-- **Plain HTTP** (LAN deployment, `COOKIE_SECURE=false`): `dts_session`. The `__Host-` prefix is browser-rejected without `Secure`, so we drop it.
-
-On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never hardcode the name. The Vue SPA doesn't read the session cookie at all (it uses bearer tokens + the httpOnly `dts_refresh` cookie), so there's no frontend cookie-name matching to keep in sync anymore.
+The only cookie the API sets is the rotating refresh token, `dts_refresh`: httpOnly, `SameSite=Lax`, scoped to `/v1/auth` (so only refresh/revoke ever receive it), with `Secure` set when `COOKIE_SECURE=true`. The access token is a stateless JWT held in memory by the client and sent as `Authorization: Bearer <token>` - never a cookie. The SPA restores its session on boot by calling `/v1/auth/refresh` against this cookie.
 
 ## Account invariants
 
 - **Soft delete, never hard delete.** Accounts have `deleted_at`; the foreign keys from expenses, splits, settlements, and recurring templates deliberately stay pointing at the tombstoned row so ledgers survive. If a requirement ever seems to want hard delete + CASCADE, stop and flag it - that's silent data loss for every other group member.
 - **Tombstone format** is `"Deleted user #" + uuid[:8]`. It's stable (members can still identify _which_ deleted person paid for what) and non-identifying (no email, no real name). The full UUID is also the only non-scrambled column after delete, so operators can still answer "who was this?" from the audit trail.
 - **Re-registration** with a soft-deleted email works because `users_email_hash_active_key` is a partial unique index (`WHERE deleted_at IS NULL`).
-- **Session revocation on delete + password change**: both flows must call `SessionRepo.DeleteAllForUser` so the old cookie stops working immediately. Password change additionally issues a fresh session so the current browser stays logged in.
+- **Token revocation on delete + password change**: both flows must call `AuthService.RevokeRefreshForUser` so every refresh-token chain is revoked. Password change (and email-change confirm) additionally mint a fresh token pair and rotate the `dts_refresh` cookie so the current browser stays logged in. Note access tokens are stateless JWTs: a still-valid access token keeps working until it expires, except for deleted users (`ResolveAccessToken` re-checks `deleted_at` on every request).
 
 ## Avatar invariants
 
@@ -110,7 +105,7 @@ On the backend, use `middleware.SessionCookieName(cfg.CookieSecure)` - never har
 
 - Passwords: Argon2id only, `golang.org/x/crypto/argon2`. Never accept reversibly-encrypted passwords.
 - Emails: `email_hash = HMAC-SHA256(normalize(email), EMAIL_HMAC_KEY)` for lookups; `email_encrypted = key_id ‖ nonce ‖ AES-GCM(EMAIL_ENC_KEY, …)` for display. Keys are 32-byte base64 from env; fail fast if missing.
-- `/auth/login` and `/auth/register` are rate-limited; keep them on the `authG` group in the router.
+- `/auth/token`, `/auth/register`, and the other credential-bearing `/auth/*` endpoints (verify, password-reset) are rate-limited; keep them on the `authG` group in the router.
 - Security headers middleware emits HSTS only when `COOKIE_SECURE=true`.
 - Never log `email`, `password`, or session tokens. The redaction list lives in the logger middleware - add new sensitive field names there when introducing any.
 
@@ -120,7 +115,7 @@ Three layers, all run in CI on every PR:
 
 - **Go unit tests** colocate with packages (`*_test.go`). Pure logic only - split math, balance simplification, Argon2 round-trip, config loading.
 - **Go integration tests** spin up real Postgres via `testcontainers-go/postgres`. Two homes:
-  - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, cookie naming switch).
+  - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, bearer token flow).
   - [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) for schema-only invariants (up/down round-trip, group-delete FK cascades).
 - **SPA unit tests** via [vitest](https://vitest.dev) under [frontend/src/\*\*/\*.test.ts](frontend/src/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math; currency/short-name suites pin formatting.
 - **End-to-end** via [Playwright](https://playwright.dev) under [frontend/tests/e2e/](frontend/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the Vue SPA on the single api origin (`:8080`). Catches contract drift between the SPA and the Go API.

@@ -90,11 +90,10 @@ export interface paths {
         /**
          * Register a new user
          * @description When SMTP is configured the new account starts unverified: the response
-         *     body's `verification_required` is `true`, no session cookie is set, and
-         *     a 6-digit verification code is emailed to the address. The user must
-         *     POST it to `/v1/auth/verify` before they can log in. When SMTP is not
-         *     configured the account is auto-verified immediately and the response
-         *     sets a session cookie just like login.
+         *     body's `verification_required` is `true` and a 6-digit verification code
+         *     is emailed to the address. The user must POST it to `/v1/auth/verify`
+         *     before they can log in. When SMTP is not configured the account is
+         *     auto-verified immediately and the user can log in via `/v1/auth/token`.
          */
         post: operations["register"];
         delete?: never;
@@ -181,40 +180,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Log in */
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Log out (clears session) */
-        post: operations["logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/auth/token": {
         parameters: {
             query?: never;
@@ -226,9 +191,9 @@ export interface paths {
         put?: never;
         /**
          * Exchange credentials for a bearer access token
-         * @description Token-based login for SPA / native (Capacitor) clients that cannot use
-         *     the session cookie. Returns a short-lived JWT access token in the body
-         *     and sets a long-lived, rotating refresh token in an httpOnly cookie
+         * @description Token-based login for SPA / native (Capacitor) clients. Returns a
+         *     short-lived JWT access token in the body and sets a long-lived,
+         *     rotating refresh token in an httpOnly cookie
          *     (`dts_refresh`, scoped to `/v1/auth/refresh`). Native clients that have
          *     no cookie jar receive the refresh token in the body as well.
          */
@@ -296,7 +261,7 @@ export interface paths {
         get: operations["me"];
         put?: never;
         post?: never;
-        /** Soft-delete the current user (tombstones display_name, scrubs email, clears all sessions) */
+        /** Soft-delete the current user (tombstones display_name, scrubs email, revokes refresh tokens) */
         delete: operations["deleteMe"];
         options?: never;
         head?: never;
@@ -313,7 +278,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change the current user's password (requires old password) */
+        /**
+         * Change the current user's password (requires old password)
+         * @description Changes the password and revokes every other token chain for the user.
+         *     Returns a fresh access token + rotated refresh cookie so the current
+         *     browser stays logged in.
+         */
         post: operations["changePassword"];
         delete?: never;
         options?: never;
@@ -356,8 +326,8 @@ export interface paths {
         put?: never;
         /**
          * Confirm a pending email change with the 6-digit code
-         * @description On success the user's email is updated, all sessions for the user are
-         *     revoked, and a fresh session cookie is issued so the current browser
+         * @description On success the user's email is updated, the user's other token chains
+         *     are revoked, and the refresh cookie is rotated so the current browser
          *     stays logged in.
          */
         post: operations["changeEmailConfirm"];
@@ -1004,10 +974,10 @@ export interface paths {
         put?: never;
         /**
          * Send the user a password-reset email (admin, step-up)
-         * @description Scrambles the target user's password hash, revokes every active
-         *     session for them, and emails them a 6-digit code so they can set a
-         *     new password through the standard /reset flow. The admin never types
-         *     a temporary password.
+         * @description Scrambles the target user's password hash, revokes every refresh token
+         *     for them, and emails them a 6-digit code so they can set a new password
+         *     through the standard /reset flow. The admin never types a temporary
+         *     password.
          */
         post: operations["adminResetUserPassword"];
         delete?: never;
@@ -2070,7 +2040,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Missing or invalid session cookie. */
+        /** @description Missing or invalid bearer access token. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -2218,10 +2188,9 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Admin created; session cookie set. */
+            /** @description Admin created. The caller then logs in via /v1/auth/token. */
             201: {
                 headers: {
-                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2264,10 +2233,9 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created. Session cookie is set only when `verification_required` is false. */
+            /** @description Created. */
             201: {
                 headers: {
-                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2293,10 +2261,9 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Verified; session cookie set. */
+            /** @description Verified. The user can now log in via /v1/auth/token. */
             200: {
                 headers: {
-                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2377,10 +2344,9 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Password rotated; session cookie set. */
+            /** @description Password rotated. The user can now log in via /v1/auth/token. */
             200: {
                 headers: {
-                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2398,60 +2364,6 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Logged in; session cookie set */
-            200: {
-                headers: {
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["User"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Account exists but the email address has not been verified yet. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            429: components["responses"]["TooManyRequests"];
-        };
-    };
-    logout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Logged out */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
     issueToken: {
@@ -2580,7 +2492,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Account deleted; session cleared */
+            /** @description Account deleted; refresh cookie cleared */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2639,12 +2551,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Password changed */
-            204: {
+            /** @description Password changed; new access token issued, refresh cookie rotated */
+            200: {
                 headers: {
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
@@ -2697,7 +2612,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Email updated; new session cookie set. */
+            /** @description Email updated; refresh cookie rotated. */
             200: {
                 headers: {
                     "Set-Cookie"?: string;
@@ -3807,7 +3722,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Password reset email queued; target's sessions revoked. */
+            /** @description Password reset email queued; target's refresh tokens revoked. */
             204: {
                 headers: {
                     [name: string]: unknown;

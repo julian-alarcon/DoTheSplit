@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Step-up password modal for destructive actions. Controlled via
 // v-model:open; emits `confirm` with the typed password. The parent owns the
-// action. Ported from the Astro tier's PasswordPromptDialog + password-prompt.ts.
+// action.
 import { ref, watch } from "vue";
 import Icon from "@/components/Icon.vue";
 

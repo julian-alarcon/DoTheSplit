@@ -214,7 +214,7 @@ export const router = createRouter({
   routes,
 });
 
-// Guard order mirrors the Astro middleware:
+// Guard order:
 //   1. Probe first-run setup state (cached after the first check). While the
 //      instance is unlocked, funnel everything to /setup; once locked, keep
 //      authenticated users away from /setup.
@@ -252,8 +252,8 @@ router.beforeEach(async (to) => {
   return true;
 });
 
-// Mirror Astro's `<title>{title} · DoTheSplit</title>`: SSR set it per page,
-// so in the CSR SPA we set document.title on each navigation instead.
+// Set `<title>{title} · DoTheSplit</title>` on each navigation (CSR has no
+// per-page server render to do it).
 router.afterEach((to) => {
   document.title = to.meta.title
     ? `${to.meta.title} · DoTheSplit`

@@ -40,8 +40,8 @@ async function login(email: string, password: string): Promise<{ ok: boolean; co
 
 /**
  * Complete first-run setup, then establish a bearer session. The setup
- * endpoint sets a cookie session, which the SPA doesn't use, so we follow up
- * with the token flow using the same credentials.
+ * endpoint just creates the admin, so we follow up with the token flow using
+ * the same credentials to log in.
  */
 async function completeSetup(input: {
   token: string;
@@ -83,9 +83,8 @@ async function register(input: {
 }
 
 /**
- * Verify a pending registration with the emailed code. The endpoint sets a
- * cookie session but we have no password to mint a bearer, so the caller
- * routes to /login on success.
+ * Verify a pending registration with the emailed code. We have no password
+ * here to mint a bearer token, so the caller routes to /login on success.
  */
 async function verifyEmail(
   email: string,
@@ -149,9 +148,12 @@ async function changePassword(
   oldPassword: string,
   newPassword: string,
 ): Promise<{ ok: boolean }> {
-  const { error } = await api.POST("/v1/me/password", {
+  // The change revokes every token chain (including ours); the API returns a
+  // fresh access token + rotated refresh cookie so we stay logged in.
+  const { data, error } = await api.POST("/v1/me/password", {
     body: { old_password: oldPassword, new_password: newPassword },
   });
+  if (!error && data) setAccessToken(data.access_token, data.expires_in);
   return { ok: !error };
 }
 

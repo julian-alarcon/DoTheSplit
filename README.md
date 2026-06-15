@@ -100,7 +100,7 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 ```bash
 make gen            # regenerate Go + TS API bindings from openapi.yaml
 make migrate-up     # apply DB migrations
-make dev            # run api + web against a local postgres
+make dev            # run api + frontend against a local postgres
 make test           # unit + integration tests
 ```
 
@@ -134,7 +134,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 - **Backup**
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
-- **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
+- **Optimistic UI + refresh-on-focus** (the perf budget is ≤100ms perceived: reads are close but mutations still block). The hand-rolled composables would gain a caching/invalidation layer if this becomes painful.
 - **Import** from Tricount
 
 ### Longer term / ideas
@@ -150,7 +150,7 @@ Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format
 ## Deployment note: HTTPS deviation
 
 [BLUEPRINT.md](BLUEPRINT.md) states **"HTTPS only"**. The v1 LAN profile ships
-**HTTP-only** for TrueNAS LAN use: session cookies use `Secure=false`. For
+**HTTP-only** for TrueNAS LAN use: the `dts_refresh` cookie uses `Secure=false`. For
 internet-exposed deployments, terminate TLS at an upstream reverse proxy (Caddy,
 Traefik, Cloudflare Tunnel), flip `COOKIE_SECURE=true`, and set `TRUSTED_PROXIES`
 to the proxy's IP/CIDR so rate limiting and audit logs see the real client IP.
@@ -165,7 +165,7 @@ Third-party attribution lives in two places:
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md): generated list of every direct and transitive Go module and npm package with SPDX license + source link. Includes the Font Awesome CC BY 4.0 attribution.
 - `/about` route in the running app: human-readable summary linked from the user menu in the header.
 
-CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/web.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
+CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/frontend.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
 
 Regenerate locally:
 

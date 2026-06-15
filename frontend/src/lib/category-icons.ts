@@ -1,8 +1,8 @@
-// Slug -> Iconify icon name (resolved against the fa7-solid collection
-// in CategoryIcon.astro). Categories are a closed, developer-controlled
-// set, so this mapping lives with the frontend that renders it. To
-// switch icon libraries, change the prefix in CategoryIcon.astro and
-// adjust any names that differ between collections.
+// Slug -> Font Awesome icon name, rendered by Icon.vue from the generated
+// path data in icons.ts. Categories are a closed, developer-controlled set,
+// so this mapping lives with the frontend that renders it. Any name added
+// here must also be in the Icon.vue generator's name list (re-run it after
+// editing) so the path data gets bundled.
 export const ICON_BY_SLUG: Record<string, string> = {
   // Entertainment
   books: "book",

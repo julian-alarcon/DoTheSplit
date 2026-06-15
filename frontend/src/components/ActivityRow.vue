@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // One row in the group activity feed: who did what, what it was, when, and the
-// amount. Links to the expense/settlement detail page. Ported from the Astro
-// ActivityRow component.
+// amount. Links to the expense/settlement detail page.
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { formatMoney } from "@/lib/currencies";

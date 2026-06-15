@@ -91,12 +91,12 @@ func (s *SetupService) EnsureToken(ctx context.Context) (cleartext string, fresh
 //     'bootstrap_admin' audit row is inserted.
 //  5. SetupRepo.Complete: stamps completed_at + completed_by.
 //  6. AuditRepo.Insert with action='setup_completed'.
-//  7. Commit. Session is issued post-tx (issuance failure means the operator
-//     just logs in normally; the install state is already committed).
-func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, displayName, password string) (*User, string, error) {
+//  7. Commit. The caller then logs in via /v1/auth/token; the install state is
+//     already committed regardless.
+func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, displayName, password string) (*User, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -109,33 +109,33 @@ func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, di
 	`).Scan(&hash, &completedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", ErrInvalidToken
+			return nil, ErrInvalidToken
 		}
-		return nil, "", err
+		return nil, err
 	}
 	if completedAt != nil {
-		return nil, "", ErrSetupCompleted
+		return nil, ErrSetupCompleted
 	}
 
 	supplied := sha256.Sum256([]byte(tokenCT))
 	if subtle.ConstantTimeCompare(supplied[:], hash) != 1 {
-		return nil, "", ErrInvalidToken
+		return nil, ErrInvalidToken
 	}
 
 	out, repoUser, err := s.auth.RegisterTx(ctx, tx, email, password, displayName)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// Bootstrap admin is auto-verified - they typed their email into the
 	// setup form themselves, and SMTP definitionally isn't configured yet.
 	if err := s.auth.users.MarkEmailVerified(ctx, tx, repoUser.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	out.EmailVerifiedAt = ptrNow()
 
 	if err := s.repo.Complete(ctx, tx, repoUser.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	meta, _ := json.Marshal(map[string]any{"reason": "first_admin_created"})
 	if err := s.audit.Insert(ctx, tx, &repo.AuditEntry{
@@ -144,16 +144,12 @@ func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, di
 		Success:     true,
 		Metadata:    meta,
 	}); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	token, err := s.auth.IssueSession(ctx, repoUser.ID)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, token, nil
+	return out, nil
 }

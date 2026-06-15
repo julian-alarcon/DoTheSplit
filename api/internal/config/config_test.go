@@ -38,7 +38,6 @@ func TestLoadValid(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, ":8080", cfg.HTTPAddr)
-	require.Equal(t, 30, cfg.SessionTTLDay)
 	require.False(t, cfg.CookieSecure)
 	require.Len(t, cfg.EmailEncKey, 32)
 	require.Len(t, cfg.EmailHMACKey, 32)
@@ -46,6 +45,7 @@ func TestLoadValid(t *testing.T) {
 	require.Len(t, cfg.JWTSigningKey, 32)
 	require.Equal(t, 15, cfg.AccessTokenTTLMin)
 	require.Equal(t, 30, cfg.RefreshTokenTTLDay)
+	require.Equal(t, 10, cfg.AuthRateLimitPerMin)
 	require.Equal(t, []string{"capacitor://localhost", "https://localhost"}, cfg.CapacitorOrigins)
 }
 

@@ -2,8 +2,8 @@
 // Split editor. Opens a <dialog> to choose a split mode (equal / exact /
 // percent) across a subset of members, with a live per-member preview. The
 // committed payload ({ mode, splits:[{user_id, value?}] }) is exposed via
-// v-model so the parent posts it directly. Logic ported from the Astro tier's
-// split-editor.ts (same rounding, two-person labels, prefill behaviour).
+// v-model so the parent posts it directly (same rounding, two-person labels,
+// prefill behaviour).
 //
 // `amountCents` and `payerId` are reactive props from the parent form so the
 // preview tracks the amount/payer live. For edit flows, pass `initialSplits`;
@@ -287,7 +287,7 @@ function onValueInput(s: RowState, raw: string) {
 }
 
 // Keep equal/percent previews in sync with a changing parent amount; exact
-// preserves the user's typed cents (matches the Astro behaviour).
+// preserves the user's typed cents.
 watch(
   () => props.amountCents,
   () => {

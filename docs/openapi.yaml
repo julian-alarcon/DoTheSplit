@@ -11,9 +11,9 @@ info:
     Conventions:
       * All money values are integer cents (no floats).
       * All IDs are UUIDs.
-      * Authentication is an opaque session cookie (`dts_session` on plain HTTP,
-        `__Host-dts_session` on HTTPS) set by `/v1/auth/login`.
-      * The session cookie is `SameSite=Lax`; write endpoints rely on that for CSRF.
+      * Authentication is a JWT bearer access token obtained from `/v1/auth/token`
+        and refreshed via `/v1/auth/refresh` (rotating `dts_refresh` httpOnly cookie).
+        Sent as `Authorization: Bearer <token>`.
       * Request bodies reject unknown fields (`additionalProperties: false`).
       * Times are RFC 3339 UTC.
 
@@ -37,7 +37,7 @@ servers:
 
 tags:
   - name: auth
-    description: Registration, login, logout, current-user lookup.
+    description: Registration, token issuance/refresh, current-user lookup.
   - name: groups
     description: Groups and membership. The creator is auto-added; any member can add others.
   - name: expenses
@@ -66,7 +66,7 @@ tags:
     description: First-run install ceremony. Active only while no admin exists.
 
 security:
-  - cookieAuth: []
+  - bearerAuth: []
 
 paths:
   /healthz:
@@ -121,10 +121,7 @@ paths:
             schema: { $ref: "#/components/schemas/SetupCompleteRequest" }
       responses:
         "201":
-          description: Admin created; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Admin created. The caller then logs in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -147,11 +144,10 @@ paths:
       summary: Register a new user
       description: |
         When SMTP is configured the new account starts unverified: the response
-        body's `verification_required` is `true`, no session cookie is set, and
-        a 6-digit verification code is emailed to the address. The user must
-        POST it to `/v1/auth/verify` before they can log in. When SMTP is not
-        configured the account is auto-verified immediately and the response
-        sets a session cookie just like login.
+        body's `verification_required` is `true` and a 6-digit verification code
+        is emailed to the address. The user must POST it to `/v1/auth/verify`
+        before they can log in. When SMTP is not configured the account is
+        auto-verified immediately and the user can log in via `/v1/auth/token`.
       operationId: register
       security: []
       tags: [auth]
@@ -162,10 +158,7 @@ paths:
             schema: { $ref: "#/components/schemas/RegisterRequest" }
       responses:
         "201":
-          description: Created. Session cookie is set only when `verification_required` is false.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Created.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RegisterResponse" }
@@ -187,10 +180,7 @@ paths:
             schema: { $ref: "#/components/schemas/VerifyEmailRequest" }
       responses:
         "200":
-          description: Verified; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Verified. The user can now log in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -257,10 +247,7 @@ paths:
             schema: { $ref: "#/components/schemas/PasswordResetConfirm" }
       responses:
         "200":
-          description: Password rotated; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Password rotated. The user can now log in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -272,50 +259,13 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
-  /v1/auth/login:
-    post:
-      summary: Log in
-      operationId: login
-      security: []
-      tags: [auth]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/LoginRequest" }
-      responses:
-        "200":
-          description: Logged in; session cookie set
-          headers:
-            Set-Cookie:
-              schema: { type: string }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/User" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403":
-          description: Account exists but the email address has not been verified yet.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "429": { $ref: "#/components/responses/TooManyRequests" }
-
-  /v1/auth/logout:
-    post:
-      summary: Log out (clears session)
-      operationId: logout
-      tags: [auth]
-      responses:
-        "204":
-          description: Logged out
-
   /v1/auth/token:
     post:
       summary: Exchange credentials for a bearer access token
       description: |
-        Token-based login for SPA / native (Capacitor) clients that cannot use
-        the session cookie. Returns a short-lived JWT access token in the body
-        and sets a long-lived, rotating refresh token in an httpOnly cookie
+        Token-based login for SPA / native (Capacitor) clients. Returns a
+        short-lived JWT access token in the body and sets a long-lived,
+        rotating refresh token in an httpOnly cookie
         (`dts_refresh`, scoped to `/v1/auth/refresh`). Native clients that have
         no cookie jar receive the refresh token in the body as well.
       operationId: issueToken
@@ -425,7 +375,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     delete:
-      summary: Soft-delete the current user (tombstones display_name, scrubs email, clears all sessions)
+      summary: Soft-delete the current user (tombstones display_name, scrubs email, revokes refresh tokens)
       operationId: deleteMe
       tags: [auth]
       requestBody:
@@ -435,7 +385,7 @@ paths:
             schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
-          description: Account deleted; session cleared
+          description: Account deleted; refresh cookie cleared
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "423":
@@ -447,6 +397,10 @@ paths:
   /v1/me/password:
     post:
       summary: Change the current user's password (requires old password)
+      description: |
+        Changes the password and revokes every other token chain for the user.
+        Returns a fresh access token + rotated refresh cookie so the current
+        browser stays logged in.
       operationId: changePassword
       tags: [auth]
       requestBody:
@@ -455,8 +409,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
       responses:
-        "204":
-          description: Password changed
+        "200":
+          description: Password changed; new access token issued, refresh cookie rotated
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
@@ -492,8 +452,8 @@ paths:
     post:
       summary: Confirm a pending email change with the 6-digit code
       description: |
-        On success the user's email is updated, all sessions for the user are
-        revoked, and a fresh session cookie is issued so the current browser
+        On success the user's email is updated, the user's other token chains
+        are revoked, and the refresh cookie is rotated so the current browser
         stays logged in.
       operationId: changeEmailConfirm
       tags: [auth]
@@ -504,7 +464,7 @@ paths:
             schema: { $ref: "#/components/schemas/ConfirmEmailChangeRequest" }
       responses:
         "200":
-          description: Email updated; new session cookie set.
+          description: Email updated; refresh cookie rotated.
           headers:
             Set-Cookie:
               schema: { type: string }
@@ -1445,10 +1405,10 @@ paths:
     post:
       summary: Send the user a password-reset email (admin, step-up)
       description: |
-        Scrambles the target user's password hash, revokes every active
-        session for them, and emails them a 6-digit code so they can set a
-        new password through the standard /reset flow. The admin never types
-        a temporary password.
+        Scrambles the target user's password hash, revokes every refresh token
+        for them, and emails them a 6-digit code so they can set a new password
+        through the standard /reset flow. The admin never types a temporary
+        password.
       operationId: adminResetUserPassword
       tags: [admin]
       parameters:
@@ -1463,7 +1423,7 @@ paths:
             schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
-          description: Password reset email queued; target's sessions revoked.
+          description: Password reset email queued; target's refresh tokens revoked.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1673,13 +1633,6 @@ paths:
 
 components:
   securitySchemes:
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: dts_session
-      description: |
-        Session cookie. Name is `dts_session` on plain HTTP deployments and
-        `__Host-dts_session` when `COOKIE_SECURE=true`.
     bearerAuth:
       type: http
       scheme: bearer
@@ -1687,8 +1640,7 @@ components:
       description: |
         Short-lived JWT access token for SPA / native clients, obtained from
         `/v1/auth/token` and refreshed via `/v1/auth/refresh`. Sent as
-        `Authorization: Bearer <token>`. Accepted on every authenticated
-        endpoint alongside `cookieAuth`; if both are present the cookie wins.
+        `Authorization: Bearer <token>` on every authenticated endpoint.
 
   parameters:
     GroupId:
@@ -1719,7 +1671,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
-      description: Missing or invalid session cookie.
+      description: Missing or invalid bearer access token.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

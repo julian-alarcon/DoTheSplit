@@ -169,7 +169,7 @@ async function onDelete(password: string) {
           <div class="avatar-slot">
             <Avatar :display-name="user.display_name" :src="previewUrl ?? storedAvatarUrl" :size="64" />
           </div>
-          <input type="file" accept="image/*" class="file" @change="onFilePick" />
+          <input type="file" accept="image/*" class="field-file" @change="onFilePick" />
         </div>
         <div class="right gap mt">
           <button v-if="user.has_avatar" type="button" class="btn-secondary" @click="removeAvatar">Remove avatar</button>
@@ -242,8 +242,8 @@ async function onDelete(password: string) {
       </section>
 
       <!-- Danger zone -->
-      <section class="panel danger">
-        <h2 class="danger-title">Danger zone</h2>
+      <section class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+        <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
         <p class="muted mb">
           Deleting your account removes your email, password and avatar. Your name is replaced with a stable tombstone so shared expenses other members still depend on stay traceable. This cannot be undone.
         </p>
@@ -323,12 +323,12 @@ async function onDelete(password: string) {
 }
 .muted {
   font-size: 0.875rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .hint {
   margin-top: -0.25rem;
   font-size: 0.75rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .avatar-row {
   display: flex;
@@ -340,36 +340,6 @@ async function onDelete(password: string) {
   overflow: hidden;
   border-radius: 0.25rem;
   border: 1px solid var(--border);
-}
-.file {
-  display: block;
-  width: 100%;
-  font-size: 0.875rem;
-}
-.file::file-selector-button {
-  margin-right: 0.75rem;
-  border: 0;
-  border-radius: 0.375rem;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-.file::file-selector-button:hover {
-  filter: brightness(0.92);
-}
-.danger {
-  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
-}
-.danger-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--destructive);
 }
 :deep(.code-input) {
   text-align: center;

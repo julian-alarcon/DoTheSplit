@@ -13,57 +13,21 @@ const cards = [
 
 <template>
   <AppLayout :back="{ to: '/groups', label: 'Groups' }">
-    <h1 class="title">Admin</h1>
-    <p class="lead">Instance-wide management. Destructive actions require re-entering your password.</p>
-    <div class="grid">
-      <RouterLink v-for="c in cards" :key="c.to" :to="c.to" class="card">
+    <h1 class="mb-1 text-2xl font-semibold">Admin</h1>
+    <p class="mb-6 text-sm text-muted-foreground">Instance-wide management. Destructive actions require re-entering your password.</p>
+    <div class="grid gap-3">
+      <RouterLink
+        v-for="c in cards"
+        :key="c.to"
+        :to="c.to"
+        class="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-[var(--hover-surface)]"
+      >
         <Icon :name="c.icon" :size="20" />
         <div>
-          <div class="card-title">{{ c.title }}</div>
-          <div class="card-desc">{{ c.desc }}</div>
+          <div class="font-medium">{{ c.title }}</div>
+          <div class="text-xs text-muted-foreground">{{ c.desc }}</div>
         </div>
       </RouterLink>
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 0.25rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.lead {
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.grid {
-  display: grid;
-  gap: 0.75rem;
-}
-.card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem 1rem;
-  transition: background-color 120ms ease;
-}
-.card:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .card:hover,
-:root[data-theme="high-contrast"] .card:hover {
-  background: var(--accent);
-}
-.card-title {
-  font-weight: 500;
-}
-.card-desc {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-</style>

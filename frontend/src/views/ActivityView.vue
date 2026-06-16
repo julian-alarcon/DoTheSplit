@@ -51,9 +51,9 @@ watch(groupId, load);
 
 <template>
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}`, label: group.name }">
-    <h1 class="title">Activity</h1>
-    <p v-if="loaded && items.length === 0" class="empty">No activity yet.</p>
-    <ul v-else class="feed">
+    <h1 class="mb-4 text-2xl font-semibold">Activity</h1>
+    <p v-if="loaded && items.length === 0" class="text-sm text-muted-foreground">No activity yet.</p>
+    <ul v-else class="feed list-none">
       <ActivityRow
         v-for="item in items"
         :key="item.id"
@@ -63,7 +63,7 @@ watch(groupId, load);
         :members="group.members"
       />
     </ul>
-    <div v-if="nextCursor" class="load-more">
+    <div v-if="nextCursor" class="mt-4 flex justify-center">
       <button type="button" class="btn-secondary btn-sm" :disabled="loadingMore" @click="onLoadMore">
         Load more
       </button>
@@ -72,27 +72,10 @@ watch(groupId, load);
 </template>
 
 <style scoped>
-.title {
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.empty {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.feed {
-  list-style: none;
-}
 .feed > :deep(li) {
   border-top: 1px solid var(--border);
 }
 .feed > :deep(li:first-child) {
   border-top: 0;
-}
-.load-more {
-  margin-top: 1rem;
-  display: flex;
-  justify-content: center;
 }
 </style>

@@ -52,15 +52,15 @@ onMounted(load);
 
 <template>
   <AppLayout :back="{ to: '/admin', label: 'Admin' }">
-    <h1 class="title">Users</h1>
+    <h1 class="mb-4 text-2xl font-semibold">Users</h1>
 
-    <Alert v-if="okMsg" tone="success" class="banner">{{ okMsg }}</Alert>
-    <Alert v-if="errMsg" tone="error" class="banner">{{ errMsg }}</Alert>
+    <Alert v-if="okMsg" tone="success" class="mb-4">{{ okMsg }}</Alert>
+    <Alert v-if="errMsg" tone="error" class="mb-4">{{ errMsg }}</Alert>
 
-    <section class="panel">
-      <h2 class="panel-title">Add user</h2>
-      <p class="hint mb">The user receives an email with a 6-digit code to set their own password.</p>
-      <form class="form" @submit.prevent="onCreate">
+    <section class="mb-6 rounded-lg border border-border p-4">
+      <h2 class="text-lg font-medium">Add user</h2>
+      <p class="mb-3 text-xs text-muted-foreground">The user receives an email with a 6-digit code to set their own password.</p>
+      <form class="grid gap-3" @submit.prevent="onCreate">
         <label class="field">
           <input v-model="form.email" type="email" required class="field-input" placeholder=" " />
           <span class="field-label" data-required>Email</span>
@@ -76,167 +76,46 @@ onMounted(load);
             <option value="admin">admin</option>
           </select>
         </label>
-        <div class="right"><button type="submit" class="btn-primary">Create user</button></div>
+        <div class="flex justify-end"><button type="submit" class="btn-primary">Create user</button></div>
       </form>
     </section>
 
     <section>
-      <div class="list-head">
-        <h2 class="panel-title">All users ({{ total }})</h2>
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-lg font-medium">All users ({{ total }})</h2>
         <label class="toggle">
           <input v-model="includeDeleted" type="checkbox" class="toggle-input" />
           <span class="toggle-track" aria-hidden="true"></span>
           <span>Show deleted</span>
         </label>
       </div>
-      <ul class="users">
+      <ul class="grid list-none gap-2">
         <li v-for="u in items" :key="u.id">
-          <RouterLink :to="`/admin/users/${u.id}`" class="user-row">
+          <RouterLink
+            :to="`/admin/users/${u.id}`"
+            class="flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors hover:bg-[var(--hover-surface)]"
+          >
             <MemberAvatar :user-id="u.id" :display-name="u.display_name" :has-avatar="u.has_avatar" :size="32" />
-            <div class="user-main">
-              <div class="user-name-row">
-                <span class="user-name">{{ u.display_name }}</span>
-                <span v-if="u.id === myId" class="muted small">(you)</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-baseline gap-2">
+                <span class="truncate font-medium">{{ u.display_name }}</span>
+                <span v-if="u.id === myId" class="text-xs text-muted-foreground">(you)</span>
               </div>
-              <div class="user-email">{{ u.email ?? "(email scrubbed)" }}</div>
-              <div class="user-meta">
-                <span class="role-badge">{{ u.role }}</span>
+              <div class="truncate text-xs text-muted-foreground">{{ u.email ?? "(email scrubbed)" }}</div>
+              <div class="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span class="rounded-sm bg-muted px-1.5 py-px">{{ u.role }}</span>
                 <span>created {{ fmtDate(u.created_at) }}</span>
-                <span v-if="u.deleted_at" class="deleted">deleted {{ fmtDate(u.deleted_at) }}</span>
+                <span v-if="u.deleted_at" class="text-[var(--destructive)]">deleted {{ fmtDate(u.deleted_at) }}</span>
               </div>
             </div>
-            <span class="chevron" aria-hidden="true">›</span>
+            <span class="ml-auto text-muted-foreground" aria-hidden="true">›</span>
           </RouterLink>
         </li>
       </ul>
-      <nav class="pager">
-        <button v-if="offset > 0" type="button" class="link" @click="offset = Math.max(0, offset - ADMIN_PAGE)">← Previous</button>
-        <button v-if="offset + ADMIN_PAGE < total" type="button" class="link" @click="offset += ADMIN_PAGE">Next →</button>
+      <nav class="mt-4 flex gap-4 text-sm">
+        <button v-if="offset > 0" type="button" class="cursor-pointer text-inherit underline" @click="offset = Math.max(0, offset - ADMIN_PAGE)">← Previous</button>
+        <button v-if="offset + ADMIN_PAGE < total" type="button" class="cursor-pointer text-inherit underline" @click="offset += ADMIN_PAGE">Next →</button>
       </nav>
     </section>
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.panel {
-  margin-bottom: 1.5rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
-  padding: 1rem;
-}
-.panel-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.form {
-  display: grid;
-  gap: 0.75rem;
-}
-.hint {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.mb {
-  margin-bottom: 0.75rem;
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-.list-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-}
-.users {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-}
-.user-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-  transition: background-color 120ms ease;
-}
-.user-row:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .user-row:hover,
-:root[data-theme="high-contrast"] .user-row:hover {
-  background: var(--accent);
-}
-.user-main {
-  min-width: 0;
-  flex: 1;
-}
-.user-name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-.user-name {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.user-email {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.user-meta {
-  margin-top: 0.25rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.role-badge {
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.0625rem 0.375rem;
-}
-.deleted {
-  color: var(--destructive);
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.small {
-  font-size: 0.75rem;
-}
-.chevron {
-  margin-left: auto;
-  color: var(--muted-foreground);
-}
-.pager {
-  margin-top: 1rem;
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-}
-.link {
-  cursor: pointer;
-  text-decoration: underline;
-  color: inherit;
-}
-</style>

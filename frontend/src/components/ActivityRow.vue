@@ -82,7 +82,7 @@ const toMember = computed(() => (props.item.to_user_id ? memberByID.value.get(pr
             <span class="who-text">
               <span v-if="recurringPrefix" class="recurring-prefix">New recurring expense: </span>
               <span class="who-name">{{ who }}</span>
-              <span class="muted"> {{ verb }}</span>
+              <span class="muted">&nbsp;{{ verb }}</span>
             </span>
           </div>
 
@@ -130,11 +130,7 @@ const toMember = computed(() => (props.item.to_user_id ? memberByID.value.get(pr
   transition: background-color 120ms ease;
 }
 .row:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .row:hover,
-:root[data-theme="high-contrast"] .row:hover {
-  background: var(--accent);
+  background: var(--hover-surface);
 }
 .row:focus-visible {
   outline: 2px solid var(--ring);
@@ -154,8 +150,13 @@ const toMember = computed(() => (props.item.to_user_id ? memberByID.value.get(pr
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: color-mix(in oklch, var(--primary) 20%, var(--card));
-  color: var(--primary);
+  background: oklch(95% 0.052 163.051); /* emerald-100 */
+  color: oklch(50.8% 0.118 165.612); /* emerald-700 */
+}
+:root[data-theme="dark"] .settle-icon,
+:root[data-theme="high-contrast"] .settle-icon {
+  background: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  color: oklch(84.5% 0.143 164.978); /* emerald-300 */
 }
 .cat-icon {
   flex-shrink: 0;

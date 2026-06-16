@@ -122,6 +122,12 @@
       "url": "https://github.com/microsoft/playwright"
     },
     {
+      "name": "@tailwindcss/vite",
+      "version": "4.3.1",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
+    },
+    {
       "name": "@types/node",
       "version": "24.13.2",
       "license": "MIT",
@@ -144,6 +150,12 @@
       "version": "7.13.0",
       "license": "MIT",
       "url": "https://github.com/openapi-ts/openapi-typescript"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.1",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
     },
     {
       "name": "typescript",

@@ -86,31 +86,31 @@ watch(groupId, load);
 
 <template>
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}`, label: group.name }">
-    <div class="wrap">
+    <div class="mx-auto flex max-w-xl flex-col gap-6">
       <div>
-        <h1 class="title">Settle up</h1>
-        <p class="lead">Record a payment between two members of {{ group.name }}.</p>
+        <h1 class="text-2xl font-semibold">Settle up</h1>
+        <p class="text-sm text-muted-foreground">Record a payment between two members of {{ group.name }}.</p>
       </div>
 
       <Alert v-if="error" tone="error">
         Could not record the settlement. Check the payer, recipient, and amount and try again.
       </Alert>
 
-      <p v-if="members.length < 2" class="note">
+      <p v-if="members.length < 2" class="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
         This group needs at least two members before anyone can settle up. Add someone under
-        <RouterLink :to="`/groups/${groupId}/settings`" class="link"> Group settings</RouterLink>.
+        <RouterLink :to="`/groups/${groupId}/settings`" class="underline"> Group settings</RouterLink>.
       </p>
 
-      <form v-else class="form" @submit.prevent="onSubmit">
+      <form v-else class="flex flex-col gap-4 rounded-md border border-border bg-card p-3" @submit.prevent="onSubmit">
         <label class="field-select-row">
-          <span>Paid by <span class="req">*</span></span>
+          <span>Paid by <span class="text-[var(--destructive)]">*</span></span>
           <select v-model="form.fromUserId" required class="field-select">
             <option v-for="m in members" :key="m.user_id" :value="m.user_id">{{ m.display_name }}</option>
           </select>
         </label>
 
         <label class="field-select-row">
-          <span>Paid to <span class="req">*</span></span>
+          <span>Paid to <span class="text-[var(--destructive)]">*</span></span>
           <select v-model="form.toUserId" required class="field-select">
             <option value="">Pick a member…</option>
             <option v-for="m in members" :key="m.user_id" :value="m.user_id">{{ m.display_name }}</option>
@@ -130,20 +130,25 @@ watch(groupId, load);
           <span class="field-label">Note</span>
         </label>
 
-        <div class="actions">
+        <div class="flex items-center justify-end gap-2">
           <DatePicker v-model="form.settledAt" variant="compact" :week-start="weekStart" />
           <RouterLink :to="`/groups/${groupId}`" class="btn-secondary">Cancel</RouterLink>
           <button type="submit" class="btn-primary" :disabled="submitting">Record payment</button>
         </div>
       </form>
 
-      <section v-if="simplified.length > 0" class="suggest">
-        <h2 class="suggest-title">Suggested transfers</h2>
-        <p class="suggest-sub">Tap one to prefill the form above.</p>
-        <ul class="suggest-list">
+      <section v-if="simplified.length > 0" class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Suggested transfers</h2>
+        <p class="mb-3 text-xs text-muted-foreground">Tap one to prefill the form above.</p>
+        <ul class="flex list-none flex-col gap-2 text-sm">
           <li v-for="(d, i) in simplified" :key="i">
-            <button type="button" class="suggest-row" title="Use this transfer in the form above" @click="applySuggestion(d)">
-              <span class="suggest-who">
+            <button
+              type="button"
+              class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-[var(--hover-surface)]"
+              title="Use this transfer in the form above"
+              @click="applySuggestion(d)"
+            >
+              <span class="flex min-w-0 items-center gap-2">
                 <MemberAvatar
                   :user-id="d.from_user_id"
                   :display-name="nameByID.get(d.from_user_id) ?? '?'"
@@ -151,8 +156,8 @@ watch(groupId, load);
                   :avatar-updated-at="memberByID.get(d.from_user_id)?.avatar_updated_at"
                   :size="18"
                 />
-                <span class="trunc">{{ nameByID.get(d.from_user_id) }}</span>
-                <Icon name="arrow-right" :size="12" class="muted" />
+                <span class="truncate">{{ nameByID.get(d.from_user_id) }}</span>
+                <Icon name="arrow-right" :size="12" class="text-muted-foreground" />
                 <MemberAvatar
                   :user-id="d.to_user_id"
                   :display-name="nameByID.get(d.to_user_id) ?? '?'"
@@ -160,9 +165,9 @@ watch(groupId, load);
                   :avatar-updated-at="memberByID.get(d.to_user_id)?.avatar_updated_at"
                   :size="18"
                 />
-                <span class="trunc">{{ nameByID.get(d.to_user_id) }}</span>
+                <span class="truncate">{{ nameByID.get(d.to_user_id) }}</span>
               </span>
-              <span class="suggest-amount">{{ formatMoney(d.amount_cents, currency) }}</span>
+              <span class="flex-shrink-0 [font-family:var(--font-mono)]">{{ formatMoney(d.amount_cents, currency) }}</span>
             </button>
           </li>
         </ul>
@@ -170,114 +175,3 @@ watch(groupId, load);
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.wrap {
-  margin-inline: auto;
-  display: flex;
-  max-width: 36rem;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.lead {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.note {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.link {
-  text-decoration: underline;
-}
-.req {
-  color: var(--destructive);
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-.suggest {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.suggest-title {
-  margin-bottom: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.suggest-sub {
-  margin-bottom: 0.75rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.suggest-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  list-style: none;
-}
-.suggest-row {
-  display: flex;
-  width: 100%;
-  cursor: pointer;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  padding: 0.375rem 0.5rem;
-  text-align: left;
-  transition: background-color 120ms ease;
-}
-.suggest-row:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .suggest-row:hover,
-:root[data-theme="high-contrast"] .suggest-row:hover {
-  background: var(--accent);
-}
-.suggest-who {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-.trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.suggest-amount {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-}
-</style>

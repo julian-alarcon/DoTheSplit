@@ -44,12 +44,15 @@ async function onSubmit() {
 
 <template>
   <AppLayout>
-    <div class="wrap">
-      <h1 class="title">New group</h1>
-      <Alert v-if="error" tone="error" class="mb">
+    <div class="mx-auto max-w-md">
+      <h1 class="mb-6 text-2xl font-semibold">New group</h1>
+      <Alert v-if="error" tone="error" class="mb-4">
         Could not create the group. Please try again.
       </Alert>
-      <form class="form" @submit.prevent="onSubmit">
+      <form
+        class="flex flex-col gap-3 rounded-md border border-border bg-card p-3"
+        @submit.prevent="onSubmit"
+      >
         <Field
           v-model="name"
           label="Group name"
@@ -63,7 +66,7 @@ async function onSubmit() {
           <span>Default currency</span>
           <CurrencySelect v-model="currency" />
         </label>
-        <p class="hint">
+        <p class="-mt-1 text-xs text-muted-foreground">
           Each group uses a single currency. DoTheSplit does not support
           multi-currency groups; use separate groups if you need to track
           expenses in different currencies.
@@ -78,48 +81,19 @@ async function onSubmit() {
           ></textarea>
           <span class="field-label">Add members (optional)</span>
         </label>
-        <p class="hint">
+        <p class="-mt-1 text-xs text-muted-foreground">
           One email per line. Only registered users can be added: others are
           skipped and you can retry from group settings.
         </p>
 
-        <button type="submit" class="btn-primary submit" :disabled="submitting">
+        <button
+          type="submit"
+          class="btn-primary mt-2 self-end"
+          :disabled="submitting"
+        >
           Create group
         </button>
       </form>
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.wrap {
-  margin-inline: auto;
-  max-width: 28rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
-}
-.mb {
-  margin-bottom: 1rem;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.hint {
-  margin-top: -0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.submit {
-  margin-top: 0.5rem;
-  align-self: flex-end;
-}
-</style>

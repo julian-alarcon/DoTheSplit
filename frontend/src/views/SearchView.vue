@@ -224,7 +224,7 @@ onMounted(async () => {
       </div>
 
       <details :open="filtersOpen" class="filters">
-        <summary class="filter-toggle">
+        <summary class="filter-toggle btn-secondary btn-xs">
           <Icon name="filter" :size="12" />
           <span>Filter</span>
         </summary>
@@ -432,18 +432,10 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.75rem;
 }
+/* btn-secondary btn-sm supplies the look; only the <summary> marker resets
+   and fit-content width are specific to this disclosure trigger. */
 .filter-toggle {
-  display: inline-flex;
   width: fit-content;
-  cursor: pointer;
-  align-items: center;
-  gap: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
   list-style: none;
 }
 .filter-toggle::-webkit-details-marker {
@@ -471,12 +463,15 @@ onMounted(async () => {
   border-radius: 9999px;
   border: 1px solid var(--border);
   background: var(--card);
+  color: var(--card-foreground);
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 500;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .chip:hover {
-  background: var(--muted);
+  background: var(--hover-surface);
+  color: var(--hover-foreground, var(--card-foreground));
 }
 .chip-val {
   max-width: 10rem;
@@ -534,14 +529,23 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
 }
 .hit:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .hit:hover,
-:root[data-theme="high-contrast"] .hit:hover {
-  background: var(--accent);
+  background: var(--hover-surface);
 }
 .hit-settlement {
-  border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
+  border-color: oklch(90.5% 0.093 164.15); /* emerald-200 */
+  background: oklch(97.9% 0.021 166.113); /* emerald-50 */
+}
+.hit-settlement:hover {
+  background: oklch(95% 0.052 163.051); /* emerald-100 */
+}
+:root[data-theme="dark"] .hit-settlement,
+:root[data-theme="high-contrast"] .hit-settlement {
+  border-color: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  background: oklch(26.2% 0.051 172.552 / 0.4); /* emerald-950/40 */
+}
+:root[data-theme="dark"] .hit-settlement:hover,
+:root[data-theme="high-contrast"] .hit-settlement:hover {
+  background: oklch(26.2% 0.051 172.552 / 0.6); /* emerald-950/60 */
 }
 .hit-left {
   display: flex;
@@ -565,8 +569,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: color-mix(in oklch, var(--primary) 20%, var(--card));
-  color: var(--primary);
+  background: oklch(95% 0.052 163.051); /* emerald-100 */
+  color: oklch(50.8% 0.118 165.612); /* emerald-700 */
+}
+:root[data-theme="dark"] .settle-icon,
+:root[data-theme="high-contrast"] .settle-icon {
+  background: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  color: oklch(84.5% 0.143 164.978); /* emerald-300 */
 }
 .hit-month,
 .hit-year {
@@ -624,10 +633,18 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 .stake-lent {
-  color: var(--primary);
+  color: oklch(37.8% 0.077 168.94); /* emerald-900 */
+}
+:root[data-theme="dark"] .stake-lent,
+:root[data-theme="high-contrast"] .stake-lent {
+  color: oklch(90.5% 0.093 164.15); /* emerald-200 */
 }
 .stake-owes {
-  color: oklch(0.6 0.13 60);
+  color: oklch(55.5% 0.163 48.998); /* amber-700 */
+}
+:root[data-theme="dark"] .stake-owes,
+:root[data-theme="high-contrast"] .stake-owes {
+  color: oklch(92.4% 0.12 95.746); /* amber-200 */
 }
 .mono {
   font-family: var(--font-mono);

@@ -1,14 +1,51 @@
-/* Global stylesheet for the Vue SPA. Plain CSS, no Tailwind: the
-   neutral/red ramps are inlined as custom-property tokens so the semantic
-   theme tokens keep resolving. No CSS framework - see CLAUDE.md.
+/* Global stylesheet for the Vue SPA. Tailwind v4 supplies its color palette
+   (neutral, red, emerald, amber, ...) and utility classes; the bespoke
+   semantic tokens (--primary, --background, the --cat- tints) and the field
+   and button component classes are authored here as plain CSS on top.
+
+   Full Tailwind import. Preflight lands in @layer base; our hand-written reset
+   is in @layer reset, ordered AFTER base below so it wins any overlap. Using
+   the full import (not a split theme plus utilities import) because the split
+   drops @theme palette vars under the Vite plugin, leaving utilities like
+   text-emerald-700 pointing at an undefined --color-emerald-700.
 
    Layered so component-scoped SFC styles (which Vue injects unlayered, i.e.
-   at the highest precedence) can always override these shared base rules. */
-@layer reset, tokens, base, components;
+   at the highest precedence) can always override these shared base rules. The
+   utilities layer sits last so a Tailwind utility wins over a component class. */
+@layer theme, base, reset, tokens, components, utilities;
+@import "tailwindcss";
+
+/* dark: variant fires for both dark themes, matching the original Astro file. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));
+
+/* Map the bespoke semantic tokens into the Tailwind --color-* namespace so
+   utilities like bg-card / text-foreground / border-border resolve to the
+   active theme. The token values live in @layer tokens below; these are thin
+   aliases (the source vars have different names, so no circular reference). */
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
 
 /* Self-hosted Inter (SIL OFL, see assets/fonts/inter/OFL.txt) - keeps font
    bytes on our origin so the app never reaches fonts.gstatic.com, and stays
-   within the strict `font-src 'self'` CSP. Only 400/600 are shipped; 500
+   within the strict font-src self CSP. Only 400/600 are shipped; 500
    (font-medium) is synthesised by the browser from 400. */
 @font-face {
   font-family: "Inter";
@@ -112,8 +149,13 @@
     --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
       "Liberation Mono", monospace;
 
-    /* Tailwind v4 default neutral ramp (true grey). The dark theme remaps
-       these to a blue-tinted scale; high-contrast inherits these defaults. */
+    /* Neutral/red ramp pinned here, not inherited from the Tailwind @theme.
+       Tailwind v4 tree-shakes @theme palette vars: it only emits --color-*
+       that a generated utility uses, NOT ones referenced via var() in our own
+       CSS (token defs, the asterisk red, the high-contrast theme). So these
+       must be defined explicitly. Values match the Tailwind v4 true-grey ramp.
+       The dark theme remaps the neutrals to a blue-tinted scale below;
+       high-contrast inherits these defaults. */
     --color-neutral-50: oklch(98.5% 0 0);
     --color-neutral-100: oklch(97% 0 0);
     --color-neutral-200: oklch(92.2% 0 0);
@@ -157,6 +199,23 @@
        near-black bodies, clearing WCAG 1.4.11 (3:1 for non-text UI). */
     --field-color: var(--color-neutral-500);
     --field-focus: var(--foreground);
+
+    /* Interaction-surface tokens. These collapse what used to be duplicated
+       :root[data-theme="dark/high-contrast"] .foo overrides into one token per
+       theme. In light mode the hover surface is --muted and the foreground is
+       left unset (so each component falls back to its own resting color); the
+       dark themes redefine both below. --track-* drive the toggle/segmented
+       control; --select-chevron is the inlined <select> arrow per theme. */
+    --hover-surface: var(--muted);
+    /* --hover-foreground intentionally unset in light; see var() fallbacks. */
+    /* Secondary prose (subhead/muted/hint). Darker than --muted-foreground in
+       light, lighter in dark, matching the original neutral-600/neutral-400
+       descriptive text. Kept separate so --muted-foreground (field labels,
+       placeholders) is not dragged along. */
+    --subtle-foreground: var(--color-neutral-600);
+    --track-bg: var(--muted);
+    --track-thumb: var(--card);
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23404040' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
 
     /* Per-category-group icon tints. OKLCH gives perceptually-uniform
        brightness across hues so no group looks louder than another. */
@@ -215,6 +274,17 @@
      for legibility on the dark panels. Applies to both dark variants. */
   :root[data-theme="dark"],
   :root[data-theme="high-contrast"] {
+    /* In dark themes --muted == --card, so hover surfaces lift to --accent and
+       gain --accent-foreground (light mode keeps each element resting fg via
+       var() fallback). The toggle track uses --secondary with a muted thumb,
+       and the <select> chevron flips to a light-grey glyph. */
+    --hover-surface: var(--accent);
+    --hover-foreground: var(--accent-foreground);
+    --subtle-foreground: var(--color-neutral-400);
+    --track-bg: var(--secondary);
+    --track-thumb: var(--muted-foreground);
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23d4d4d4' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
+
     --cat-entertainment: oklch(75% 0.16 295);
     --cat-food-drink: oklch(75% 0.13 30);
     --cat-home: oklch(72% 0.12 145);
@@ -270,7 +340,7 @@
     font-family: var(--font-mono);
   }
 
-  /* Visually-hidden but accessible label/input (was Tailwind's sr-only). */
+  /* Visually-hidden but accessible label/input (was the Tailwind sr-only). */
   .sr-only {
     position: absolute;
     width: 1px;
@@ -328,7 +398,7 @@
 /* ------------------------------------------------------------ components -- */
 @layer components {
   /* Per-slug rotation override for the category icon SVG. The `other` slug
-     reuses FA's meteor glyph rotated 270 deg so it points down-left. */
+     reuses the FA meteor glyph rotated 270 deg so it points down-left. */
   svg[data-icon-slug="other"] {
     transform: rotate(270deg);
     transform-box: fill-box;
@@ -424,8 +494,8 @@
   }
 
   /* User-driven validation feedback. :user-invalid only matches after the
-     user interacts (blur or submit), so first paint isn't all red. This is
-     the only visible cue on Firefox for Android, which doesn't render the
+     user interacts (blur or submit), so first paint is not all red. This is
+     the only visible cue on Firefox for Android, which does not render the
      native constraint-validation tooltip. */
   .field:has(.field-input:user-invalid) {
     box-shadow:
@@ -507,6 +577,33 @@
     margin: 0;
   }
 
+  /* File input whose native Browse button mirrors .btn-secondary. The button
+     is a pseudo-element, so it cannot be styled with utilities - this is the
+     shared home for the avatar/CSV upload controls. */
+  .field-file {
+    display: block;
+    width: 100%;
+    font-size: 0.875rem;
+  }
+  .field-file::file-selector-button {
+    margin-right: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--card);
+    color: var(--card-foreground);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+  .field-file::file-selector-button:hover {
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--card-foreground));
+  }
+
   /* Bordered <select>: full rounded border, panel-matching background, no
      floating label. Pair with a sibling label via .field-select-row. */
   .field-select-row {
@@ -525,15 +622,11 @@
     /* Strip the OS chevron on the closed control; the open popup stays
        native (no spec-compliant way to style it on Android). */
     appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23404040' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
+    background-image: var(--select-chevron);
     background-repeat: no-repeat;
     background-position: right 0.625rem center;
     background-size: 0.875rem 0.875rem;
     padding-right: 2rem;
-  }
-  :root[data-theme="dark"] .field-select,
-  :root[data-theme="high-contrast"] .field-select {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23d4d4d4' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
   }
   .field-select:user-invalid {
     border-color: var(--color-red-600);
@@ -566,11 +659,7 @@
     border: 1px solid var(--border);
   }
   .field-category-trigger:hover {
-    background: var(--muted);
-  }
-  :root[data-theme="dark"] .field-category-trigger:hover,
-  :root[data-theme="high-contrast"] .field-category-trigger:hover {
-    background: var(--accent);
+    background: var(--hover-surface);
   }
   .field-category-trigger:focus-visible {
     outline: 2px solid var(--ring);
@@ -592,14 +681,8 @@
   }
   .field-category-option:hover,
   .field-category-option:focus-visible {
-    background: var(--muted);
+    background: var(--hover-surface);
     outline: none;
-  }
-  :root[data-theme="dark"] .field-category-option:hover,
-  :root[data-theme="dark"] .field-category-option:focus-visible,
-  :root[data-theme="high-contrast"] .field-category-option:hover,
-  :root[data-theme="high-contrast"] .field-category-option:focus-visible {
-    background: var(--accent);
   }
 
   /* Sticky section header inside the category list. */
@@ -669,13 +752,8 @@
     border: 1px solid var(--border);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: var(--muted);
-  }
-  /* In dark themes --muted == --card, so lift hover to --accent. */
-  :root[data-theme="dark"] .btn-secondary:hover:not(:disabled),
-  :root[data-theme="high-contrast"] .btn-secondary:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--card-foreground));
   }
 
   .btn-danger {
@@ -701,6 +779,11 @@
     font-size: 0.875rem;
   }
 
+  .btn-xs {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
   /* Square icon-only button (36x36). */
   .btn-icon {
     display: inline-flex;
@@ -720,12 +803,8 @@
     outline-offset: 2px;
   }
   .btn-icon:hover:not(:disabled) {
-    background: var(--muted);
-  }
-  :root[data-theme="dark"] .btn-icon:hover:not(:disabled),
-  :root[data-theme="high-contrast"] .btn-icon:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--muted-foreground));
   }
 
   /* Switch: a styled native checkbox rendered as a horizontal toggle. The
@@ -758,7 +837,7 @@
     flex-shrink: 0;
     border-radius: 9999px;
     transition: background-color 120ms ease;
-    background: var(--muted);
+    background: var(--track-bg);
     border: 1px solid var(--border);
   }
   .toggle-track::after {
@@ -772,15 +851,7 @@
     border-radius: 9999px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transition: transform 120ms ease;
-    background: var(--card);
-  }
-  :root[data-theme="dark"] .toggle-track,
-  :root[data-theme="high-contrast"] .toggle-track {
-    background: var(--secondary);
-  }
-  :root[data-theme="dark"] .toggle-track::after,
-  :root[data-theme="high-contrast"] .toggle-track::after {
-    background: var(--muted-foreground);
+    background: var(--track-thumb);
   }
   .toggle-input:checked + .toggle-track {
     background: var(--primary);
@@ -805,12 +876,8 @@
     align-items: center;
     border-radius: 9999px;
     padding: 0.125rem;
-    background: var(--muted);
+    background: var(--track-bg);
     border: 1px solid var(--border);
-  }
-  :root[data-theme="dark"] .theme-seg,
-  :root[data-theme="high-contrast"] .theme-seg {
-    background: var(--secondary);
   }
   .theme-seg-opt {
     cursor: pointer;
@@ -921,14 +988,8 @@
   }
   .user-menu-item:hover,
   .user-menu-item:focus-visible {
-    background: var(--muted);
-  }
-  :root[data-theme="dark"] .user-menu-item:hover,
-  :root[data-theme="dark"] .user-menu-item:focus-visible,
-  :root[data-theme="high-contrast"] .user-menu-item:hover,
-  :root[data-theme="high-contrast"] .user-menu-item:focus-visible {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: var(--hover-surface);
+    color: var(--hover-foreground, inherit);
   }
 
   /* Icon-only header button (32px) - lines up with the user-menu trigger. */

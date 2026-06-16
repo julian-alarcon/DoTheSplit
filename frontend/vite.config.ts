@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import tailwindcss from "@tailwindcss/vite";
 
 // CSR SPA. Production output is static files in dist/, embedded into the Go
 // binary (see api/internal/webui). In dev, /v1 and /healthz are proxied to the
@@ -12,7 +13,7 @@ const buildCommit = process.env.BUILD_COMMIT ?? "dev";
 const buildVersion = process.env.BUILD_VERSION ?? "dev";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
   define: {
     "import.meta.env.VITE_BUILD_COMMIT": JSON.stringify(buildCommit),
     "import.meta.env.VITE_BUILD_VERSION": JSON.stringify(buildVersion),

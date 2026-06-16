@@ -146,16 +146,16 @@ function fmtDate(s: string) {
 
 <template>
   <div>
-    <section v-if="phase === 'pick'" class="panel">
+    <section v-if="phase === 'pick'" class="rounded-md border border-border bg-card p-3">
       <label class="field">
-        <input type="file" accept=".csv,text/csv" required class="field-input file" @change="onPick" />
+        <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="err" role="alert">{{ pickError }}</p>
-      <p v-if="busy" class="muted">Parsing…</p>
+      <p v-if="pickError" class="mt-2 text-sm text-[var(--destructive)]" role="alert">{{ pickError }}</p>
+      <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 
-    <section v-else-if="preview" class="review">
+    <section v-else-if="preview" class="flex flex-col gap-4">
       <label class="field">
         <input v-model="groupName" required maxlength="80" class="field-input" placeholder=" " />
         <span class="field-label" data-required>Group name</span>
@@ -169,85 +169,85 @@ function fmtDate(s: string) {
       <p v-if="mixedCurrencies" class="warn">
         This CSV mixes multiple currencies. DoTheSplit groups use a single currency; amounts are kept
         as-is but stored under the chosen one. Detected:
-        <span class="mono">{{ preview.csv_currencies.join(", ") }}</span>.
+        <span class="[font-family:var(--font-mono)]">{{ preview.csv_currencies.join(", ") }}</span>.
       </p>
 
-      <fieldset class="members">
-        <legend class="members-legend">Members</legend>
-        <p class="muted small">
+      <fieldset class="flex flex-col gap-3 rounded-md border border-border p-3">
+        <legend class="px-1 text-sm font-medium">Members</legend>
+        <p class="text-xs text-muted-foreground">
           Map each CSV name to the email of a registered DoTheSplit user. Unknown emails work too:
           expenses are kept against a placeholder account the real owner can claim later.
         </p>
-        <div v-for="name in memberNames" :key="name" class="member-row">
-          <span class="member-name">{{ name }}</span>
+        <div v-for="name in memberNames" :key="name" class="flex items-center gap-2">
+          <span class="w-32 flex-shrink-0 truncate text-sm">{{ name }}</span>
           <input
             v-model="memberEmails[name]"
             type="email"
-            class="field-input member-email"
+            class="field-input flex-1 rounded-md border border-border bg-card"
             placeholder="email@example.com"
             @blur="refreshPreview"
           />
         </div>
       </fieldset>
 
-      <div class="box">
-        <div class="box-head"><span class="strong">Balances preview</span></div>
-        <ul class="bal-list">
-          <li v-for="name in memberNames" :key="name" class="bal-row">
-            <span class="trunc">{{ name }}</span>
-            <span class="mono" :class="(balanceByName.get(name) ?? 0) >= 0 ? 'pos' : 'neg'">
+      <div class="rounded-md border border-border p-3 text-sm">
+        <div class="mb-2 flex items-center justify-between"><span class="font-medium">Balances preview</span></div>
+        <ul class="flex list-none flex-col gap-1">
+          <li v-for="name in memberNames" :key="name" class="flex items-center justify-between gap-2">
+            <span class="truncate">{{ name }}</span>
+            <span class="[font-family:var(--font-mono)]" :class="(balanceByName.get(name) ?? 0) >= 0 ? 'text-[var(--primary)]' : 'text-[var(--destructive)]'">
               {{ formatMoney(balanceByName.get(name) ?? 0, defaultCurrency) }}
             </span>
           </li>
         </ul>
       </div>
 
-      <div class="box">
-        <div class="box-head">
-          <span class="strong">Expenses preview</span>
-          <span class="muted small">
+      <div class="rounded-md border border-border p-3 text-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-medium">Expenses preview</span>
+          <span class="text-xs text-muted-foreground">
             {{ preview.expense_count }} expense{{ preview.expense_count === 1 ? "" : "s" }}
             <template v-if="preview.skipped_count > 0"> · {{ preview.skipped_count }} skipped</template>
           </span>
         </div>
-        <ul class="rows">
-          <li v-for="(r, i) in preview.preview" :key="i" class="prow">
-            <div class="prow-main">
-              <span class="prow-desc">{{ r.description }}</span>
-              <span class="prow-meta">{{ fmtDate(r.incurred_at) }} · {{ r.payer_csv_name }} · {{ r.category_slug }}</span>
+        <ul class="flex list-none flex-col gap-2">
+          <li v-for="(r, i) in preview.preview" :key="i" class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+            <div class="flex min-w-0 flex-col">
+              <span class="truncate font-medium">{{ r.description }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ fmtDate(r.incurred_at) }} · {{ r.payer_csv_name }} · {{ r.category_slug }}</span>
             </div>
-            <span class="prow-amt">{{ formatMoney(r.amount_cents, r.currency) }}</span>
+            <span class="flex-shrink-0 [font-family:var(--font-mono)]">{{ formatMoney(r.amount_cents, r.currency) }}</span>
           </li>
         </ul>
-        <p v-if="preview.expense_count > preview.preview.length" class="muted small mt">
+        <p v-if="preview.expense_count > preview.preview.length" class="mt-2 text-xs text-muted-foreground">
           …and {{ preview.expense_count - preview.preview.length }} more.
         </p>
       </div>
 
-      <div v-if="preview.settlement_count > 0" class="box">
-        <div class="box-head">
-          <span class="strong">Settlements preview</span>
-          <span class="muted small">{{ preview.settlement_count }}</span>
+      <div v-if="preview.settlement_count > 0" class="rounded-md border border-border p-3 text-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-medium">Settlements preview</span>
+          <span class="text-xs text-muted-foreground">{{ preview.settlement_count }}</span>
         </div>
-        <ul class="rows">
-          <li v-for="(s, i) in preview.settlement_preview" :key="i" class="prow">
-            <div class="prow-main">
-              <span class="prow-desc">{{ s.from_csv_name }} → {{ s.to_csv_name }}</span>
-              <span class="prow-meta">{{ fmtDate(s.settled_at) }}<template v-if="s.note"> · {{ s.note }}</template></span>
+        <ul class="flex list-none flex-col gap-2">
+          <li v-for="(s, i) in preview.settlement_preview" :key="i" class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+            <div class="flex min-w-0 flex-col">
+              <span class="truncate font-medium">{{ s.from_csv_name }} → {{ s.to_csv_name }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ fmtDate(s.settled_at) }}<template v-if="s.note"> · {{ s.note }}</template></span>
             </div>
-            <span class="prow-amt">{{ formatMoney(s.amount_cents, s.currency) }}</span>
+            <span class="flex-shrink-0 [font-family:var(--font-mono)]">{{ formatMoney(s.amount_cents, s.currency) }}</span>
           </li>
         </ul>
       </div>
 
-      <details v-if="preview.skipped_count > 0" class="box">
-        <summary class="strong">Skipped rows <span class="muted small">({{ preview.skipped_count }})</span></summary>
-        <pre class="skipped">{{ preview.skipped.join("\n") }}</pre>
+      <details v-if="preview.skipped_count > 0" class="rounded-md border border-border p-3 text-sm">
+        <summary class="font-medium">Skipped rows <span class="text-xs text-muted-foreground">({{ preview.skipped_count }})</span></summary>
+        <pre class="mt-2 max-h-64 overflow-auto rounded-sm bg-muted p-2 text-xs leading-normal [font-family:var(--font-mono)]">{{ preview.skipped.join("\n") }}</pre>
       </details>
 
-      <p v-if="importError" class="err" role="alert">{{ importError }}</p>
+      <p v-if="importError" class="text-sm text-[var(--destructive)]" role="alert">{{ importError }}</p>
 
-      <div class="actions">
+      <div class="flex items-center justify-between gap-3">
         <button type="button" class="btn-secondary btn-sm" @click="back">Pick another file</button>
         <button type="button" class="btn-primary" :disabled="busy" @click="onImport">Import</button>
       </div>
@@ -256,173 +256,11 @@ function fmtDate(s: string) {
 </template>
 
 <style scoped>
-.panel {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.file::file-selector-button {
-  margin-right: 0.75rem;
-  border: 0;
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-.err {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--destructive);
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.small {
-  font-size: 0.75rem;
-}
-.mt {
-  margin-top: 0.5rem;
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.strong {
-  font-weight: 500;
-}
-.review {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
 .warn {
   border-radius: 0.375rem;
   border: 1px solid color-mix(in oklch, oklch(0.7 0.15 80) 50%, var(--border));
   background: color-mix(in oklch, oklch(0.7 0.15 80) 12%, var(--card));
   padding: 0.75rem;
   font-size: 0.875rem;
-}
-.members {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  padding: 0.75rem;
-}
-.members-legend {
-  padding: 0 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.member-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.member-name {
-  width: 8rem;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.875rem;
-}
-.member-email {
-  flex: 1;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-}
-.box {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  padding: 0.75rem;
-  font-size: 0.875rem;
-}
-.box-head {
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.bal-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  list-style: none;
-}
-.bal-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pos {
-  color: var(--primary);
-}
-.neg {
-  color: var(--destructive);
-}
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  list-style: none;
-}
-.prow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.5rem 0.75rem;
-}
-.prow-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-.prow-desc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.prow-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.prow-amt {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-}
-.skipped {
-  margin-top: 0.5rem;
-  max-height: 16rem;
-  overflow: auto;
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
 }
 </style>

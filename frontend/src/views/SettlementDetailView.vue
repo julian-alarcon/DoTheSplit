@@ -221,8 +221,8 @@ onMounted(async () => {
       </ul>
     </section>
 
-    <section v-if="canEdit" class="panel danger">
-      <h2 class="danger-title">Danger zone</h2>
+    <section v-if="canEdit" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
       <p class="muted mb">Soft-deletes this settlement. Balances will revert to the state before this payment was recorded.</p>
       <div class="right">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
@@ -344,7 +344,7 @@ onMounted(async () => {
   gap: 0.375rem;
 }
 .muted {
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .small {
   font-size: 0.75rem;
@@ -390,21 +390,12 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
-.danger {
-  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
-}
-.danger-title,
 .restore-title {
   margin-bottom: 0.5rem;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-.danger-title {
-  color: var(--destructive);
-}
-.restore-title {
   color: var(--muted-foreground);
 }
 .right {

@@ -376,8 +376,8 @@ onMounted(async () => {
     </section>
 
     <!-- Danger / Restore -->
-    <section v-if="canEdit" class="panel danger">
-      <h2 class="danger-title">Danger zone</h2>
+    <section v-if="canEdit" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
       <p class="muted mb">Soft-deletes this expense. It will stop affecting balances, but the edit history is kept.</p>
       <div class="right">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
@@ -517,7 +517,7 @@ onMounted(async () => {
 .hint,
 .muted {
   font-size: 0.75rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .muted {
   font-size: 0.875rem;
@@ -597,17 +597,6 @@ onMounted(async () => {
   gap: 0.375rem;
   font-size: 0.75rem;
   color: var(--muted-foreground);
-}
-.danger {
-  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
-}
-.danger-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--destructive);
 }
 .restore-title {
   margin-bottom: 0.5rem;

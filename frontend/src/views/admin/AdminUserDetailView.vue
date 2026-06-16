@@ -93,62 +93,62 @@ onMounted(load);
 
 <template>
   <AppLayout v-if="target" :back="{ to: '/admin/users', label: 'Users' }">
-    <header class="hero">
+    <header class="mb-6 flex items-center gap-4">
       <MemberAvatar :user-id="target.id" :display-name="target.display_name" :has-avatar="target.has_avatar" :size="48" />
-      <div class="hero-text">
-        <h1 class="name">{{ target.display_name }}</h1>
-        <p class="email">{{ target.email ?? "(email scrubbed)" }}</p>
+      <div class="min-w-0">
+        <h1 class="truncate text-2xl font-semibold">{{ target.display_name }}</h1>
+        <p class="truncate text-sm text-muted-foreground">{{ target.email ?? "(email scrubbed)" }}</p>
       </div>
     </header>
 
-    <Alert v-if="okMsg" tone="success" class="banner">{{ okMsg }}</Alert>
-    <Alert v-if="errMsg" tone="error" class="banner">{{ errMsg }}</Alert>
+    <Alert v-if="okMsg" tone="success" class="mb-4">{{ okMsg }}</Alert>
+    <Alert v-if="errMsg" tone="error" class="mb-4">{{ errMsg }}</Alert>
 
-    <div class="stack">
-      <section class="panel">
-        <h2 class="panel-title">Profile</h2>
-        <dl class="profile">
-          <dt class="muted">Role</dt>
-          <dd><span class="role-badge">{{ targetRole }}</span></dd>
-          <dt class="muted">Created</dt>
+    <div class="flex flex-col gap-4">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-2 font-medium">Profile</h2>
+        <dl class="grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
+          <dt class="text-muted-foreground">Role</dt>
+          <dd><span class="rounded-sm bg-muted px-1.5 py-px">{{ targetRole }}</span></dd>
+          <dt class="text-muted-foreground">Created</dt>
           <dd>{{ fmtDate(target.created_at) }}</dd>
           <template v-if="isDeleted">
-            <dt class="muted">Deleted</dt>
-            <dd class="deleted">{{ fmtDate(target.deleted_at) }}</dd>
+            <dt class="text-muted-foreground">Deleted</dt>
+            <dd class="text-[var(--destructive)]">{{ fmtDate(target.deleted_at) }}</dd>
           </template>
         </dl>
-        <p v-if="isSelf" class="hint mt">
+        <p v-if="isSelf" class="mt-3 text-xs text-muted-foreground">
           This is your own account. Role and delete actions are disabled here; use the account page or another admin.
         </p>
       </section>
 
       <template v-if="actionable">
-        <section class="panel">
-          <h2 class="panel-title">Role</h2>
-          <p class="muted mb">
+        <section class="rounded-md border border-border bg-card p-3">
+          <h2 class="mb-2 font-medium">Role</h2>
+          <p class="mb-3 text-sm text-muted-foreground">
             {{ targetRole === "admin"
               ? "Demoting removes access to the admin surface. The last remaining admin cannot be demoted."
               : "Promoting gives this user full admin powers across the instance." }}
           </p>
-          <div class="right">
+          <div class="flex justify-end">
             <button type="button" :class="targetRole === 'admin' ? 'btn-secondary' : 'btn-primary'" @click="roleOpen = true">
               {{ promoteLabel }}
             </button>
           </div>
         </section>
 
-        <section class="panel">
-          <h2 class="panel-title">Reset password</h2>
-          <p class="muted mb">Revokes every active session and emails the user a 6-digit code so they can set a new password themselves.</p>
-          <div class="right">
+        <section class="rounded-md border border-border bg-card p-3">
+          <h2 class="mb-2 font-medium">Reset password</h2>
+          <p class="mb-3 text-sm text-muted-foreground">Revokes every active session and emails the user a 6-digit code so they can set a new password themselves.</p>
+          <div class="flex justify-end">
             <button type="button" class="btn-secondary" @click="resetOpen = true">Reset password</button>
           </div>
         </section>
 
-        <section class="panel danger">
-          <h2 class="danger-title">Danger zone</h2>
-          <p class="muted mb">Soft-deletes the account. Email and password are scrubbed and the display name becomes a tombstone so historical ledger entries stay traceable.</p>
-          <div class="right">
+        <section class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+          <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
+          <p class="mb-3 text-sm text-[var(--subtle-foreground)]">Soft-deletes the account. Email and password are scrubbed and the display name becomes a tombstone so historical ledger entries stay traceable.</p>
+          <div class="flex justify-end">
             <button type="button" class="btn-danger" @click="deleteOpen = true">
               <Icon name="trash" /><span>Delete user</span>
             </button>
@@ -183,94 +183,3 @@ onMounted(load);
     />
   </AppLayout>
 </template>
-
-<style scoped>
-.hero {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.hero-text {
-  min-width: 0;
-}
-.name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.email {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.panel {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.panel-title {
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-.profile {
-  display: grid;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-@media (min-width: 640px) {
-  .profile {
-    grid-template-columns: 10rem minmax(0, 1fr);
-  }
-}
-.role-badge {
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.0625rem 0.375rem;
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.hint {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.mt {
-  margin-top: 0.75rem;
-}
-.mb {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-}
-.deleted {
-  color: var(--destructive);
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-.danger {
-  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
-}
-.danger-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--destructive);
-}
-</style>

@@ -96,192 +96,68 @@ onMounted(async () => {
 
 <template>
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}/settings`, label: 'Settings' }">
-    <h1 class="title">Import expenses</h1>
-    <p class="lead">
-      Append expenses to <span class="strong">{{ group.name }}</span> from a DoTheSplit-shaped CSV.
-      Splits will use this group's rule: <span class="strong">{{ splitMode }}</span>.
+    <h1 class="mb-2 text-2xl font-semibold">Import expenses</h1>
+    <p class="mb-3 text-sm text-muted-foreground">
+      Append expenses to <span class="font-medium text-foreground">{{ group.name }}</span> from a DoTheSplit-shaped CSV.
+      Splits will use this group's rule: <span class="font-medium text-foreground">{{ splitMode }}</span>.
     </p>
-    <p class="lead">
+    <p class="mb-3 text-sm text-muted-foreground">
       Required per row: <code>Date</code>, <code>Description</code>, <code>Cost</code>. Empty cells
       fall back to the group currency ({{ group.default_currency }}), the importer as payer, and the
       <code>other</code> category. The optional <code>Payer</code> column matches a member's display
       name; an unknown name causes the row to be skipped.
     </p>
 
-    <Alert v-if="importError" tone="error" class="banner">{{ importError }}</Alert>
+    <Alert v-if="importError" tone="error" class="mb-4">{{ importError }}</Alert>
 
-    <section v-if="phase === 'pick'" class="panel">
+    <section v-if="phase === 'pick'" class="rounded-md border border-border bg-card p-3">
       <label class="field">
-        <input type="file" accept=".csv,text/csv" required class="field-input file" @change="onPick" />
+        <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="err" role="alert">{{ pickError }}</p>
-      <p v-if="busy" class="muted">Parsing…</p>
+      <p v-if="pickError" class="mt-2 text-sm text-[var(--destructive)]" role="alert">{{ pickError }}</p>
+      <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 
-    <section v-else-if="preview" class="review">
+    <section v-else-if="preview" class="flex flex-col gap-4">
       <Alert v-if="mixedCurrencies" tone="info">
         This CSV mixes multiple currencies. DoTheSplit groups are single-currency; imported amounts
         are stored under {{ group.default_currency }} regardless. Detected:
-        <span class="mono">{{ preview.csv_currencies.join(", ") }}</span>.
+        <span class="[font-family:var(--font-mono)]">{{ preview.csv_currencies.join(", ") }}</span>.
       </Alert>
 
-      <div class="box">
-        <div class="box-head">
-          <span class="strong">Expenses preview</span>
-          <span class="muted small">
+      <div class="rounded-md border border-border p-3 text-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-medium text-foreground">Expenses preview</span>
+          <span class="text-xs text-muted-foreground">
             {{ preview.expense_count }} expense{{ preview.expense_count === 1 ? "" : "s" }}
             <template v-if="preview.skipped_count > 0"> · {{ preview.skipped_count }} skipped</template>
           </span>
         </div>
-        <ul class="rows">
-          <li v-for="(r, i) in preview.preview" :key="i" class="prow">
-            <div class="prow-main">
-              <span class="prow-desc">{{ r.description }}</span>
-              <span class="prow-meta">{{ fmtDate(r.incurred_at) }} · {{ r.payer_display_name }} · {{ r.category_slug }}</span>
+        <ul class="flex list-none flex-col gap-2">
+          <li v-for="(r, i) in preview.preview" :key="i" class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+            <div class="flex min-w-0 flex-col">
+              <span class="truncate font-medium">{{ r.description }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ fmtDate(r.incurred_at) }} · {{ r.payer_display_name }} · {{ r.category_slug }}</span>
             </div>
-            <span class="prow-amt">{{ formatMoney(r.amount_cents, r.currency) }}</span>
+            <span class="flex-shrink-0 [font-family:var(--font-mono)]">{{ formatMoney(r.amount_cents, r.currency) }}</span>
           </li>
         </ul>
-        <p v-if="preview.expense_count > preview.preview.length" class="muted small mt">
+        <p v-if="preview.expense_count > preview.preview.length" class="mt-2 text-xs text-muted-foreground">
           …and {{ preview.expense_count - preview.preview.length }} more.
         </p>
       </div>
 
-      <details v-if="preview.skipped_count > 0" class="box">
-        <summary class="strong">Skipped rows <span class="muted small">({{ preview.skipped_count }})</span></summary>
-        <p class="muted small mt">Rows the importer dropped (bad date, missing cost, unknown payer name, etc.):</p>
-        <pre class="skipped">{{ preview.skipped.join("\n") }}</pre>
+      <details v-if="preview.skipped_count > 0" class="rounded-md border border-border p-3 text-sm">
+        <summary class="font-medium text-foreground">Skipped rows <span class="text-xs text-muted-foreground">({{ preview.skipped_count }})</span></summary>
+        <p class="mt-2 text-xs text-muted-foreground">Rows the importer dropped (bad date, missing cost, unknown payer name, etc.):</p>
+        <pre class="mt-2 max-h-64 overflow-auto rounded-sm bg-muted p-2 text-xs leading-normal [font-family:var(--font-mono)]">{{ preview.skipped.join("\n") }}</pre>
       </details>
 
-      <div class="actions">
+      <div class="flex items-center justify-between gap-3">
         <button type="button" class="btn-secondary btn-sm" @click="back">Pick another file</button>
         <button type="button" class="btn-primary" :disabled="busy" @click="onImport">Import</button>
       </div>
     </section>
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 0.5rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.lead {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.strong {
-  font-weight: 500;
-  color: var(--foreground);
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.panel {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.file::file-selector-button {
-  margin-right: 0.75rem;
-  border: 0;
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-.err {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--destructive);
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.small {
-  font-size: 0.75rem;
-}
-.mt {
-  margin-top: 0.5rem;
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.review {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.box {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  padding: 0.75rem;
-  font-size: 0.875rem;
-}
-.box-head {
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  list-style: none;
-}
-.prow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.5rem 0.75rem;
-}
-.prow-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-.prow-desc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.prow-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.prow-amt {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-}
-.skipped {
-  margin-top: 0.5rem;
-  max-height: 16rem;
-  overflow: auto;
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-</style>

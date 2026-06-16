@@ -227,21 +227,29 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.375rem;
   border-radius: 0.375rem;
-  border: 1px solid color-mix(in oklch, oklch(0.83 0.16 85) 60%, transparent);
-  background: oklch(0.97 0.04 95);
+  border: 1px solid oklch(82.8% 0.189 84.429 / 0.6); /* amber-400/60 */
+  background: oklch(98.7% 0.022 95.277); /* amber-50 */
   padding: 0.375rem 0.5rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: oklch(0.42 0.09 80);
+  color: oklch(41.4% 0.112 45.904); /* amber-900 */
 }
 .admin-link:hover {
-  background: oklch(0.94 0.06 95);
+  background: oklch(96.2% 0.059 95.617); /* amber-100 */
+}
+.admin-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px oklch(76.9% 0.188 70.08); /* ring-amber-500 */
 }
 :root[data-theme="dark"] .admin-link,
 :root[data-theme="high-contrast"] .admin-link {
-  border-color: color-mix(in oklch, oklch(0.77 0.16 85) 60%, transparent);
-  background: color-mix(in oklch, oklch(0.4 0.08 80) 40%, var(--card));
-  color: oklch(0.88 0.09 90);
+  border-color: oklch(76.9% 0.188 70.08 / 0.6); /* amber-500/60 */
+  background: oklch(27.9% 0.077 45.635 / 0.4); /* amber-950/40 */
+  color: oklch(92.4% 0.12 95.746); /* amber-200 */
+}
+:root[data-theme="dark"] .admin-link:hover,
+:root[data-theme="high-contrast"] .admin-link:hover {
+  background: oklch(41.4% 0.112 45.904 / 0.4); /* amber-900/40 */
 }
 .admin-label {
   display: none;

@@ -38,12 +38,15 @@ async function onSubmit() {
 
 <template>
   <AppLayout>
-    <section class="card">
-      <h1 class="title">Create account</h1>
-      <Alert v-if="error" tone="error" class="mb">
+    <section class="mx-auto max-w-96 py-6">
+      <h1 class="mb-6 text-2xl font-semibold">Create account</h1>
+      <Alert v-if="error" tone="error" class="mb-4">
         Could not register. The email may already be in use.
       </Alert>
-      <form class="form" @submit.prevent="onSubmit">
+      <form
+        class="flex flex-col gap-3 rounded-md border border-border bg-card p-3"
+        @submit.prevent="onSubmit"
+      >
         <Field
           v-model="displayName"
           label="Display name"
@@ -69,50 +72,17 @@ async function onSubmit() {
           autocomplete="new-password"
           error="Password must be at least 10 characters"
         />
-        <button type="submit" class="btn-primary submit" :disabled="submitting">
+        <button
+          type="submit"
+          class="btn-primary mt-2 self-end"
+          :disabled="submitting"
+        >
           Create account
         </button>
       </form>
-      <p class="foot">
-        Already have one? <RouterLink to="/login" class="link">Log in</RouterLink>.
+      <p class="mt-4 text-sm text-muted-foreground">
+        Already have one? <RouterLink to="/login" class="rounded-md underline text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500">Log in</RouterLink>.
       </p>
     </section>
   </AppLayout>
 </template>
-
-<style scoped>
-.card {
-  margin-inline: auto;
-  max-width: 24rem;
-  padding-block: 1.5rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
-}
-.mb {
-  margin-bottom: 1rem;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.submit {
-  margin-top: 0.5rem;
-  align-self: flex-end;
-}
-.foot {
-  margin-top: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.link {
-  text-decoration: underline;
-}
-</style>

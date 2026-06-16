@@ -46,40 +46,16 @@ onMounted(async () => {
 
 <template>
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}/settings`, label: 'Settings' }">
-    <h1 class="title">Export CSV</h1>
-    <p class="lead">
-      Download every expense and settlement in <span class="strong">{{ group.name }}</span> as a CSV file. The
+    <h1 class="mb-2 text-2xl font-semibold">Export CSV</h1>
+    <p class="mb-4 text-sm text-muted-foreground">
+      Download every expense and settlement in <span class="font-medium text-foreground">{{ group.name }}</span> as a CSV file. The
       format is a superset of Splitwise's export, so you can re-import it into either tool.
     </p>
-    <Alert v-if="error" tone="error" class="banner">Could not export the group. Try again.</Alert>
-    <div class="right">
+    <Alert v-if="error" tone="error" class="mb-4">Could not export the group. Try again.</Alert>
+    <div class="flex justify-end">
       <button type="button" class="btn-primary" :disabled="busy" @click="onExport">
         <Icon name="download" /><span>{{ busy ? "Preparing…" : "Export CSV" }}</span>
       </button>
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 0.5rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.lead {
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.strong {
-  font-weight: 500;
-  color: var(--foreground);
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

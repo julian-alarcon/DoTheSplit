@@ -47,20 +47,23 @@ async function onSubmit() {
 
 <template>
   <AppLayout>
-    <div class="wrap">
-      <h1 class="title">Welcome to DoTheSplit</h1>
-      <p class="lead">
+    <div class="mx-auto max-w-md">
+      <h1 class="mb-2 text-2xl font-semibold">Welcome to DoTheSplit</h1>
+      <p class="mb-4 text-sm text-muted-foreground">
         This is the one-time install ceremony. The first account created here is
         the instance admin. The setup token was printed to the API container log
         on every boot until now: grab it via
-        <code class="code">docker compose logs api</code>.
+        <code class="rounded-sm bg-muted px-1 py-0.5 font-mono">docker compose logs api</code>.
       </p>
 
-      <Alert v-if="errorCode" tone="error" class="mb">
+      <Alert v-if="errorCode" tone="error" class="mb-4">
         {{ errorMessages[errorCode] ?? "Could not complete setup." }}
       </Alert>
 
-      <form class="form" @submit.prevent="onSubmit">
+      <form
+        class="flex flex-col gap-3 rounded-md border border-border bg-card p-3"
+        @submit.prevent="onSubmit"
+      >
         <Field
           v-model="token"
           label="Setup token"
@@ -96,55 +99,15 @@ async function onSubmit() {
           autocomplete="new-password"
           error="Password must be at least 10 characters"
         />
-        <p class="minhint">Minimum 10 characters.</p>
-        <button type="submit" class="btn-primary submit" :disabled="submitting">
+        <p class="-mt-1 text-xs text-muted-foreground">Minimum 10 characters.</p>
+        <button
+          type="submit"
+          class="btn-primary mt-2 self-end"
+          :disabled="submitting"
+        >
           Create admin
         </button>
       </form>
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.wrap {
-  margin-inline: auto;
-  max-width: 28rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.lead {
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.code {
-  border-radius: 0.25rem;
-  background: var(--muted);
-  padding: 0.125rem 0.25rem;
-  font-family: var(--font-mono);
-}
-.mb {
-  margin-bottom: 1rem;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.minhint {
-  margin-top: -0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.submit {
-  margin-top: 0.5rem;
-  align-self: flex-end;
-}
-</style>

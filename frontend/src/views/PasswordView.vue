@@ -46,12 +46,15 @@ async function onRecover() {
 
 <template>
   <AppLayout :back="{ to: '/settings', label: 'Settings' }">
-    <div class="wrap">
-      <h1 class="title">Change your password or recover your current one.</h1>
+    <div class="mx-auto flex max-w-xl flex-col gap-3">
+      <h1 class="text-2xl font-semibold">Change your password or recover your current one.</h1>
 
       <Alert v-if="error" tone="error">{{ error }}</Alert>
 
-      <form class="form" @submit.prevent="onSubmit">
+      <form
+        class="flex flex-col gap-3 rounded-md border border-border bg-card p-3"
+        @submit.prevent="onSubmit"
+      >
         <Field
           v-model="oldPassword"
           label="Current password"
@@ -60,7 +63,7 @@ async function onRecover() {
           autocomplete="current-password"
           error="Required"
         />
-        <p class="hint">You must provide your current password in order to change it.</p>
+        <p class="-mt-1 text-xs text-muted-foreground">You must provide your current password in order to change it.</p>
         <Field
           v-model="newPassword"
           label="New password"
@@ -80,7 +83,7 @@ async function onRecover() {
           autocomplete="new-password"
           error="Both passwords must match"
         />
-        <div class="actions">
+        <div class="flex flex-wrap justify-end gap-2 pt-2">
           <button type="button" class="btn-secondary" @click="onRecover">Recover password by email</button>
           <button type="submit" class="btn-primary" :disabled="submitting">Save password</button>
         </div>
@@ -88,38 +91,3 @@ async function onRecover() {
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.wrap {
-  margin-inline: auto;
-  display: flex;
-  max-width: 36rem;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.hint {
-  margin-top: -0.25rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
-</style>

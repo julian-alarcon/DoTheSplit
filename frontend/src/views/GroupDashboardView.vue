@@ -335,7 +335,10 @@ watch(groupId, loadGroup);
       <section class="col-balances">
         <div class="bal-head">
           <div class="bal-list">
-            <p v-if="myDebts.length === 0" class="settled">
+            <p
+              v-if="myDebts.length === 0"
+              class="settled text-emerald-700 dark:text-emerald-400"
+            >
               <Icon :name="settledIcon" :size="16" />
               <span class="settled-msg">{{ settledMessage }}</span>
             </p>
@@ -375,7 +378,14 @@ watch(groupId, loadGroup);
                     }}</span>
                   </span>
                 </template>
-                <span class="amount" :class="d.theyOweMe ? 'pos' : 'neg'">
+                <span
+                  class="amount"
+                  :class="
+                    d.theyOweMe
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-red-700 dark:text-red-400'
+                  "
+                >
                   {{ formatMoney(d.amountCents, currency) }}
                 </span>
               </li>
@@ -383,7 +393,7 @@ watch(groupId, loadGroup);
           </div>
           <RouterLink
             :to="`/groups/${groupId}/settle`"
-            class="btn-secondary btn-sm settle-btn"
+            class="btn-secondary btn-xs shrink-0"
           >
             Settle up
           </RouterLink>
@@ -469,7 +479,7 @@ watch(groupId, loadGroup);
 
       <!-- Transactions -->
       <section class="col-transactions">
-        <RouterLink :to="`/groups/${groupId}/activity`" class="activity-link">
+        <RouterLink :to="`/groups/${groupId}/activity`" class="btn-secondary btn-xs activity-link">
           <Icon name="clock-rotate-left" :size="12" />
           <span>See activity</span>
         </RouterLink>
@@ -720,7 +730,10 @@ watch(groupId, loadGroup);
     </dialog>
   </AppLayout>
 
-  <AppLayout v-else-if="loaded && loadError" :back="{ to: '/groups', label: 'Groups' }">
+  <AppLayout
+    v-else-if="loaded && loadError"
+    :back="{ to: '/groups', label: 'Groups' }"
+  >
     <Alert tone="error">
       Couldn't load this group. Check your connection and try again.
     </Alert>
@@ -767,7 +780,7 @@ watch(groupId, loadGroup);
 .subhead {
   margin-bottom: 0.75rem;
   font-size: 0.875rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .banner {
   margin-bottom: 1rem;
@@ -821,11 +834,6 @@ watch(groupId, loadGroup);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: oklch(0.508 0.118 165.612);
-}
-:root[data-theme="dark"] .settled,
-:root[data-theme="high-contrast"] .settled {
-  color: oklch(0.765 0.177 163.223);
 }
 .settled-msg {
   font-weight: 500;
@@ -855,42 +863,25 @@ watch(groupId, loadGroup);
   white-space: nowrap;
 }
 .muted {
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .amount {
   font-family: var(--font-mono);
 }
-.amount.pos {
-  color: var(--primary);
-}
-.amount.neg {
-  color: var(--destructive);
-}
-.settle-btn {
-  flex-shrink: 0;
-}
 
 .col-transactions {
   position: relative;
+  /* Reserve a row for the corner-anchored See-activity link so the feed below
+     never sits under it. */
+  padding-top: 2.5rem;
 }
+/* btn-secondary btn-xs supplies the look; only the overlay positioning is
+   specific to this corner-anchored link. */
 .activity-link {
   position: absolute;
   right: 0;
-  top: -0.75rem;
+  top: 0;
   z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.activity-link:hover {
-  background: var(--muted);
 }
 .empty {
   font-size: 0.875rem;
@@ -924,18 +915,35 @@ watch(groupId, loadGroup);
   padding: 0.375rem 0.75rem;
 }
 .tx:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .tx:hover,
-:root[data-theme="high-contrast"] .tx:hover {
-  background: var(--accent);
+  background: var(--hover-surface);
 }
 .tx:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+/* Settlement rows get the emerald chip treatment (restored from Astro). */
 .tx-settlement {
-  border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
+  border-color: oklch(90.5% 0.093 164.15); /* emerald-200 */
+  background: oklch(97.9% 0.021 166.113); /* emerald-50 */
+}
+.tx-settlement:hover {
+  background: oklch(95% 0.052 163.051); /* emerald-100 */
+}
+.tx-settlement:focus-visible {
+  outline: 2px solid oklch(76.5% 0.177 163.223); /* emerald-400 */
+}
+:root[data-theme="dark"] .tx-settlement,
+:root[data-theme="high-contrast"] .tx-settlement {
+  border-color: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  background: oklch(26.2% 0.051 172.552 / 0.4); /* emerald-950/40 */
+}
+:root[data-theme="dark"] .tx-settlement:hover,
+:root[data-theme="high-contrast"] .tx-settlement:hover {
+  background: oklch(26.2% 0.051 172.552 / 0.6); /* emerald-950/60 */
+}
+:root[data-theme="dark"] .tx-settlement:focus-visible,
+:root[data-theme="high-contrast"] .tx-settlement:focus-visible {
+  outline-color: oklch(50.8% 0.118 165.612); /* emerald-700 */
 }
 .tx-left {
   display: flex;
@@ -959,8 +967,13 @@ watch(groupId, loadGroup);
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: color-mix(in oklch, var(--primary) 20%, var(--card));
-  color: var(--primary);
+  background: oklch(95% 0.052 163.051); /* emerald-100 */
+  color: oklch(50.8% 0.118 165.612); /* emerald-700 */
+}
+:root[data-theme="dark"] .settle-icon,
+:root[data-theme="high-contrast"] .settle-icon {
+  background: oklch(37.8% 0.077 168.94); /* emerald-900 */
+  color: oklch(84.5% 0.143 164.978); /* emerald-300 */
 }
 .tx-month {
   margin-top: 0.125rem;
@@ -1044,10 +1057,18 @@ watch(groupId, loadGroup);
   font-variant-numeric: tabular-nums;
 }
 .stake-lent {
-  color: var(--primary);
+  color: oklch(37.8% 0.077 168.94); /* emerald-900 */
+}
+:root[data-theme="dark"] .stake-lent,
+:root[data-theme="high-contrast"] .stake-lent {
+  color: oklch(90.5% 0.093 164.15); /* emerald-200 */
 }
 .stake-owes {
-  color: oklch(0.6 0.13 60);
+  color: oklch(55.5% 0.163 48.998); /* amber-700 */
+}
+:root[data-theme="dark"] .stake-owes,
+:root[data-theme="high-contrast"] .stake-owes {
+  color: oklch(92.4% 0.12 95.746); /* amber-200 */
 }
 .stake-amt {
   font-family: var(--font-mono);

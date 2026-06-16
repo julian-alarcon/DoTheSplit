@@ -28,30 +28,38 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <img src="/logo.svg" alt="" aria-hidden="true" class="watermark" />
-    <div class="head">
-      <h1 class="title">Your groups</h1>
-      <RouterLink to="/groups/new" class="btn-primary btn-sm new-btn">New group</RouterLink>
+    <img
+      src="/logo.svg"
+      alt=""
+      aria-hidden="true"
+      class="pointer-events-none fixed left-1/2 top-1/2 -z-10 w-[min(90vw,640px)] -translate-x-1/2 -translate-y-1/2 opacity-40 dark:opacity-35"
+    />
+    <div class="mb-4 flex items-center justify-between gap-3">
+      <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">Your groups</h1>
+      <RouterLink to="/groups/new" class="btn-primary btn-sm flex-shrink-0">New group</RouterLink>
     </div>
 
     <Alert v-if="loaded && loadError" tone="error">
       Couldn't load your groups. Check your connection and try again.
     </Alert>
 
-    <p v-else-if="loaded && groups.length === 0" class="empty">
-      No groups yet. <RouterLink to="/groups/new" class="link">Create one</RouterLink>.
+    <p v-else-if="loaded && groups.length === 0" class="text-muted-foreground">
+      No groups yet. <RouterLink to="/groups/new" class="underline">Create one</RouterLink>.
     </p>
 
-    <ul v-else class="list">
+    <ul v-else class="flex list-none flex-col gap-1">
       <li v-for="g in groups" :key="g.id">
-        <RouterLink :to="`/groups/${g.id}`" class="row">
-          <span class="row-main">
-            <span class="row-name">{{ g.name }}</span>
-            <span class="row-sub">
+        <RouterLink
+          :to="`/groups/${g.id}`"
+          class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-[var(--hover-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+        >
+          <span class="flex min-w-0 flex-col">
+            <span class="truncate font-medium">{{ g.name }}</span>
+            <span class="truncate text-xs text-muted-foreground">
               Created by {{ g.created_by === myId ? "you" : ownerName(g) }}
             </span>
           </span>
-          <span class="row-meta">
+          <span class="flex-shrink-0 text-sm text-muted-foreground">
             {{ g.members.length }} member{{ g.members.length === 1 ? "" : "s" }} ·
             {{ g.default_currency }}
           </span>
@@ -59,106 +67,8 @@ onMounted(async () => {
       </li>
     </ul>
 
-    <div class="import-row">
+    <div class="mt-8 flex justify-center">
       <RouterLink to="/import" class="btn-secondary btn-sm">Import group</RouterLink>
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.watermark {
-  pointer-events: none;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  z-index: -10;
-  width: min(90vw, 640px);
-  transform: translate(-50%, -50%);
-  opacity: 0.4;
-}
-:root[data-theme="dark"] .watermark,
-:root[data-theme="high-contrast"] .watermark {
-  opacity: 0.35;
-}
-.head {
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.title {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.new-btn {
-  flex-shrink: 0;
-}
-.empty {
-  color: var(--muted-foreground);
-}
-.link {
-  text-decoration: underline;
-}
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  list-style: none;
-}
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.5rem 0.75rem;
-  transition: background-color 120ms ease;
-}
-.row:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .row:hover,
-:root[data-theme="high-contrast"] .row:hover {
-  background: var(--accent);
-}
-.row:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.row-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-.row-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.row-sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.row-meta {
-  flex-shrink: 0;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.import-row {
-  margin-top: 2rem;
-  display: flex;
-  justify-content: center;
-}
-</style>

@@ -105,17 +105,17 @@ onMounted(async () => {
 
 <template>
   <AppLayout :back="{ to: '/admin', label: 'Admin' }">
-    <h1 class="title">SMTP configuration</h1>
-    <p class="lead">
+    <h1 class="mb-1 text-2xl font-semibold">SMTP configuration</h1>
+    <p class="mb-4 text-sm text-muted-foreground">
       Outbound email settings. The password is encrypted at rest with the same key used for emails. The cleartext is never returned by the API.
     </p>
 
-    <Alert v-if="okMsg" tone="success" class="banner">{{ okMsg }}</Alert>
-    <Alert v-if="errMsg" tone="error" class="banner">{{ errMsg }}</Alert>
-    <Alert v-if="testMsg" :tone="testMsg.ok ? 'success' : 'error'" class="banner">{{ testMsg.msg }}</Alert>
-    <Alert v-if="notConfigured" tone="info" class="banner">SMTP is not configured yet.</Alert>
+    <Alert v-if="okMsg" tone="success" class="mb-4">{{ okMsg }}</Alert>
+    <Alert v-if="errMsg" tone="error" class="mb-4">{{ errMsg }}</Alert>
+    <Alert v-if="testMsg" :tone="testMsg.ok ? 'success' : 'error'" class="mb-4">{{ testMsg.msg }}</Alert>
+    <Alert v-if="notConfigured" tone="info" class="mb-4">SMTP is not configured yet.</Alert>
 
-    <form v-if="loaded" class="form" @submit.prevent="onSave">
+    <form v-if="loaded" class="grid gap-3" @submit.prevent="onSave">
       <label class="field">
         <input v-model="form.host" required class="field-input" placeholder=" " />
         <span class="field-label" data-required>Host (e.g. smtp.example.com)</span>
@@ -163,7 +163,7 @@ onMounted(async () => {
         </button>
       </label>
 
-      <div class="actions">
+      <div class="flex flex-wrap justify-end gap-2">
         <button type="button" class="btn-secondary" :disabled="notConfigured" @click="onSendTest">Send test email</button>
         <button type="submit" class="btn-primary">Save and test connection</button>
       </div>
@@ -172,23 +172,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.title {
-  margin-bottom: 0.25rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.lead {
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.form {
-  display: grid;
-  gap: 0.75rem;
-}
 .pw-field {
   position: relative;
 }

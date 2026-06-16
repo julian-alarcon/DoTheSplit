@@ -98,7 +98,6 @@ Generated from `license-checker-rseidelsohn --json` against [frontend/package.js
 | @csstools/css-syntax-patches-for-csstree@1.1.5 | MIT-0 | https://github.com/csstools/postcss-plugins |
 | @csstools/css-tokenizer@4.0.0 | MIT | https://github.com/csstools/postcss-plugins |
 | @exodus/bytes@1.15.1 | MIT | https://github.com/ExodusOSS/bytes |
-| @iconify/types@2.0.0 | MIT | https://github.com/iconify/iconify |
 | @jridgewell/gen-mapping@0.3.13 | MIT | https://github.com/jridgewell/sourcemaps |
 | @jridgewell/remapping@2.3.5 | MIT | https://github.com/jridgewell/sourcemaps |
 | @jridgewell/resolve-uri@3.1.2 | MIT | https://github.com/jridgewell/resolve-uri |
@@ -112,6 +111,10 @@ Generated from `license-checker-rseidelsohn --json` against [frontend/package.js
 | @rolldown/binding-linux-x64-gnu@1.0.3 | MIT | https://github.com/rolldown/rolldown |
 | @rolldown/pluginutils@1.0.1 | MIT | https://github.com/rolldown/plugins |
 | @standard-schema/spec@1.1.0 | MIT | https://github.com/standard-schema/standard-schema |
+| @tailwindcss/node@4.3.1 | MIT | https://github.com/tailwindlabs/tailwindcss |
+| @tailwindcss/oxide-linux-x64-gnu@4.3.1 | MIT | https://github.com/tailwindlabs/tailwindcss |
+| @tailwindcss/oxide@4.3.1 | MIT | https://github.com/tailwindlabs/tailwindcss |
+| @tailwindcss/vite@4.3.1 | MIT | https://github.com/tailwindlabs/tailwindcss |
 | @types/chai@5.2.3 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | @types/deep-eql@4.0.2 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | @types/estree@1.0.9 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
@@ -167,6 +170,7 @@ Generated from `license-checker-rseidelsohn --json` against [frontend/package.js
 | debug@4.4.3 | MIT | https://github.com/debug-js/debug |
 | decimal.js@10.6.0 | MIT | https://github.com/MikeMcl/decimal.js |
 | detect-libc@2.1.2 | Apache-2.0 | https://github.com/lovell/detect-libc |
+| enhanced-resolve@5.21.6 | MIT | https://github.com/webpack/enhanced-resolve |
 | entities@7.0.1 | BSD-2-Clause | https://github.com/fb55/entities |
 | entities@8.0.0 | BSD-2-Clause | https://github.com/fb55/entities |
 | es-module-lexer@2.1.0 | MIT | https://github.com/guybedford/es-module-lexer |
@@ -176,11 +180,13 @@ Generated from `license-checker-rseidelsohn --json` against [frontend/package.js
 | exsolve@1.0.8 | MIT | https://github.com/unjs/exsolve |
 | fast-deep-equal@3.1.3 | MIT | https://github.com/epoberezkin/fast-deep-equal |
 | fdir@6.5.0 | MIT | https://github.com/thecodrr/fdir |
+| graceful-fs@4.2.11 | ISC | https://github.com/isaacs/node-graceful-fs |
 | hookable@5.5.3 | MIT | https://github.com/unjs/hookable |
 | html-encoding-sniffer@6.0.0 | MIT | https://github.com/jsdom/html-encoding-sniffer |
 | https-proxy-agent@7.0.6 | MIT | https://github.com/TooTallNate/proxy-agents |
 | index-to-position@1.2.0 | MIT | https://github.com/sindresorhus/index-to-position |
 | is-potential-custom-element-name@1.0.1 | MIT | https://github.com/mathiasbynens/is-potential-custom-element-name |
+| jiti@2.7.0 | MIT | https://github.com/unjs/jiti |
 | js-levenshtein@1.1.6 | MIT | https://github.com/gustf/js-levenshtein |
 | js-tokens@4.0.0 | MIT | https://github.com/lydell/js-tokens |
 | js-yaml@4.1.1 | MIT | https://github.com/nodeca/js-yaml |
@@ -230,6 +236,8 @@ Generated from `license-checker-rseidelsohn --json` against [frontend/package.js
 | std-env@4.1.0 | MIT | https://github.com/unjs/std-env |
 | supports-color@10.2.2 | MIT | https://github.com/chalk/supports-color |
 | symbol-tree@3.2.4 | MIT | https://github.com/jsdom/js-symbol-tree |
+| tailwindcss@4.3.1 | MIT | https://github.com/tailwindlabs/tailwindcss |
+| tapable@2.3.3 | MIT | https://github.com/webpack/tapable |
 | tinybench@2.9.0 | MIT | https://github.com/tinylibs/tinybench |
 | tinyexec@1.2.4 | MIT | https://github.com/tinylibs/tinyexec |
 | tinyglobby@0.2.17 | MIT | https://github.com/SuperchupuDev/tinyglobby |

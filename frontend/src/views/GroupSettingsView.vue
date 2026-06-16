@@ -290,8 +290,8 @@ watch(groupId, load);
     </section>
 
     <!-- Leave (non-creator) -->
-    <section v-if="!isCreator" class="panel danger">
-      <h2 class="danger-title">Leave group</h2>
+    <section v-if="!isCreator" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Leave group</h2>
       <p class="muted mb">Removes you from this group. Your past expenses, splits, and settlements stay in the ledger.</p>
       <Alert v-if="myNetCents !== 0" tone="info" class="mb">
         You have a non-zero balance of <span class="mono">{{ formatMoney(myNetCents, group.default_currency) }}</span> in this group.
@@ -326,8 +326,8 @@ watch(groupId, load);
     </section>
 
     <!-- Delete (creator) -->
-    <section v-if="isCreator" class="panel danger">
-      <h2 class="danger-title">Danger zone</h2>
+    <section v-if="isCreator" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
+      <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
       <p class="muted mb">Deleting the group removes all its expenses, settlements and recurring templates. This cannot be undone.</p>
       <div class="right">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
@@ -381,7 +381,7 @@ watch(groupId, load);
 .subhead {
   margin-bottom: 1.5rem;
   font-size: 0.875rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .banner {
   margin-bottom: 0.75rem;
@@ -407,11 +407,11 @@ watch(groupId, load);
 }
 .hint {
   font-size: 0.75rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .muted {
   font-size: 0.875rem;
-  color: var(--muted-foreground);
+  color: var(--subtle-foreground);
 }
 .mb {
   margin-bottom: 0.75rem;
@@ -514,16 +514,5 @@ watch(groupId, load);
   .transfer-field {
     flex: 1;
   }
-}
-.danger {
-  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
-}
-.danger-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--destructive);
 }
 </style>

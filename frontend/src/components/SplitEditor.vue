@@ -310,7 +310,12 @@ defineExpose({ dirty, hasInitial });
 
 <template>
   <div class="split">
-    <button type="button" class="split-trigger" aria-label="Edit details" @click="open">
+    <button
+      type="button"
+      class="btn-secondary w-full justify-between gap-3 px-3 text-left font-normal whitespace-normal"
+      aria-label="Edit details"
+      @click="open"
+    >
       <span class="split-summary">{{ summary }}</span>
       <span class="split-trigger-end">
         <span class="details-label">Details</span>
@@ -405,31 +410,6 @@ defineExpose({ dirty, hasInitial });
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-}
-.split-trigger {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-.split-trigger:hover {
-  background: var(--muted);
-}
-:root[data-theme="dark"] .split-trigger:hover,
-:root[data-theme="high-contrast"] .split-trigger:hover {
-  background: var(--accent);
-}
-.split-trigger:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 .split-summary {
   min-width: 0;

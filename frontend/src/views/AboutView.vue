@@ -17,57 +17,57 @@ const inter = (credits as { inter?: {
 
 <template>
   <AppLayout>
-    <div class="about">
-      <h1 class="h1">About</h1>
-      <p class="lead">
+    <div class="mx-auto max-w-3xl">
+      <h1 class="mb-2 text-2xl font-semibold">About</h1>
+      <p class="mb-6 text-sm text-muted-foreground">
         {{ project.name }} is a small, self-hosted expense-sharing app.
       </p>
 
-      <section class="panel">
-        <h2 class="h2">{{ project.name }}</h2>
-        <p class="body">
+      <section class="mb-8 rounded-md border border-border bg-card p-3">
+        <h2 class="mb-2 text-lg font-semibold">{{ project.name }}</h2>
+        <p class="text-sm">
           {{ project.copyright }}. Released under the
-          <a :href="`${project.url}/blob/main/LICENSE`" class="link" rel="noopener noreferrer" target="_blank">{{ project.license }} license</a>.
+          <a :href="`${project.url}/blob/main/LICENSE`" class="underline" rel="noopener noreferrer" target="_blank">{{ project.license }} license</a>.
         </p>
-        <p class="body mt">
+        <p class="mt-2 text-sm">
           Source on
-          <a :href="project.url" class="link" rel="noopener noreferrer" target="_blank">GitHub</a>.
+          <a :href="project.url" class="underline" rel="noopener noreferrer" target="_blank">GitHub</a>.
           Support development via
-          <a :href="project.sponsorUrl" class="link" rel="noopener noreferrer" target="_blank">GitHub Sponsors</a>.
+          <a :href="project.sponsorUrl" class="underline" rel="noopener noreferrer" target="_blank">GitHub Sponsors</a>.
         </p>
       </section>
 
-      <h2 class="h2 mt-lg">Credits</h2>
-      <p class="lead">Built on open-source software. Thanks to all the maintainers below.</p>
+      <h2 class="mb-2 mt-8 text-lg font-semibold">Credits</h2>
+      <p class="mb-6 text-sm text-muted-foreground">Built on open-source software. Thanks to all the maintainers below.</p>
 
-      <section class="panel">
-        <h2 class="h2">Font Awesome Free Icons</h2>
-        <p class="body">
+      <section class="mb-8 rounded-md border border-border bg-card p-3">
+        <h2 class="mb-2 text-lg font-semibold">Font Awesome Free Icons</h2>
+        <p class="text-sm">
           Icons by
-          <a :href="fontAwesome.creatorUrl" class="link" rel="noopener noreferrer" target="_blank">{{ fontAwesome.creator }}</a>,
+          <a :href="fontAwesome.creatorUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ fontAwesome.creator }}</a>,
           licensed under
-          <a :href="fontAwesome.licenseUrl" class="link" rel="noopener noreferrer" target="_blank">{{ fontAwesome.license }}</a>
-          (<a :href="fontAwesome.licensePageUrl" class="link" rel="noopener noreferrer" target="_blank">license page</a>).
+          <a :href="fontAwesome.licenseUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ fontAwesome.license }}</a>
+          (<a :href="fontAwesome.licensePageUrl" class="underline" rel="noopener noreferrer" target="_blank">license page</a>).
           {{ fontAwesome.modificationStatement }}
         </p>
       </section>
 
-      <section v-if="inter" class="panel">
-        <h2 class="h2">Inter Font</h2>
-        <p class="body">
+      <section v-if="inter" class="mb-8 rounded-md border border-border bg-card p-3">
+        <h2 class="mb-2 text-lg font-semibold">Inter Font</h2>
+        <p class="text-sm">
           Body type by
-          <a :href="inter.creatorUrl" class="link" rel="noopener noreferrer" target="_blank">{{ inter.creator }}</a>,
+          <a :href="inter.creatorUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ inter.creator }}</a>,
           licensed under the
-          <a :href="inter.licenseUrl" class="link" rel="noopener noreferrer" target="_blank">{{ inter.license }}</a>.
+          <a :href="inter.licenseUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ inter.license }}</a>.
           {{ inter.modificationStatement }}
         </p>
       </section>
 
-      <section class="block">
-        <h2 class="h2">Backend dependencies</h2>
-        <p class="sub">Direct Go modules from <code class="mono">api/go.mod</code>.</p>
-        <div class="table-wrap">
-          <table class="table">
+      <section class="mb-8">
+        <h2 class="mb-2 text-lg font-semibold">Backend dependencies</h2>
+        <p class="mb-3 text-sm text-muted-foreground">Direct Go modules from <code class="[font-family:var(--font-mono)]">api/go.mod</code>.</p>
+        <div class="table-wrap overflow-x-auto rounded-md border border-border">
+          <table class="w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th>Module</th>
@@ -77,8 +77,8 @@ const inter = (credits as { inter?: {
             </thead>
             <tbody>
               <tr v-for="d in backend" :key="d.name">
-                <td><a :href="d.url" class="link" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
-                <td class="mono small">{{ d.version }}</td>
+                <td><a :href="d.url" class="underline" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
+                <td class="text-xs [font-family:var(--font-mono)]">{{ d.version }}</td>
                 <td>{{ d.license }}</td>
               </tr>
             </tbody>
@@ -86,11 +86,11 @@ const inter = (credits as { inter?: {
         </div>
       </section>
 
-      <section class="block">
-        <h2 class="h2">Frontend dependencies</h2>
-        <p class="sub">Direct npm packages.</p>
-        <div class="table-wrap">
-          <table class="table">
+      <section class="mb-8">
+        <h2 class="mb-2 text-lg font-semibold">Frontend dependencies</h2>
+        <p class="mb-3 text-sm text-muted-foreground">Direct npm packages.</p>
+        <div class="table-wrap overflow-x-auto rounded-md border border-border">
+          <table class="w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th>Package</th>
@@ -100,8 +100,8 @@ const inter = (credits as { inter?: {
             </thead>
             <tbody>
               <tr v-for="d in frontend" :key="d.name">
-                <td><a :href="d.url" class="link" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
-                <td class="mono small">{{ d.version }}</td>
+                <td><a :href="d.url" class="underline" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
+                <td class="text-xs [font-family:var(--font-mono)]">{{ d.version }}</td>
                 <td>{{ d.license }}</td>
               </tr>
             </tbody>
@@ -109,14 +109,14 @@ const inter = (credits as { inter?: {
         </div>
       </section>
 
-      <section class="block muted">
+      <section class="mb-8 text-sm text-muted-foreground">
         <p>
           Full transitive attribution lives in
-          <a :href="`${project.url}/blob/main/THIRD_PARTY_LICENSES.md`" class="link" rel="noopener noreferrer" target="_blank">THIRD_PARTY_LICENSES.md</a>.
+          <a :href="`${project.url}/blob/main/THIRD_PARTY_LICENSES.md`" class="underline" rel="noopener noreferrer" target="_blank">THIRD_PARTY_LICENSES.md</a>.
         </p>
-        <p class="mt">
+        <p class="mt-2">
           CycloneDX SBOMs are published as artifacts on each
-          <a :href="`${project.url}/releases`" class="link" rel="noopener noreferrer" target="_blank">GitHub Release</a>.
+          <a :href="`${project.url}/releases`" class="underline" rel="noopener noreferrer" target="_blank">GitHub Release</a>.
         </p>
       </section>
     </div>
@@ -124,80 +124,14 @@ const inter = (credits as { inter?: {
 </template>
 
 <style scoped>
-.about {
-  margin-inline: auto;
-  max-width: 48rem;
-}
-.h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.h2 {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-.mt-lg {
-  margin-top: 2rem;
-}
-.lead {
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.panel {
-  margin-bottom: 2rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.block {
-  margin-bottom: 2rem;
-}
-.body {
-  font-size: 0.875rem;
-}
-.sub {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.mt {
-  margin-top: 0.5rem;
-}
-.link {
-  text-decoration: underline;
-}
-.table-wrap {
-  overflow-x: auto;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-}
-.table {
-  width: 100%;
-  font-size: 0.875rem;
-  border-collapse: collapse;
-}
-.table th {
+.table-wrap th {
   background: var(--muted);
   text-align: left;
   padding: 0.5rem 0.75rem;
   font-weight: 500;
 }
-.table td {
+.table-wrap td {
   border-top: 1px solid var(--border);
   padding: 0.5rem 0.75rem;
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.small {
-  font-size: 0.75rem;
-}
-.muted {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
 }
 </style>

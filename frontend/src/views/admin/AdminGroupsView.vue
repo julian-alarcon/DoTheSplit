@@ -51,31 +51,31 @@ onMounted(load);
 
 <template>
   <AppLayout :back="{ to: '/admin', label: 'Admin' }">
-    <h1 class="title">All groups ({{ total }})</h1>
+    <h1 class="mb-4 text-2xl font-semibold">All groups ({{ total }})</h1>
 
-    <Alert v-if="okMsg" tone="success" class="banner">{{ okMsg }}</Alert>
-    <Alert v-if="errMsg" tone="error" class="banner">{{ errMsg }}</Alert>
+    <Alert v-if="okMsg" tone="success" class="mb-4">{{ okMsg }}</Alert>
+    <Alert v-if="errMsg" tone="error" class="mb-4">{{ errMsg }}</Alert>
 
-    <ul class="groups">
-      <li v-for="g in items" :key="g.id" class="group">
-        <div class="group-row">
-          <div class="group-main">
-            <div class="group-name">
-              <RouterLink :to="`/groups/${g.id}`" class="link">{{ g.name }}</RouterLink>
+    <ul class="grid list-none gap-2">
+      <li v-for="g in items" :key="g.id" class="rounded-md border border-border bg-card p-3">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="truncate font-medium">
+              <RouterLink :to="`/groups/${g.id}`" class="text-inherit no-underline hover:underline">{{ g.name }}</RouterLink>
             </div>
-            <div class="group-meta">
+            <div class="text-xs text-muted-foreground">
               {{ g.member_count }} members · {{ g.expense_count }} expenses · {{ g.default_currency }} · created {{ fmtDate(g.created_at) }}
             </div>
           </div>
-          <button type="button" class="btn-danger btn-sm" @click="deleteTarget = g.id">
+          <button type="button" class="btn-danger btn-sm ml-auto" @click="deleteTarget = g.id">
             <Icon name="trash" /><span>Delete</span>
           </button>
         </div>
       </li>
     </ul>
-    <nav class="pager">
-      <button v-if="offset > 0" type="button" class="link" @click="offset = Math.max(0, offset - ADMIN_PAGE)">← Previous</button>
-      <button v-if="offset + ADMIN_PAGE < total" type="button" class="link" @click="offset += ADMIN_PAGE">Next →</button>
+    <nav class="mt-4 flex gap-4 text-sm">
+      <button v-if="offset > 0" type="button" class="cursor-pointer text-inherit underline" @click="offset = Math.max(0, offset - ADMIN_PAGE)">← Previous</button>
+      <button v-if="offset + ADMIN_PAGE < total" type="button" class="cursor-pointer text-inherit underline" @click="offset += ADMIN_PAGE">Next →</button>
     </nav>
 
     <PasswordPromptDialog
@@ -89,62 +89,3 @@ onMounted(load);
     />
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.groups {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-}
-.group {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.group-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.group-main {
-  min-width: 0;
-}
-.group-name {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.group-meta {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.pager {
-  margin-top: 1rem;
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-}
-.link {
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-}
-.link:hover {
-  text-decoration: underline;
-}
-.pager .link {
-  text-decoration: underline;
-}
-</style>

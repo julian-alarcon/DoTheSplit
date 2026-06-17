@@ -552,6 +552,14 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: v
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Cache-busting version token; pass the user's `avatar_updated_at`.
+            The server ignores it, but a changed value gives the browser a
+            distinct URL so an updated avatar isn't served stale from cache.
       responses:
         "200":
           description: PNG bytes

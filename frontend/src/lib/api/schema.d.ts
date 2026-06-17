@@ -2729,7 +2729,14 @@ export interface operations {
     };
     getUserAvatar: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Cache-busting version token; pass the user's `avatar_updated_at`.
+                 *     The server ignores it, but a changed value gives the browser a
+                 *     distinct URL so an updated avatar isn't served stale from cache.
+                 */
+                v?: string;
+            };
             header?: never;
             path: {
                 id: string;

@@ -16,7 +16,10 @@ async function fetchAvatar(userId: string, version: string): Promise<string | nu
   const cached = cache.get(key);
   if (cached) return cached;
   const { data, error } = await api.GET("/v1/users/{id}/avatar", {
-    params: { path: { id: userId } },
+    // Pass the version as a query param so a changed avatar yields a distinct
+    // URL. The server sends `Cache-Control: private, max-age=...`, so without
+    // this the browser would serve the stale cached bytes after an update.
+    params: { path: { id: userId }, query: version ? { v: version } : {} },
     parseAs: "blob",
   });
   if (error || !data) return null;

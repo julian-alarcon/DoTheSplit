@@ -271,7 +271,7 @@ watch(value, (v) => {
         @click="open"
       >
         <span class="relative inline-block h-7 w-7" aria-hidden="true">
-          <Icon name="layer-group" :size="28" class="absolute inset-0 text-muted-foreground" />
+          <Icon name="calendar" :size="28" class="absolute inset-0 text-muted-foreground" />
           <span class="absolute inset-x-0 top-[12px] flex h-[14px] items-center justify-center text-[10px] font-semibold leading-none text-foreground">{{ triggerDay }}</span>
         </span>
       </button>
@@ -284,7 +284,7 @@ watch(value, (v) => {
       <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
         <button type="button" class="flex cursor-pointer items-center gap-2 rounded-md text-left text-sm hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" @click="open">
           <span class="relative inline-block h-7 w-7" aria-hidden="true">
-            <Icon name="layer-group" :size="28" class="absolute inset-0 text-muted-foreground" />
+            <Icon name="calendar" :size="28" class="absolute inset-0 text-muted-foreground" />
             <span class="absolute inset-x-0 top-[12px] flex h-[14px] items-center justify-center text-[10px] font-semibold leading-none text-foreground">{{ triggerDay }}</span>
           </span>
           <span class="font-medium">{{ triggerLabel }}</span>

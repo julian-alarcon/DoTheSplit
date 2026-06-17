@@ -29,8 +29,12 @@ watch(open, (isOpen) => {
 });
 
 function onConfirm() {
-  open.value = false;
+  // Emit before closing: parents that derive `open` from a target ref and
+  // clear it on `update:open=false` (RecurringView, GroupSettingsView) read
+  // that ref inside their `confirm` handler, so the close must not clear it
+  // first.
   emit("confirm");
+  open.value = false;
 }
 function onCancel() {
   open.value = false;

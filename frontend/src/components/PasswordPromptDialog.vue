@@ -41,8 +41,11 @@ function onConfirm() {
     showError.value = true;
     return;
   }
-  open.value = false;
+  // Emit before closing: parents that derive `open` from a target ref and
+  // clear it on `update:open=false` (AdminGroupsView) read that ref inside
+  // their `confirm` handler, so the close must not clear it first.
   emit("confirm", password.value);
+  open.value = false;
 }
 function onCancel() {
   open.value = false;

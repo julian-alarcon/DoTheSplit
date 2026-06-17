@@ -119,7 +119,7 @@ onMounted(async () => {
 <template>
   <AppLayout v-if="settlement && group" :back="{ to: `/groups/${groupId}`, label: group.name }">
     <div class="mb-6 flex items-center gap-3">
-      <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--primary)_20%,var(--card))] text-primary"><Icon name="arrow-right" :size="18" /></span>
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" title="Settlement"><Icon name="arrow-right" :size="18" /></span>
       <div>
         <h1 class="text-2xl font-semibold">Settlement</h1>
         <p class="text-sm text-muted-foreground">

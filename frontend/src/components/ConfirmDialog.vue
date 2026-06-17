@@ -4,7 +4,7 @@
 import { ref, watch } from "vue";
 import Icon from "@/components/Icon.vue";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     title: string;
     message: string;

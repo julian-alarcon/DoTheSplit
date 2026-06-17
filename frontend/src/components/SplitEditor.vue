@@ -35,8 +35,8 @@ export interface SplitPayload {
 const props = withDefaults(
   defineProps<{
     members: Member[];
-    currency: string;
-    amountCents: number;
+    currency?: string;
+    amountCents?: number;
     payerId?: string;
     currentUserId?: string;
     initialSplits?: InitialSplit[];

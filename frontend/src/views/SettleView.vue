@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { getBalances, getGroup, type Group, type SimplifiedDebt } from "@/composables/useGroups";
 import { createSettlement } from "@/composables/useSettlements";
+import { useGroupMembers } from "@/composables/useGroupMembers";
 import { formatMoney } from "@/lib/currencies";
 import AppLayout from "@/components/AppLayout.vue";
 import Alert from "@/components/Alert.vue";
@@ -25,8 +26,7 @@ const submitting = ref(false);
 
 const currency = computed(() => group.value?.default_currency ?? "EUR");
 const members = computed(() => group.value?.members ?? []);
-const nameByID = computed(() => new Map(members.value.map((m) => [m.user_id, m.display_name])));
-const memberByID = computed(() => new Map(members.value.map((m) => [m.user_id, m])));
+const { memberByID, nameByID } = useGroupMembers(members);
 
 const form = ref({
   fromUserId: "",
@@ -141,7 +141,7 @@ watch(groupId, load);
         <h2 class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Suggested transfers</h2>
         <p class="mb-3 text-xs text-muted-foreground">Tap one to prefill the form above.</p>
         <ul class="flex list-none flex-col gap-2 text-sm">
-          <li v-for="(d, i) in simplified" :key="i">
+          <li v-for="d in simplified" :key="`${d.from_user_id}-${d.to_user_id}`">
             <button
               type="button"
               class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-hover-surface"

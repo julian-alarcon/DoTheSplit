@@ -12,6 +12,7 @@ import {
   type Expense,
   type ExpenseRevision,
 } from "@/composables/useExpense";
+import { useGroupMembers } from "@/composables/useGroupMembers";
 import type { components } from "@/lib/api/schema";
 import { moneyFormatter } from "@/lib/currencies";
 import AppLayout from "@/components/AppLayout.vue";
@@ -44,8 +45,7 @@ const deleteConfirm = ref(false);
 const restoreConfirm = ref(false);
 
 const categoryByID = computed(() => new Map(categories.value.map((c) => [c.id, c])));
-const memberByID = computed(() => new Map((group.value?.members ?? []).map((m) => [m.user_id, m])));
-const nameByID = computed(() => new Map((group.value?.members ?? []).map((m) => [m.user_id, m.display_name])));
+const { memberByID, nameByID } = useGroupMembers(() => group.value?.members ?? []);
 
 const currency = computed(() => expense.value?.currency ?? "EUR");
 const moneyFmt = computed(() => moneyFormatter(currency.value));

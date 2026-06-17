@@ -3,6 +3,7 @@
 // amount. Links to the expense/settlement detail page.
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
+import { useGroupMembers } from "@/composables/useGroupMembers";
 import { formatMoney } from "@/lib/currencies";
 import { shortName } from "@/lib/short-name";
 import type { components } from "@/lib/api/schema";
@@ -20,8 +21,7 @@ const props = defineProps<{
   members: GroupMember[];
 }>();
 
-const memberByID = computed(() => new Map(props.members.map((m) => [m.user_id, m])));
-const nameByID = computed(() => new Map(props.members.map((m) => [m.user_id, m.display_name])));
+const { memberByID, nameByID } = useGroupMembers(() => props.members);
 
 const isSettlement = computed(() => props.item.target_kind === "settlement");
 const href = computed(() =>

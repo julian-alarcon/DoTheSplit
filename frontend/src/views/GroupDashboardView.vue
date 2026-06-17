@@ -12,7 +12,9 @@ import {
   type SimplifiedDebt,
   type TransactionItem,
 } from "@/composables/useDashboard";
+import { useGroupMembers } from "@/composables/useGroupMembers";
 import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { monthShortFmt, dayTwoDigitFmt } from "@/lib/dates";
 import { shortName } from "@/lib/short-name";
 import { withMonthHeaders } from "@/lib/transaction-month";
 import AppLayout from "@/components/AppLayout.vue";
@@ -48,12 +50,7 @@ const inviteFailed = computed(() => {
 
 const currency = computed(() => group.value?.default_currency ?? "EUR");
 const members = computed(() => group.value?.members ?? []);
-const memberByID = computed(
-  () => new Map(members.value.map((m) => [m.user_id, m])),
-);
-const nameByID = computed(
-  () => new Map(members.value.map((m) => [m.user_id, m.display_name])),
-);
+const { memberByID, nameByID } = useGroupMembers(members);
 const categoryByID = computed(
   () => new Map(categories.value.map((c) => [c.id, c])),
 );
@@ -65,9 +62,6 @@ const cadenceLabels: Record<string, string> = {
   monthly: "monthly",
   yearly: "yearly",
 };
-
-const localeFmtMonth = new Intl.DateTimeFormat(undefined, { month: "short" });
-const localeFmtDay = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
 
 // --- Balances (viewer perspective) ------------------------------------------
 type ViewerDebt = { otherID: string; amountCents: number; theyOweMe: boolean };
@@ -148,7 +142,7 @@ function viewerStake(e: {
 
 function dayParts(iso: string) {
   const d = new Date(iso);
-  return { month: localeFmtMonth.format(d), day: localeFmtDay.format(d) };
+  return { month: monthShortFmt.format(d), day: dayTwoDigitFmt.format(d) };
 }
 function rowMoney(cents: number, cur: string) {
   return moneyFormatter(cur).format(cents / 100);
@@ -359,8 +353,8 @@ watch(groupId, loadGroup);
             </p>
             <ul v-else class="flex list-none flex-col gap-2">
               <li
-                v-for="(d, i) in myDebts"
-                :key="i"
+                v-for="d in myDebts"
+                :key="d.otherID"
                 class="flex min-w-0 flex-wrap items-center gap-1.5"
               >
                 <template v-if="d.theyOweMe">
@@ -517,7 +511,16 @@ watch(groupId, loadGroup);
         </p>
 
         <ul v-else class="flex list-none flex-col gap-1">
-          <template v-for="(row, i) in feedRows" :key="i">
+          <template
+            v-for="row in feedRows"
+            :key="
+              row.kind === 'month-header'
+                ? `m:${row.key}`
+                : row.item.expense
+                  ? `e:${row.item.expense.id}`
+                  : `s:${row.item.settlement?.id}`
+            "
+          >
             <li
               v-if="row.kind === 'month-header'"
               class="px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground first:pt-1"

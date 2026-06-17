@@ -6,6 +6,7 @@ import { listCategories, listGroups } from "@/composables/useGroups";
 import { search, type SearchGroupRef } from "@/composables/useSearch";
 import type { components } from "@/lib/api/schema";
 import { moneyFormatter, formatMoney } from "@/lib/currencies";
+import { monthShortFmt, dayTwoDigitFmt } from "@/lib/dates";
 import { shortName } from "@/lib/short-name";
 import AppLayout from "@/components/AppLayout.vue";
 import Alert from "@/components/Alert.vue";
@@ -61,8 +62,6 @@ const visibleCategories = computed(() => {
   return categories.value.filter((c) => set.has(c.id));
 });
 
-const monthFmt = new Intl.DateTimeFormat(undefined, { month: "short" });
-const dayFmt = new Intl.DateTimeFormat(undefined, { day: "2-digit" });
 const yearFmt = new Intl.DateTimeFormat(undefined, { year: "numeric" });
 
 type ViewerStake = { kind: "lent"; cents: number } | { kind: "owes"; cents: number } | { kind: "none" };
@@ -88,26 +87,32 @@ function groupForItem(item: SearchItem): SearchGroupRef | undefined {
   return gid ? groupByID.value.get(gid) : undefined;
 }
 
-// Build group-header + item rows from the flat result list.
-type Row =
+// Build group-header + item rows from the flat result list. Each row carries a
+// stable `key`: items key off their entity id (globally unique); headers key
+// off the group id plus a block counter, since the same group can open more
+// than one header block if its items aren't contiguous in the result list.
+type Row = { key: string } & (
   | { kind: "group-header"; group: SearchGroupRef; count: number }
-  | { kind: "item"; item: SearchItem };
+  | { kind: "item"; item: SearchItem }
+);
 const rows = computed<Row[]>(() => {
   const out: Row[] = [];
   let lastGroupID: string | null = null;
   let headerIndex = -1;
   let running = 0;
+  let headerBlock = 0;
   for (const item of items.value) {
     const g = groupForItem(item);
     if (!g) continue;
     if (g.id !== lastGroupID) {
       if (headerIndex >= 0) (out[headerIndex] as Extract<Row, { kind: "group-header" }>).count = running;
-      out.push({ kind: "group-header", group: g, count: 0 });
+      out.push({ kind: "group-header", group: g, count: 0, key: `g:${g.id}:${headerBlock++}` });
       headerIndex = out.length - 1;
       running = 0;
       lastGroupID = g.id;
     }
-    out.push({ kind: "item", item });
+    const id = item.expense?.id ?? item.settlement?.id ?? "";
+    out.push({ kind: "item", item, key: `${item.kind[0]}:${id}` });
     running++;
   }
   if (headerIndex >= 0) (out[headerIndex] as Extract<Row, { kind: "group-header" }>).count = running;
@@ -261,7 +266,7 @@ onMounted(async () => {
     </p>
 
     <ul v-else class="flex list-none flex-col gap-2">
-      <template v-for="(row, i) in rows" :key="i">
+      <template v-for="row in rows" :key="row.key">
         <li v-if="row.kind === 'group-header'" class="flex items-baseline justify-between gap-3 px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <RouterLink :to="`/groups/${row.group.id}`" class="truncate hover:underline">{{ row.group.name }}</RouterLink>
           <span class="tabular-nums normal-case">{{ row.count }} {{ row.count === 1 ? "match" : "matches" }}</span>
@@ -278,8 +283,8 @@ onMounted(async () => {
                   :group-label="categoryByID.get(row.item.expense.category_id)?.group_label"
                   :size="28"
                 />
-                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
-                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthShortFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
+                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayTwoDigitFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
                 <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ yearFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
               </span>
               <div class="min-w-0">
@@ -321,8 +326,8 @@ onMounted(async () => {
             <div class="flex min-w-0 items-center gap-3">
               <span class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none" title="Settlement">
                 <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"><Icon name="arrow-right" :size="14" /></span>
-                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
-                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthShortFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
+                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayTwoDigitFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
                 <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ yearFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
               </span>
               <div class="min-w-0">

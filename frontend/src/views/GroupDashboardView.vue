@@ -286,7 +286,9 @@ watch(groupId, loadGroup);
 <template>
   <AppLayout v-if="group" wide :back="{ to: '/groups', label: 'Groups' }">
     <div class="mb-2 flex items-baseline justify-between gap-3">
-      <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">{{ group.name }}</h1>
+      <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">
+        {{ group.name }}
+      </h1>
       <div class="flex shrink-0 items-center gap-2">
         <RouterLink
           :to="`/groups/${groupId}/recurring`"
@@ -316,8 +318,17 @@ watch(groupId, loadGroup);
       currency {{ currency }}
     </p>
 
-    <Alert v-if="formError" tone="error" class="mb-4 flex flex-wrap items-center justify-between gap-2">{{ formError }}</Alert>
-    <Alert v-if="inviteFailed > 0" tone="info" class="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <Alert
+      v-if="formError"
+      tone="error"
+      class="mb-4 flex flex-wrap items-center justify-between gap-2"
+      >{{ formError }}</Alert
+    >
+    <Alert
+      v-if="inviteFailed > 0"
+      tone="info"
+      class="mb-4 flex flex-wrap items-center justify-between gap-2"
+    >
       <span>
         {{
           inviteFailed === 1
@@ -325,12 +336,16 @@ watch(groupId, loadGroup);
             : `${inviteFailed} invites were skipped: those emails aren't registered users yet.`
         }}
       </span>
-      <RouterLink :to="`/groups/${groupId}/settings`" class="font-medium underline"
+      <RouterLink
+        :to="`/groups/${groupId}/settings`"
+        class="font-medium underline"
         >Add members</RouterLink
       >
     </Alert>
 
-    <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]">
+    <div
+      class="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]"
+    >
       <!-- Balances -->
       <section class="lg:order-1">
         <div class="flex items-start justify-between gap-3 text-sm">
@@ -343,7 +358,11 @@ watch(groupId, loadGroup);
               <span class="font-medium">{{ settledMessage }}</span>
             </p>
             <ul v-else class="flex list-none flex-col gap-2">
-              <li v-for="(d, i) in myDebts" :key="i" class="flex min-w-0 flex-wrap items-center gap-1.5">
+              <li
+                v-for="(d, i) in myDebts"
+                :key="i"
+                class="flex min-w-0 flex-wrap items-center gap-1.5"
+              >
                 <template v-if="d.theyOweMe">
                   <span class="flex min-w-0 items-center gap-1.5">
                     <MemberAvatar
@@ -478,19 +497,29 @@ watch(groupId, loadGroup);
       </section>
 
       <!-- Transactions -->
-      <section class="relative pt-10 lg:order-2">
-        <RouterLink :to="`/groups/${groupId}/activity`" class="btn-secondary btn-xs absolute right-0 top-0 z-10">
+      <section class="relative pt-4 lg:order-2">
+        <RouterLink
+          v-if="!(loaded && transactions.length === 0)"
+          :to="`/groups/${groupId}/activity`"
+          class="btn-secondary btn-xs absolute right-0 top-0 z-6"
+        >
           <Icon name="clock-rotate-left" :size="12" />
           <span>See activity</span>
         </RouterLink>
 
-        <p v-if="loaded && transactions.length === 0" class="text-sm text-muted-foreground">
+        <p
+          v-if="loaded && transactions.length === 0"
+          class="text-sm text-muted-foreground"
+        >
           No expenses or settlements yet.
         </p>
 
         <ul v-else class="flex list-none flex-col gap-1">
           <template v-for="(row, i) in feedRows" :key="i">
-            <li v-if="row.kind === 'month-header'" class="px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground first:pt-1">
+            <li
+              v-if="row.kind === 'month-header'"
+              class="px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground first:pt-1"
+            >
               {{ row.label }}
             </li>
             <li v-else-if="row.item.kind === 'expense' && row.item.expense">
@@ -516,15 +545,19 @@ watch(groupId, loadGroup);
                       "
                       :size="28"
                     />
-                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{
-                      dayParts(row.item.expense.incurred_at).month
-                    }}</span>
-                    <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{
-                      dayParts(row.item.expense.incurred_at).day
-                    }}</span>
+                    <span
+                      class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      >{{ dayParts(row.item.expense.incurred_at).month }}</span
+                    >
+                    <span
+                      class="text-xs font-semibold tabular-nums text-muted-foreground"
+                      >{{ dayParts(row.item.expense.incurred_at).day }}</span
+                    >
                   </span>
                   <div class="flex min-w-0 flex-col gap-0.5">
-                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+                    <div
+                      class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium"
+                    >
                       <span class="min-w-0 truncate">{{
                         row.item.expense.description
                       }}</span>
@@ -539,7 +572,9 @@ watch(groupId, loadGroup);
                         }}
                       </span>
                     </div>
-                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <div
+                      class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
+                    >
                       <span>paid by</span>
                       <MemberAvatar
                         :user-id="row.item.expense.payer_id"
@@ -561,12 +596,16 @@ watch(groupId, loadGroup);
                     </div>
                   </div>
                 </div>
-                <div class="flex shrink-0 flex-col items-end justify-between gap-1">
+                <div
+                  class="flex shrink-0 flex-col items-end justify-between gap-1"
+                >
                   <span class="text-[11px] tabular-nums">
                     <template
                       v-if="viewerStake(row.item.expense).kind === 'lent'"
                     >
-                      <span class="text-emerald-900 dark:text-emerald-200">you lent </span>
+                      <span class="text-emerald-900 dark:text-emerald-200"
+                        >you lent
+                      </span>
                       <span class="[font-family:var(--font-mono)]">{{
                         rowMoney(
                           (viewerStake(row.item.expense) as { cents: number })
@@ -578,7 +617,9 @@ watch(groupId, loadGroup);
                     <template
                       v-else-if="viewerStake(row.item.expense).kind === 'owes'"
                     >
-                      <span class="text-amber-700 dark:text-amber-200">you owe </span>
+                      <span class="text-amber-700 dark:text-amber-200"
+                        >you owe
+                      </span>
                       <span class="[font-family:var(--font-mono)]">{{
                         rowMoney(
                           (viewerStake(row.item.expense) as { cents: number })
@@ -587,14 +628,19 @@ watch(groupId, loadGroup);
                         )
                       }}</span>
                     </template>
-                    <span v-else class="text-subtle-foreground">not involved</span>
+                    <span v-else class="text-subtle-foreground"
+                      >not involved</span
+                    >
                   </span>
-                  <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{
-                    rowMoney(
-                      row.item.expense.amount_cents,
-                      row.item.expense.currency,
-                    )
-                  }}</span>
+                  <span
+                    class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]"
+                    >{{
+                      rowMoney(
+                        row.item.expense.amount_cents,
+                        row.item.expense.currency,
+                      )
+                    }}</span
+                  >
                 </div>
               </RouterLink>
             </li>
@@ -604,19 +650,29 @@ watch(groupId, loadGroup);
                 class="flex items-stretch justify-between gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:outline-emerald-700"
               >
                 <div class="flex min-w-0 items-center gap-3">
-                  <span class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none" title="Settlement">
-                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                  <span
+                    class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none"
+                    title="Settlement"
+                  >
+                    <span
+                      class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
                       ><Icon name="arrow-right" :size="14"
                     /></span>
-                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{
-                      dayParts(row.item.settlement.settled_at).month
-                    }}</span>
-                    <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{
-                      dayParts(row.item.settlement.settled_at).day
-                    }}</span>
+                    <span
+                      class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      >{{
+                        dayParts(row.item.settlement.settled_at).month
+                      }}</span
+                    >
+                    <span
+                      class="text-xs font-semibold tabular-nums text-muted-foreground"
+                      >{{ dayParts(row.item.settlement.settled_at).day }}</span
+                    >
                   </span>
                   <div class="flex min-w-0 flex-col gap-0.5">
-                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+                    <div
+                      class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium"
+                    >
                       <MemberAvatar
                         :user-id="row.item.settlement.from_user_id"
                         :display-name="
@@ -657,7 +713,9 @@ watch(groupId, loadGroup);
                         shortName(nameByID.get(row.item.settlement.to_user_id))
                       }}</span>
                     </div>
-                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <div
+                      class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
+                    >
                       <span>settlement</span>
                       <span v-if="row.item.settlement.note" class="truncate"
                         >· {{ row.item.settlement.note }}</span
@@ -665,9 +723,12 @@ watch(groupId, loadGroup);
                     </div>
                   </div>
                 </div>
-                <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{
-                  formatMoney(row.item.settlement.amount_cents, currency)
-                }}</span>
+                <span
+                  class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]"
+                  >{{
+                    formatMoney(row.item.settlement.amount_cents, currency)
+                  }}</span
+                >
               </RouterLink>
             </li>
           </template>

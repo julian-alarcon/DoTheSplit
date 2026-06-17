@@ -13,5 +13,5 @@ DROP TABLE IF EXISTS expenses            CASCADE;
 DROP TABLE IF EXISTS categories          CASCADE;
 DROP TABLE IF EXISTS group_members       CASCADE;
 DROP TABLE IF EXISTS groups              CASCADE;
-DROP TABLE IF EXISTS sessions            CASCADE;
+DROP TABLE IF EXISTS refresh_tokens      CASCADE;
 DROP TABLE IF EXISTS users               CASCADE;

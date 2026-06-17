@@ -300,6 +300,7 @@ onMounted(async () => {
         <SplitEditor
           ref="splitEditor"
           v-model="split"
+          v-model:notes="form.notes"
           :members="group.members"
           :currency="currency"
           :amount-cents="form.amountCents"

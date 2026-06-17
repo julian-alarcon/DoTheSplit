@@ -49,6 +49,10 @@ const props = withDefaults(
 // null payload tells the parent to omit splits_json).
 const payload = defineModel<SplitPayload | null>({ default: null });
 
+// Free-form expense notes. Bound live (independent of the split Done/Cancel
+// commit) so the parent form always has the current text.
+const notes = defineModel<string>("notes", { default: "" });
+
 const initial = computed(() => props.initialSplits ?? []);
 const groupDefault = computed(() => props.defaultSplit ?? []);
 const hasInitial = computed(() => initial.value.length > 0);
@@ -70,6 +74,9 @@ type RowState = { userID: string; included: boolean; value: number };
 const mode = ref<Mode>("equal");
 const state = reactive<RowState[]>([]);
 const dirty = ref(false);
+// True once the user touches a split control in this session. Lets a
+// notes-only edit close without committing (and dirtying) the split.
+const splitTouched = ref(false);
 
 const memberByID = computed(() => new Map(props.members.map((m) => [m.user_id, m])));
 
@@ -265,8 +272,11 @@ function open() {
   dialog.value?.showModal();
 }
 function done() {
-  if (!valid.value) return;
-  commitPayload();
+  // Notes bind live, so a notes-only edit should always be able to close (even
+  // with no amount yet, when the split can't be valid). Only commit the split
+  // when the user actually touched it AND it's valid - otherwise leave the
+  // prior payload untouched so we don't dirty an unchanged split.
+  if (splitTouched.value && valid.value) commitPayload();
   dialog.value?.close();
 }
 function cancel() {
@@ -274,14 +284,17 @@ function cancel() {
 }
 
 function onModeChange(next: Mode) {
+  splitTouched.value = true;
   mode.value = next;
   prefillForMode();
 }
 function onToggle(s: RowState, checked: boolean) {
+  splitTouched.value = true;
   s.included = checked;
   prefillForMode();
 }
 function onValueInput(s: RowState, raw: string) {
+  splitTouched.value = true;
   const n = Number(raw);
   s.value = !Number.isFinite(n) || n < 0 ? 0 : Math.round(n * 100);
 }
@@ -399,15 +412,20 @@ defineExpose({ dirty, hasInitial });
         </ul>
 
         <div class="flex min-h-[1.25em] items-center justify-between gap-3 border-t border-border pt-3 text-sm">
-          <span class="text-muted-foreground">{{ remainingText }}</span>
+          <span class="text-amber-700 dark:text-amber-200">{{ remainingText }}</span>
           <span class="[font-family:var(--font-mono)]">{{ totalText }}</span>
         </div>
 
         <p class="min-h-[1.25em] text-xs text-destructive">{{ errorText }}</p>
 
+        <label class="field">
+          <input v-model="notes" maxlength="2000" placeholder=" " class="field-input" />
+          <span class="field-label">Note</span>
+        </label>
+
         <div class="flex justify-end gap-2">
           <button type="button" class="btn-secondary btn-sm" @click="cancel">Cancel</button>
-          <button type="button" class="btn-primary btn-sm" :disabled="!valid" @click="done">Done</button>
+          <button type="button" class="btn-primary btn-sm" :disabled="splitTouched && !valid" @click="done">Done</button>
         </div>
       </div>
     </dialog>

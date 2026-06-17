@@ -473,6 +473,7 @@ watch(groupId, loadGroup);
 
           <SplitEditor
             v-model="split"
+            v-model:notes="form.notes"
             :members="members"
             :currency="currency"
             :amount-cents="form.amountCents"

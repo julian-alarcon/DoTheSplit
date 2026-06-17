@@ -35,7 +35,7 @@ onMounted(load);
 
     <form class="mb-4 flex flex-wrap items-center gap-2" @submit.prevent="onFilter">
       <label class="text-sm">Action</label>
-      <input v-model="actionInput" placeholder="e.g. admin_delete_user" class="rounded-md border border-border bg-card px-2 py-1 text-sm" />
+      <input v-model="actionInput" placeholder="e.g. admin_delete_user" autocomplete="off" class="rounded-md border border-border bg-card px-2 py-1 text-sm" />
       <button type="submit" class="btn-secondary btn-sm">Filter</button>
     </form>
 

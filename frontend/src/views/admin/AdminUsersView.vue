@@ -62,11 +62,11 @@ onMounted(load);
       <p class="mb-3 text-xs text-muted-foreground">The user receives an email with a 6-digit code to set their own password.</p>
       <form class="grid gap-3" @submit.prevent="onCreate">
         <label class="field">
-          <input v-model="form.email" type="email" required class="field-input" placeholder=" " />
+          <input v-model="form.email" type="email" required autocomplete="off" class="field-input" placeholder=" " />
           <span class="field-label" data-required>Email</span>
         </label>
         <label class="field">
-          <input v-model="form.display_name" required maxlength="80" class="field-input" placeholder=" " />
+          <input v-model="form.display_name" required maxlength="80" autocomplete="off" class="field-input" placeholder=" " />
           <span class="field-label" data-required>Display name</span>
         </label>
         <label class="field-select-row">

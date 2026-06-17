@@ -59,6 +59,7 @@ async function onSubmit() {
           type="text"
           required
           maxlength="80"
+          autocomplete="off"
           error="Required"
         />
 
@@ -77,6 +78,7 @@ async function onSubmit() {
             v-model="memberEmails"
             rows="4"
             placeholder=" "
+            autocomplete="off"
             class="field-input"
           ></textarea>
           <span class="field-label">Add members (optional)</span>

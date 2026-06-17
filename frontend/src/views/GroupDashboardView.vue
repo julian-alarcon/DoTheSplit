@@ -446,6 +446,7 @@ watch(groupId, loadGroup);
                   class="field-input"
                   required
                   maxlength="200"
+                  autocomplete="off"
                   placeholder=" "
                 />
                 <span class="field-label" data-required>What was it?</span>

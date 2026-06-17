@@ -126,7 +126,7 @@ watch(groupId, load);
         />
 
         <label class="field">
-          <input v-model="form.note" maxlength="200" placeholder=" " class="field-input" />
+          <input v-model="form.note" maxlength="200" autocomplete="off" placeholder=" " class="field-input" />
           <span class="field-label">Note</span>
         </label>
 

@@ -180,7 +180,7 @@ watch(groupId, load);
     <section class="mb-4 rounded-md border border-border bg-card p-3">
       <h2 class="mb-3 font-medium">Rename &amp; currency</h2>
       <form class="flex flex-col gap-3" @submit.prevent="onSaveRename">
-        <Field v-model="name" label="Group name" type="text" required minlength="1" maxlength="80" error="Required" />
+        <Field v-model="name" label="Group name" type="text" required minlength="1" maxlength="80" autocomplete="off" error="Required" />
         <label class="field-select-row">
           <span>Default currency</span>
           <CurrencySelect v-model="currency" :disabled="currencyLocked" />
@@ -226,7 +226,7 @@ watch(groupId, load);
       </Alert>
       <form class="flex items-end gap-2" @submit.prevent="onAddMember">
         <div class="flex-1">
-          <Field v-model="newEmail" label="New member email" type="email" required error="Enter a valid email address" />
+          <Field v-model="newEmail" label="New member email" type="email" required autocomplete="off" error="Enter a valid email address" />
         </div>
         <button type="submit" class="btn-primary">Add</button>
       </form>

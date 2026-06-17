@@ -275,7 +275,7 @@ onMounted(async () => {
           </button>
           <div class="flex flex-1 flex-col">
             <label class="field">
-              <input v-model="form.description" class="field-input" required maxlength="200" placeholder=" " />
+              <input v-model="form.description" class="field-input" required maxlength="200" autocomplete="off" placeholder=" " />
               <span class="field-label" data-required>What was it?</span>
             </label>
             <p class="field-error">Required</p>

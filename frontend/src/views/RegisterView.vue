@@ -53,6 +53,7 @@ async function onSubmit() {
           type="text"
           required
           maxlength="80"
+          autocomplete="name"
           error="Required"
         />
         <Field

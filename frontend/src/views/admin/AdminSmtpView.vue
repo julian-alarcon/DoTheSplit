@@ -117,7 +117,7 @@ onMounted(async () => {
 
     <form v-if="loaded" class="grid gap-3" @submit.prevent="onSave">
       <label class="field">
-        <input v-model="form.host" required class="field-input" placeholder=" " />
+        <input v-model="form.host" required autocomplete="off" class="field-input" placeholder=" " />
         <span class="field-label" data-required>Host (e.g. smtp.example.com)</span>
       </label>
       <label class="field">
@@ -136,11 +136,11 @@ onMounted(async () => {
         Warning: TLS is disabled. The username, password, and every email body will travel in plain text. Not recommended outside trusted local networks.
       </Alert>
       <label class="field">
-        <input v-model="form.username" class="field-input" placeholder=" " />
+        <input v-model="form.username" autocomplete="off" class="field-input" placeholder=" " />
         <span class="field-label">Username (optional)</span>
       </label>
       <label class="field">
-        <input v-model="form.from_address" type="email" required class="field-input" placeholder=" " />
+        <input v-model="form.from_address" type="email" required autocomplete="off" class="field-input" placeholder=" " />
         <span class="field-label" data-required>From address</span>
       </label>
       <label class="field relative">

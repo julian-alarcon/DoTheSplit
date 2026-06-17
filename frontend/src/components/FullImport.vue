@@ -176,7 +176,7 @@ function fmtDate(s: string) {
 
     <section v-else-if="preview" class="flex flex-col gap-4">
       <label class="field">
-        <input v-model="groupName" required maxlength="80" class="field-input" placeholder=" " />
+        <input v-model="groupName" required maxlength="80" autocomplete="off" class="field-input" placeholder=" " />
         <span class="field-label" data-required>Group name</span>
       </label>
 
@@ -202,6 +202,7 @@ function fmtDate(s: string) {
           <input
             v-model="memberEmails[name]"
             type="email"
+            autocomplete="off"
             class="field-input flex-1 rounded-md border border-border bg-card"
             placeholder="email@example.com"
             @blur="refreshPreview"

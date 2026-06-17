@@ -419,7 +419,7 @@ defineExpose({ dirty, hasInitial });
         <p class="min-h-[1.25em] text-xs text-destructive">{{ errorText }}</p>
 
         <label class="field">
-          <input v-model="notes" maxlength="2000" placeholder=" " class="field-input" />
+          <input v-model="notes" maxlength="2000" autocomplete="off" placeholder=" " class="field-input" />
           <span class="field-label">Note</span>
         </label>
 

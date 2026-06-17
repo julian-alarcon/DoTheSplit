@@ -154,7 +154,7 @@ async function onDelete(password: string) {
       <section class="rounded-md border border-border bg-card p-3">
         <h2 class="mb-3 font-medium">Display name</h2>
         <form class="flex flex-col gap-3" @submit.prevent="saveName">
-          <Field v-model="displayName" label="Display name" type="text" required minlength="1" maxlength="80" error="Required" />
+          <Field v-model="displayName" label="Display name" type="text" required minlength="1" maxlength="80" autocomplete="name" error="Required" />
           <div class="flex justify-end"><button type="submit" class="btn-primary">Save name</button></div>
         </form>
       </section>
@@ -193,7 +193,7 @@ async function onDelete(password: string) {
           Current address: <strong>{{ user.email }}</strong>. Changing it sends a 6-digit code to the new address; your old address keeps working until you confirm.
         </p>
         <form class="flex flex-col gap-3" @submit.prevent="requestEmail">
-          <Field v-model="newEmail" label="New email" type="email" required maxlength="254" error="Enter a valid email address" />
+          <Field v-model="newEmail" label="New email" type="email" required maxlength="254" autocomplete="email" error="Enter a valid email address" />
           <Field v-model="emailPassword" label="Current password" type="password" required autocomplete="current-password" error="Required" />
           <div class="flex justify-end"><button type="submit" class="btn-primary">Send code to new email</button></div>
         </form>

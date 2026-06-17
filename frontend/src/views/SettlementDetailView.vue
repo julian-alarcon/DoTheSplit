@@ -158,7 +158,7 @@ onMounted(async () => {
           error="Enter an amount greater than 0"
         />
         <label class="field">
-          <input v-model="form.note" maxlength="200" placeholder=" " class="field-input" />
+          <input v-model="form.note" maxlength="200" autocomplete="off" placeholder=" " class="field-input" />
           <span class="field-label">Note</span>
         </label>
         <div class="flex items-center justify-end gap-2">

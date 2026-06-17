@@ -10,10 +10,13 @@ import {
   commitFullImport,
   csvTooLarge,
   firstCsvCurrency,
+  groupNameFromFilename,
+  memberNamesFromCsv,
   previewFullImport,
   type SplitwiseResponse,
 } from "@/composables/useImport";
 import { formatMoney } from "@/lib/currencies";
+import Alert from "@/components/Alert.vue";
 import CurrencySelect from "@/components/CurrencySelect.vue";
 
 const props = defineProps<{
@@ -53,6 +56,7 @@ function currentMembers() {
 
 async function onPick(e: Event) {
   pickError.value = null;
+  importError.value = null;
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   if (!/\.csv$/i.test(file.name)) {
@@ -72,8 +76,9 @@ async function onPick(e: Event) {
   const cur = firstCsvCurrency(text);
   busy.value = true;
   // We don't yet know the member names; the server derives them from the
-  // header. Send the right count of placeholders by parsing the header here.
-  const headerNames = text.split(/\r?\n/, 1)[0]?.split(",").slice(5).map((s) => s.trim()) ?? [];
+  // header. Send the right count of placeholders by parsing the header here,
+  // skipping the optional DoTheSplit metadata columns exactly as the server does.
+  const headerNames = memberNamesFromCsv(text);
   const res = await previewFullImport(props.source, {
     csv: text,
     group_name: "Imported group",
@@ -83,13 +88,16 @@ async function onPick(e: Event) {
   });
   busy.value = false;
   if (!res.data) {
-    pickError.value = "Could not parse the CSV. Check the format and try again.";
+    pickError.value = res.message ?? "Could not parse the CSV. Check the format and try again.";
     return;
   }
   csv.value = text;
   preview.value = res.data;
   defaultCurrency.value = res.data.default_currency || cur;
-  groupName.value = res.data.group_name && res.data.group_name !== "Imported group" ? res.data.group_name : "";
+  // The first preview is sent with a placeholder group_name, so the server
+  // echoes that back rather than a real name; derive a default from the file
+  // name instead (the user can still edit it before importing).
+  groupName.value = groupNameFromFilename(file.name);
   memberEmails.value = {};
   phase.value = "review";
 }
@@ -110,7 +118,14 @@ async function refreshPreview() {
     dry_run: true,
   });
   busy.value = false;
-  if (res.data) preview.value = res.data;
+  if (res.data) {
+    preview.value = res.data;
+    importError.value = null;
+  } else {
+    // A live re-preview can fail (e.g. a mistyped email rejected by the
+    // server). Surface why so the user can fix it before committing.
+    importError.value = res.message ?? null;
+  }
 }
 
 async function onImport() {
@@ -130,13 +145,17 @@ async function onImport() {
   });
   busy.value = false;
   if (res.ok && res.groupId) await router.replace(`/groups/${res.groupId}`);
-  else importError.value = "The import failed. Check the file and member emails, then try again.";
+  else
+    importError.value =
+      res.message ?? "The import failed. Check the file and member emails, then try again.";
 }
 
 function back() {
   phase.value = "pick";
   csv.value = "";
   preview.value = null;
+  pickError.value = null;
+  importError.value = null;
 }
 
 function fmtDate(s: string) {
@@ -145,13 +164,13 @@ function fmtDate(s: string) {
 </script>
 
 <template>
-  <div>
+  <div class="flex flex-col gap-4">
     <section v-if="phase === 'pick'" class="rounded-md border border-border bg-card p-3">
       <label class="field">
         <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="mt-2 text-sm text-destructive" role="alert">{{ pickError }}</p>
+      <Alert v-if="pickError" tone="error" class="mt-2">{{ pickError }}</Alert>
       <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 
@@ -245,7 +264,7 @@ function fmtDate(s: string) {
         <pre class="mt-2 max-h-64 overflow-auto rounded-sm bg-muted p-2 text-xs leading-normal [font-family:var(--font-mono)]">{{ preview.skipped.join("\n") }}</pre>
       </details>
 
-      <p v-if="importError" class="text-sm text-destructive" role="alert">{{ importError }}</p>
+      <Alert v-if="importError" tone="error">{{ importError }}</Alert>
 
       <div class="flex items-center justify-between gap-3">
         <button type="button" class="btn-secondary btn-sm" @click="back">Pick another file</button>

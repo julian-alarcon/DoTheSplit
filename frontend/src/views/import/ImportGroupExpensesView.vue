@@ -38,6 +38,7 @@ const mixedCurrencies = computed(() => (preview.value?.csv_currencies ?? []).len
 
 async function onPick(e: Event) {
   pickError.value = null;
+  importError.value = null;
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
   if (!/\.csv$/i.test(file.name)) {
@@ -57,7 +58,7 @@ async function onPick(e: Event) {
   const res = await previewGroupExpenses(groupId.value, text);
   busy.value = false;
   if (!res.data) {
-    pickError.value = "Could not parse the CSV. Check the format and try again.";
+    pickError.value = res.message ?? "Could not parse the CSV. Check the format and try again.";
     return;
   }
   csv.value = text;
@@ -71,13 +72,15 @@ async function onImport() {
   const res = await commitGroupExpenses(groupId.value, csv.value);
   busy.value = false;
   if (res.ok) await router.replace(`/groups/${groupId.value}`);
-  else importError.value = "Import failed. Try again or check the file.";
+  else importError.value = res.message ?? "Import failed. Try again or check the file.";
 }
 
 function back() {
   phase.value = "pick";
   csv.value = "";
   preview.value = null;
+  pickError.value = null;
+  importError.value = null;
 }
 
 function fmtDate(s: string) {
@@ -108,14 +111,12 @@ onMounted(async () => {
       name; an unknown name causes the row to be skipped.
     </p>
 
-    <Alert v-if="importError" tone="error" class="mb-4">{{ importError }}</Alert>
-
     <section v-if="phase === 'pick'" class="rounded-md border border-border bg-card p-3">
       <label class="field">
         <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="mt-2 text-sm text-destructive" role="alert">{{ pickError }}</p>
+      <Alert v-if="pickError" tone="error" class="mt-2">{{ pickError }}</Alert>
       <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 
@@ -153,6 +154,8 @@ onMounted(async () => {
         <p class="mt-2 text-xs text-muted-foreground">Rows the importer dropped (bad date, missing cost, unknown payer name, etc.):</p>
         <pre class="mt-2 max-h-64 overflow-auto rounded-sm bg-muted p-2 text-xs leading-normal [font-family:var(--font-mono)]">{{ preview.skipped.join("\n") }}</pre>
       </details>
+
+      <Alert v-if="importError" tone="error">{{ importError }}</Alert>
 
       <div class="flex items-center justify-between gap-3">
         <button type="button" class="btn-secondary btn-sm" @click="back">Pick another file</button>

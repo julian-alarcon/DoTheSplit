@@ -502,11 +502,14 @@
     color: var(--color-red-600);
   }
 
-  /* User-driven validation feedback. :user-invalid only matches after the
-     user interacts (blur or submit), so first paint is not all red. This is
-     the only visible cue on Firefox for Android, which does not render the
-     native constraint-validation tooltip. */
-  .field:has(.field-input:user-invalid) {
+  /* Submit-gated validation feedback. The cues stay hidden until the user
+     attempts an action: src/lib/form-validation.ts sets `data-validated` on a
+     form only when a submit is tried while fields are invalid (and clears it on
+     a successful submit), so first paint and plain blur never go red, and an
+     in-place reset after a successful add does not re-light cleared fields.
+     Live `:invalid` then drives the cue. This is also the only visible cue on
+     Firefox for Android, which does not render the native validation tooltip. */
+  form[data-validated] .field:has(.field-input:invalid) {
     box-shadow:
       inset 0 1px 0 0 var(--border),
       inset 1px 0 0 0 var(--border),
@@ -519,7 +522,7 @@
     font-size: 0.75rem;
     color: var(--color-red-600);
   }
-  .field:has(.field-input:user-invalid) + .field-error {
+  form[data-validated] .field:has(.field-input:invalid) + .field-error {
     display: block;
   }
 
@@ -570,7 +573,7 @@
       inset -1px 0 0 0 var(--border),
       inset 0 -2px 0 0 var(--field-focus);
   }
-  .field-input-num:user-invalid {
+  form[data-validated] .field-input-num:invalid {
     box-shadow:
       inset 0 1px 0 0 var(--border),
       inset 1px 0 0 0 var(--border),
@@ -637,7 +640,7 @@
     background-size: 0.875rem 0.875rem;
     padding-right: 2rem;
   }
-  .field-select:user-invalid {
+  form[data-validated] .field-select:invalid {
     border-color: var(--color-red-600);
   }
 

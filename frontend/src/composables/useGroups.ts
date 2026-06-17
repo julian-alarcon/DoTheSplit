@@ -55,11 +55,14 @@ export async function addMember(groupId: string, email: string): Promise<{ ok: b
   return { ok: !error };
 }
 
-export async function removeMember(groupId: string, userId: string): Promise<{ ok: boolean }> {
+export async function removeMember(
+  groupId: string,
+  userId: string,
+): Promise<{ ok: boolean; message?: string }> {
   const { error } = await api.DELETE("/v1/groups/{id}/members/{userId}", {
     params: { path: { id: groupId, userId } },
   });
-  return { ok: !error };
+  return { ok: !error, message: error?.message };
 }
 
 // All group-settings mutations (rename, currency, default_split, ownership

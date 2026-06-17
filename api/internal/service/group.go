@@ -19,7 +19,7 @@ var (
 	ErrCurrencyLocked      = errors.New("default_currency is locked once the group has expenses or settlements")
 	ErrBadDefaultSplit     = errors.New("invalid default_split")
 	ErrCannotRemoveCreator = errors.New("the group creator cannot leave or be removed; transfer ownership or delete the group")
-	ErrBalanceNotZero      = errors.New("settle up first: removing a member with a non-zero balance would silently drop their share of the ledger")
+	ErrBalanceNotZero      = errors.New("This member still has an outstanding balance. Settle up so their balance is zero, then remove them. Otherwise their share of the group's expenses would be dropped from the ledger.")
 	ErrNewOwnerNotMember   = errors.New("new owner must be an existing group member")
 )
 

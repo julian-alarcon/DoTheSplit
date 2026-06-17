@@ -99,11 +99,13 @@ async function onAddMember() {
 }
 
 async function onRemoveMember() {
+  error.value = null;
   const userId = removeTarget.value;
   removeTarget.value = null;
   if (!userId) return;
   const res = await removeMember(groupId.value, userId);
   if (res.ok) await reload();
+  else error.value = res.message || "Could not remove the member. Try again.";
 }
 
 async function onSaveSplit() {

@@ -143,18 +143,18 @@ onMounted(async () => {
         <input v-model="form.from_address" type="email" required class="field-input" placeholder=" " />
         <span class="field-label" data-required>From address</span>
       </label>
-      <label class="field pw-field">
+      <label class="field relative">
         <input
           v-model="form.smtp_password"
           :type="showPassword ? 'text' : 'password'"
           autocomplete="new-password"
-          class="field-input pw-input"
+          class="field-input pr-10"
           placeholder=" "
         />
         <span class="field-label">SMTP password</span>
         <button
           type="button"
-          class="pw-toggle"
+          class="absolute right-2 top-1/2 grid -translate-y-1/2 cursor-pointer place-items-center rounded-sm p-1 text-muted-foreground hover:text-foreground"
           :aria-label="showPassword ? 'Hide password' : 'Show password'"
           :aria-pressed="showPassword"
           @click="showPassword = !showPassword"
@@ -170,33 +170,3 @@ onMounted(async () => {
     </form>
   </AppLayout>
 </template>
-
-<style scoped>
-.pw-field {
-  position: relative;
-}
-.pw-input {
-  padding-right: 2.5rem;
-}
-.pw-toggle {
-  position: absolute;
-  right: 0.5rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  place-items: center;
-  border-radius: 0.25rem;
-  padding: 0.25rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.pw-toggle:hover {
-  color: var(--foreground);
-}
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-</style>

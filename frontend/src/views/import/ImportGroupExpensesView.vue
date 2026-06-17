@@ -115,7 +115,7 @@ onMounted(async () => {
         <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="mt-2 text-sm text-[var(--destructive)]" role="alert">{{ pickError }}</p>
+      <p v-if="pickError" class="mt-2 text-sm text-destructive" role="alert">{{ pickError }}</p>
       <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 

@@ -41,6 +41,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Interaction-surface tokens, registered so they resolve as first-class
+     utilities (bg-hover-surface, text-subtle-foreground, bg-backdrop,
+     text-hover-foreground) instead of text-[var(--token)] arbitrary values. */
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-hover-surface: var(--hover-surface);
+  --color-hover-foreground: var(--hover-foreground);
+  --color-backdrop: var(--backdrop);
 }
 
 /* Self-hosted Inter (SIL OFL, see assets/fonts/inter/OFL.txt) - keeps font
@@ -207,7 +214,9 @@
        dark themes redefine both below. --track-* drive the toggle/segmented
        control; --select-chevron is the inlined <select> arrow per theme. */
     --hover-surface: var(--muted);
-    /* --hover-foreground intentionally unset in light; see var() fallbacks. */
+    /* In light mode the hovered foreground stays the component's resting card
+       color; the dark themes lift it to --accent-foreground below. */
+    --hover-foreground: var(--card-foreground);
     /* Secondary prose (subhead/muted/hint). Darker than --muted-foreground in
        light, lighter in dark, matching the original neutral-600/neutral-400
        descriptive text. Kept separate so --muted-foreground (field labels,

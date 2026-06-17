@@ -285,39 +285,39 @@ watch(groupId, loadGroup);
 
 <template>
   <AppLayout v-if="group" wide :back="{ to: '/groups', label: 'Groups' }">
-    <div class="head">
-      <h1 class="title">{{ group.name }}</h1>
-      <div class="head-actions">
+    <div class="mb-2 flex items-baseline justify-between gap-3">
+      <h1 class="min-w-0 flex-1 truncate text-2xl font-semibold">{{ group.name }}</h1>
+      <div class="flex shrink-0 items-center gap-2">
         <RouterLink
           :to="`/groups/${groupId}/recurring`"
-          class="btn-secondary btn-sm head-btn"
+          class="btn-secondary btn-sm h-9"
           :aria-label="`Recurring expenses (${recurring.length})`"
           title="Recurring expenses"
         >
           <Icon name="arrows-rotate" />
-          <span class="head-btn-label">Recurring</span>
-          <span v-if="recurring.length > 0" class="tnum"
+          <span class="hidden sm:inline">Recurring</span>
+          <span v-if="recurring.length > 0" class="tabular-nums"
             >({{ recurring.length }})</span
           >
         </RouterLink>
         <RouterLink
           :to="`/groups/${groupId}/settings`"
-          class="btn-secondary btn-sm head-btn"
+          class="btn-secondary btn-sm h-9"
           aria-label="Group settings"
           title="Group settings"
         >
           <Icon name="gear" />
-          <span class="head-btn-label">Group settings</span>
+          <span class="hidden sm:inline">Group settings</span>
         </RouterLink>
       </div>
     </div>
-    <p class="subhead">
+    <p class="mb-3 text-sm text-subtle-foreground">
       {{ members.length }} member{{ members.length === 1 ? "" : "s" }} · default
       currency {{ currency }}
     </p>
 
-    <Alert v-if="formError" tone="error" class="banner">{{ formError }}</Alert>
-    <Alert v-if="inviteFailed > 0" tone="info" class="banner">
+    <Alert v-if="formError" tone="error" class="mb-4 flex flex-wrap items-center justify-between gap-2">{{ formError }}</Alert>
+    <Alert v-if="inviteFailed > 0" tone="info" class="mb-4 flex flex-wrap items-center justify-between gap-2">
       <span>
         {{
           inviteFailed === 1
@@ -325,27 +325,27 @@ watch(groupId, loadGroup);
             : `${inviteFailed} invites were skipped: those emails aren't registered users yet.`
         }}
       </span>
-      <RouterLink :to="`/groups/${groupId}/settings`" class="link"
+      <RouterLink :to="`/groups/${groupId}/settings`" class="font-medium underline"
         >Add members</RouterLink
       >
     </Alert>
 
-    <div class="triptych">
+    <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[20.5rem_minmax(0,1fr)_20.5rem]">
       <!-- Balances -->
-      <section class="col-balances">
-        <div class="bal-head">
-          <div class="bal-list">
+      <section class="lg:order-1">
+        <div class="flex items-start justify-between gap-3 text-sm">
+          <div class="flex min-w-0 flex-1 flex-col gap-2">
             <p
               v-if="myDebts.length === 0"
-              class="settled text-emerald-700 dark:text-emerald-400"
+              class="flex items-center gap-2 text-emerald-700 dark:text-emerald-400"
             >
               <Icon :name="settledIcon" :size="16" />
-              <span class="settled-msg">{{ settledMessage }}</span>
+              <span class="font-medium">{{ settledMessage }}</span>
             </p>
-            <ul v-else class="debts">
-              <li v-for="(d, i) in myDebts" :key="i" class="debt">
+            <ul v-else class="flex list-none flex-col gap-2">
+              <li v-for="(d, i) in myDebts" :key="i" class="flex min-w-0 flex-wrap items-center gap-1.5">
                 <template v-if="d.theyOweMe">
-                  <span class="who">
+                  <span class="flex min-w-0 items-center gap-1.5">
                     <MemberAvatar
                       :user-id="d.otherID"
                       :display-name="nameByID.get(d.otherID) ?? '?'"
@@ -355,15 +355,15 @@ watch(groupId, loadGroup);
                       "
                       :size="18"
                     />
-                    <span class="who-name">{{
+                    <span class="truncate">{{
                       shortName(nameByID.get(d.otherID))
                     }}</span>
                   </span>
-                  <span class="muted">owes you</span>
+                  <span class="text-subtle-foreground">owes you</span>
                 </template>
                 <template v-else>
-                  <span class="muted">You owe</span>
-                  <span class="who">
+                  <span class="text-subtle-foreground">You owe</span>
+                  <span class="flex min-w-0 items-center gap-1.5">
                     <MemberAvatar
                       :user-id="d.otherID"
                       :display-name="nameByID.get(d.otherID) ?? '?'"
@@ -373,13 +373,13 @@ watch(groupId, loadGroup);
                       "
                       :size="18"
                     />
-                    <span class="who-name">{{
+                    <span class="truncate">{{
                       shortName(nameByID.get(d.otherID))
                     }}</span>
                   </span>
                 </template>
                 <span
-                  class="amount"
+                  class="[font-family:var(--font-mono)]"
                   :class="
                     d.theyOweMe
                       ? 'text-emerald-700 dark:text-emerald-400'
@@ -401,10 +401,10 @@ watch(groupId, loadGroup);
       </section>
 
       <!-- Add expense -->
-      <section class="col-add">
-        <h2 class="add-title">Add expense</h2>
-        <form class="add-form" @submit.prevent="onSubmit">
-          <div class="cat-row">
+      <section class="rounded-md border border-border bg-card p-3 lg:order-3">
+        <h2 class="mb-3 font-medium">Add expense</h2>
+        <form class="flex flex-col gap-4" @submit.prevent="onSubmit">
+          <div class="flex items-end gap-2">
             <button
               type="button"
               class="field-category-trigger"
@@ -420,7 +420,7 @@ watch(groupId, loadGroup);
                 :size="38"
               />
             </button>
-            <div class="cat-desc">
+            <div class="flex flex-1 flex-col">
               <label class="field">
                 <input
                   v-model="form.description"
@@ -462,7 +462,7 @@ watch(groupId, loadGroup);
             :default-split="group.default_split"
           />
 
-          <div class="add-actions">
+          <div class="flex items-center justify-end gap-2">
             <DatePicker
               v-model="form.incurredAt"
               v-model:cadence="form.cadence"
@@ -478,29 +478,29 @@ watch(groupId, loadGroup);
       </section>
 
       <!-- Transactions -->
-      <section class="col-transactions">
-        <RouterLink :to="`/groups/${groupId}/activity`" class="btn-secondary btn-xs activity-link">
+      <section class="relative pt-10 lg:order-2">
+        <RouterLink :to="`/groups/${groupId}/activity`" class="btn-secondary btn-xs absolute right-0 top-0 z-10">
           <Icon name="clock-rotate-left" :size="12" />
           <span>See activity</span>
         </RouterLink>
 
-        <p v-if="loaded && transactions.length === 0" class="empty">
+        <p v-if="loaded && transactions.length === 0" class="text-sm text-muted-foreground">
           No expenses or settlements yet.
         </p>
 
-        <ul v-else class="feed">
+        <ul v-else class="flex list-none flex-col gap-1">
           <template v-for="(row, i) in feedRows" :key="i">
-            <li v-if="row.kind === 'month-header'" class="month-header">
+            <li v-if="row.kind === 'month-header'" class="px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground first:pt-1">
               {{ row.label }}
             </li>
             <li v-else-if="row.item.kind === 'expense' && row.item.expense">
               <RouterLink
                 :to="`/groups/${groupId}/expenses/${row.item.expense.id}`"
-                class="tx tx-expense"
+                class="flex items-stretch justify-between gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 hover:bg-hover-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                <div class="tx-left">
+                <div class="flex min-w-0 items-center gap-3">
                   <span
-                    class="tx-date"
+                    class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none"
                     :title="
                       categoryByID.get(row.item.expense.category_id)?.label ??
                       ''
@@ -516,21 +516,21 @@ watch(groupId, loadGroup);
                       "
                       :size="28"
                     />
-                    <span class="tx-month">{{
+                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{
                       dayParts(row.item.expense.incurred_at).month
                     }}</span>
-                    <span class="tx-day">{{
+                    <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{
                       dayParts(row.item.expense.incurred_at).day
                     }}</span>
                   </span>
-                  <div class="tx-body">
-                    <div class="tx-title">
-                      <span class="tx-desc">{{
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
+                      <span class="min-w-0 truncate">{{
                         row.item.expense.description
                       }}</span>
                       <span
                         v-if="row.item.cadence"
-                        class="cadence-badge"
+                        class="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
                         :title="`Repeats ${cadenceLabels[row.item.cadence] ?? row.item.cadence}`"
                       >
                         <Icon name="arrows-rotate" :size="9" />
@@ -539,7 +539,7 @@ watch(groupId, loadGroup);
                         }}
                       </span>
                     </div>
-                    <div class="tx-sub">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span>paid by</span>
                       <MemberAvatar
                         :user-id="row.item.expense.payer_id"
@@ -555,19 +555,19 @@ watch(groupId, loadGroup);
                         "
                         :size="12"
                       />
-                      <span class="tx-payer">{{
+                      <span class="truncate">{{
                         shortName(nameByID.get(row.item.expense.payer_id))
                       }}</span>
                     </div>
                   </div>
                 </div>
-                <div class="tx-right">
-                  <span class="tx-stake">
+                <div class="flex shrink-0 flex-col items-end justify-between gap-1">
+                  <span class="text-[11px] tabular-nums">
                     <template
                       v-if="viewerStake(row.item.expense).kind === 'lent'"
                     >
-                      <span class="stake-lent">you lent </span>
-                      <span class="stake-amt">{{
+                      <span class="text-emerald-900 dark:text-emerald-200">you lent </span>
+                      <span class="[font-family:var(--font-mono)]">{{
                         rowMoney(
                           (viewerStake(row.item.expense) as { cents: number })
                             .cents,
@@ -578,8 +578,8 @@ watch(groupId, loadGroup);
                     <template
                       v-else-if="viewerStake(row.item.expense).kind === 'owes'"
                     >
-                      <span class="stake-owes">you owe </span>
-                      <span class="stake-amt">{{
+                      <span class="text-amber-700 dark:text-amber-200">you owe </span>
+                      <span class="[font-family:var(--font-mono)]">{{
                         rowMoney(
                           (viewerStake(row.item.expense) as { cents: number })
                             .cents,
@@ -587,9 +587,9 @@ watch(groupId, loadGroup);
                         )
                       }}</span>
                     </template>
-                    <span v-else class="muted">not involved</span>
+                    <span v-else class="text-subtle-foreground">not involved</span>
                   </span>
-                  <span class="tx-amount">{{
+                  <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{
                     rowMoney(
                       row.item.expense.amount_cents,
                       row.item.expense.currency,
@@ -601,22 +601,22 @@ watch(groupId, loadGroup);
             <li v-else-if="row.item.settlement">
               <RouterLink
                 :to="`/groups/${groupId}/settlements/${row.item.settlement.id}`"
-                class="tx tx-settlement"
+                class="flex items-stretch justify-between gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 dark:focus-visible:outline-emerald-700"
               >
-                <div class="tx-left">
-                  <span class="tx-date" title="Settlement">
-                    <span class="settle-icon"
+                <div class="flex min-w-0 items-center gap-3">
+                  <span class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none" title="Settlement">
+                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
                       ><Icon name="arrow-right" :size="14"
                     /></span>
-                    <span class="tx-month">{{
+                    <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{
                       dayParts(row.item.settlement.settled_at).month
                     }}</span>
-                    <span class="tx-day">{{
+                    <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{
                       dayParts(row.item.settlement.settled_at).day
                     }}</span>
                   </span>
-                  <div class="tx-body">
-                    <div class="tx-title settle-title">
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 font-medium">
                       <MemberAvatar
                         :user-id="row.item.settlement.from_user_id"
                         :display-name="
@@ -632,12 +632,12 @@ watch(groupId, loadGroup);
                         "
                         :size="16"
                       />
-                      <span class="tx-payer">{{
+                      <span class="truncate">{{
                         shortName(
                           nameByID.get(row.item.settlement.from_user_id),
                         )
                       }}</span>
-                      <span class="muted">paid</span>
+                      <span class="text-subtle-foreground">paid</span>
                       <MemberAvatar
                         :user-id="row.item.settlement.to_user_id"
                         :display-name="
@@ -653,19 +653,19 @@ watch(groupId, loadGroup);
                         "
                         :size="16"
                       />
-                      <span class="tx-payer">{{
+                      <span class="truncate">{{
                         shortName(nameByID.get(row.item.settlement.to_user_id))
                       }}</span>
                     </div>
-                    <div class="tx-sub">
+                    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span>settlement</span>
-                      <span v-if="row.item.settlement.note" class="tx-note"
+                      <span v-if="row.item.settlement.note" class="truncate"
                         >· {{ row.item.settlement.note }}</span
                       >
                     </div>
                   </div>
                 </div>
-                <span class="tx-amount">{{
+                <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{
                   formatMoney(row.item.settlement.amount_cents, currency)
                 }}</span>
               </RouterLink>
@@ -673,7 +673,7 @@ watch(groupId, loadGroup);
           </template>
         </ul>
 
-        <div v-if="nextCursor" class="load-more">
+        <div v-if="nextCursor" class="mt-3 flex justify-center">
           <button
             type="button"
             class="btn-secondary btn-sm"
@@ -689,23 +689,23 @@ watch(groupId, loadGroup);
     <!-- Category picker dialog -->
     <dialog
       ref="categoryDialog"
-      class="cat-dialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
       aria-modal="true"
       aria-label="Choose category"
     >
-      <div class="cat-dialog-body">
-        <div class="cat-dialog-head">
-          <h3 class="cat-dialog-title">Choose category</h3>
+      <div class="flex flex-col gap-3 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-medium">Choose category</h3>
           <button
             type="button"
-            class="cat-close"
+            class="cursor-pointer rounded-md px-2 py-1 text-muted-foreground hover:bg-muted"
             aria-label="Close"
             @click="categoryDialog?.close()"
           >
             <Icon name="xmark" :size="14" />
           </button>
         </div>
-        <ul class="cat-list">
+        <ul class="flex max-h-[60vh] list-none flex-col gap-0.5 overflow-auto">
           <template v-for="(c, i) in categories" :key="c.id">
             <li v-if="isNewGroupRow(i)" class="field-category-group">
               {{ c.group_label }}
@@ -739,432 +739,3 @@ watch(groupId, loadGroup);
     </Alert>
   </AppLayout>
 </template>
-
-<style scoped>
-.head {
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.title {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.head-actions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-.head-btn {
-  height: 2.25rem;
-}
-.head-btn-label {
-  display: none;
-}
-@media (min-width: 640px) {
-  .head-btn-label {
-    display: inline;
-  }
-}
-.tnum {
-  font-variant-numeric: tabular-nums;
-}
-.subhead {
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  color: var(--subtle-foreground);
-}
-.banner {
-  margin-bottom: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.link {
-  font-weight: 500;
-  text-decoration: underline;
-}
-
-.triptych {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 0.75rem;
-}
-@media (min-width: 1024px) {
-  .triptych {
-    grid-template-columns: 20.5rem minmax(0, 1fr) 20.5rem;
-  }
-  .col-balances {
-    order: 1;
-  }
-  .col-transactions {
-    order: 2;
-  }
-  .col-add {
-    order: 3;
-  }
-}
-
-.bal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.875rem;
-}
-.bal-list {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.settled {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.settled-msg {
-  font-weight: 500;
-}
-.debts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  list-style: none;
-}
-.debt {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-}
-.who {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.375rem;
-}
-.who-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.muted {
-  color: var(--subtle-foreground);
-}
-.amount {
-  font-family: var(--font-mono);
-}
-
-.col-transactions {
-  position: relative;
-  /* Reserve a row for the corner-anchored See-activity link so the feed below
-     never sits under it. */
-  padding-top: 2.5rem;
-}
-/* btn-secondary btn-xs supplies the look; only the overlay positioning is
-   specific to this corner-anchored link. */
-.activity-link {
-  position: absolute;
-  right: 0;
-  top: 0;
-  z-index: 10;
-}
-.empty {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.feed {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  list-style: none;
-}
-.month-header {
-  padding: 0.75rem 0.25rem 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.month-header:first-child {
-  padding-top: 0.25rem;
-}
-.tx {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.375rem 0.75rem;
-}
-.tx:hover {
-  background: var(--hover-surface);
-}
-.tx:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-/* Settlement rows get the emerald chip treatment (restored from Astro). */
-.tx-settlement {
-  border-color: oklch(90.5% 0.093 164.15); /* emerald-200 */
-  background: oklch(97.9% 0.021 166.113); /* emerald-50 */
-}
-.tx-settlement:hover {
-  background: oklch(95% 0.052 163.051); /* emerald-100 */
-}
-.tx-settlement:focus-visible {
-  outline: 2px solid oklch(76.5% 0.177 163.223); /* emerald-400 */
-}
-:root[data-theme="dark"] .tx-settlement,
-:root[data-theme="high-contrast"] .tx-settlement {
-  border-color: oklch(37.8% 0.077 168.94); /* emerald-900 */
-  background: oklch(26.2% 0.051 172.552 / 0.4); /* emerald-950/40 */
-}
-:root[data-theme="dark"] .tx-settlement:hover,
-:root[data-theme="high-contrast"] .tx-settlement:hover {
-  background: oklch(26.2% 0.051 172.552 / 0.6); /* emerald-950/60 */
-}
-:root[data-theme="dark"] .tx-settlement:focus-visible,
-:root[data-theme="high-contrast"] .tx-settlement:focus-visible {
-  outline-color: oklch(50.8% 0.118 165.612); /* emerald-700 */
-}
-.tx-left {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.75rem;
-}
-.tx-date {
-  flex-shrink: 0;
-  display: inline-flex;
-  width: 1.75rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.settle-icon {
-  display: inline-flex;
-  height: 1.75rem;
-  width: 1.75rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: oklch(95% 0.052 163.051); /* emerald-100 */
-  color: oklch(50.8% 0.118 165.612); /* emerald-700 */
-}
-:root[data-theme="dark"] .settle-icon,
-:root[data-theme="high-contrast"] .settle-icon {
-  background: oklch(37.8% 0.077 168.94); /* emerald-900 */
-  color: oklch(84.5% 0.143 164.978); /* emerald-300 */
-}
-.tx-month {
-  margin-top: 0.125rem;
-  font-size: 8px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.tx-day {
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-.tx-body {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-.tx-title {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  font-weight: 500;
-}
-.settle-title {
-  font-weight: 500;
-}
-.tx-desc {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cadence-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-  border-radius: 9999px;
-  background: var(--muted);
-  padding: 0 0.375rem;
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.tx-sub {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-.tx-payer {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tx-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tx-right {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.25rem;
-}
-.tx-stake {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.stake-lent {
-  color: oklch(37.8% 0.077 168.94); /* emerald-900 */
-}
-:root[data-theme="dark"] .stake-lent,
-:root[data-theme="high-contrast"] .stake-lent {
-  color: oklch(90.5% 0.093 164.15); /* emerald-200 */
-}
-.stake-owes {
-  color: oklch(55.5% 0.163 48.998); /* amber-700 */
-}
-:root[data-theme="dark"] .stake-owes,
-:root[data-theme="high-contrast"] .stake-owes {
-  color: oklch(92.4% 0.12 95.746); /* amber-200 */
-}
-.stake-amt {
-  font-family: var(--font-mono);
-}
-.tx-amount {
-  align-self: center;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 1.125rem;
-  font-variant-numeric: tabular-nums;
-}
-.load-more {
-  margin-top: 0.75rem;
-  display: flex;
-  justify-content: center;
-}
-
-.col-add {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.add-title {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.cat-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-.cat-desc {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-.add-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.cat-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.cat-dialog::backdrop {
-  background: var(--backdrop);
-}
-.cat-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-}
-.cat-dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.cat-dialog-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.cat-close {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.cat-close:hover {
-  background: var(--muted);
-}
-.cat-list {
-  display: flex;
-  max-height: 60vh;
-  flex-direction: column;
-  gap: 0.125rem;
-  overflow: auto;
-  list-style: none;
-}
-</style>

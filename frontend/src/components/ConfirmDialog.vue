@@ -44,20 +44,20 @@ function onClose() {
 <template>
   <dialog
     ref="dialog"
-    class="confirm"
+    class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
     aria-modal="true"
     :aria-label="title"
     @close="onClose"
   >
-    <div class="confirm-body">
-      <div class="confirm-head">
-        <h3 class="confirm-title">{{ title }}</h3>
-        <button type="button" class="confirm-x" aria-label="Close" title="Close" @click="onCancel">
+    <div class="flex flex-col gap-4 p-5">
+      <div class="flex items-start justify-between gap-3">
+        <h3 class="text-lg font-medium">{{ title }}</h3>
+        <button type="button" class="cursor-pointer rounded-md px-2 py-1 text-muted-foreground hover:bg-muted" aria-label="Close" title="Close" @click="onCancel">
           <Icon name="xmark" :size="14" />
         </button>
       </div>
-      <p class="confirm-msg">{{ message }}</p>
-      <div class="confirm-actions">
+      <p class="text-sm text-muted-foreground">{{ message }}</p>
+      <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <button type="button" class="btn-secondary" @click="onCancel">{{ cancelLabel }}</button>
         <button
           type="button"
@@ -71,62 +71,3 @@ function onClose() {
     </div>
   </dialog>
 </template>
-
-<style scoped>
-.confirm {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.confirm::backdrop {
-  background: var(--backdrop);
-}
-.confirm-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-}
-.confirm-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.confirm-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.confirm-x {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.confirm-x:hover {
-  background: var(--muted);
-}
-.confirm-msg {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.confirm-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-@media (min-width: 640px) {
-  .confirm-actions {
-    flex-direction: row;
-    justify-content: flex-end;
-  }
-}
-</style>

@@ -166,37 +166,37 @@ watch(groupId, load);
 
 <template>
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}`, label: group.name }">
-    <h1 class="title">Group settings</h1>
-    <p class="subhead">
+    <h1 class="mb-2 text-2xl font-semibold">Group settings</h1>
+    <p class="mb-6 text-sm text-subtle-foreground">
       {{ members.length }} member{{ members.length === 1 ? "" : "s" }} ·
       default currency {{ group.default_currency }}
     </p>
 
-    <Alert v-if="error" tone="error" class="banner">{{ error }}</Alert>
+    <Alert v-if="error" tone="error" class="mb-3">{{ error }}</Alert>
 
     <!-- Rename & currency -->
-    <section class="panel">
-      <h2 class="panel-title">Rename &amp; currency</h2>
-      <form class="form" @submit.prevent="onSaveRename">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Rename &amp; currency</h2>
+      <form class="flex flex-col gap-3" @submit.prevent="onSaveRename">
         <Field v-model="name" label="Group name" type="text" required minlength="1" maxlength="80" error="Required" />
         <label class="field-select-row">
           <span>Default currency</span>
           <CurrencySelect v-model="currency" :disabled="currencyLocked" />
         </label>
-        <p v-if="currencyLocked" class="hint">
+        <p v-if="currencyLocked" class="text-xs text-subtle-foreground">
           Currency is fixed after the first expense or settlement. To change it, delete all transactions or create a new group.
         </p>
-        <p v-else class="hint">Each group uses a single currency. Multi-currency groups are not supported.</p>
+        <p v-else class="text-xs text-subtle-foreground">Each group uses a single currency. Multi-currency groups are not supported.</p>
         <button type="submit" class="btn-primary self-end">Save</button>
       </form>
     </section>
 
     <!-- Members -->
-    <section class="panel">
-      <h2 class="panel-title">Members</h2>
-      <ul class="members">
-        <li v-for="m in members" :key="m.user_id" class="member">
-          <span class="member-who">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Members</h2>
+      <ul class="mb-3 flex list-none flex-col gap-2 text-sm">
+        <li v-for="m in members" :key="m.user_id" class="flex items-center justify-between gap-2">
+          <span class="flex min-w-0 items-center gap-2">
             <MemberAvatar
               :user-id="m.user_id"
               :display-name="m.display_name"
@@ -204,10 +204,10 @@ watch(groupId, load);
               :avatar-updated-at="m.avatar_updated_at"
               :size="20"
             />
-            <span class="trunc">{{ m.display_name }}</span>
+            <span class="truncate">{{ m.display_name }}</span>
           </span>
-          <span class="member-actions">
-            <span v-if="m.user_id === group.created_by" class="badge">creator</span>
+          <span class="flex shrink-0 items-center gap-2">
+            <span v-if="m.user_id === group.created_by" class="text-xs uppercase tracking-wider text-muted-foreground">creator</span>
             <button
               v-if="isCreator && m.user_id !== group.created_by"
               type="button"
@@ -219,22 +219,22 @@ watch(groupId, load);
           </span>
         </li>
       </ul>
-      <Alert v-if="isPair && hasDefaultSplit" tone="info" class="mt">
+      <Alert v-if="isPair && hasDefaultSplit" tone="info" class="my-2">
         Adding a 3rd member will clear the pinned default split. New expenses will fall back to an equal split until you set a new default.
       </Alert>
-      <form class="add-member" @submit.prevent="onAddMember">
-        <div class="add-member-field">
+      <form class="flex items-end gap-2" @submit.prevent="onAddMember">
+        <div class="flex-1">
           <Field v-model="newEmail" label="New member email" type="email" required error="Enter a valid email address" />
         </div>
         <button type="submit" class="btn-primary">Add</button>
       </form>
-      <p class="hint">The invitee must already be registered.</p>
+      <p class="text-xs text-subtle-foreground">The invitee must already be registered.</p>
     </section>
 
     <!-- Default split -->
-    <section class="panel">
-      <h2 class="panel-title">Default split</h2>
-      <p class="muted mb">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Default split</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">
         {{
           !isPair
             ? "Only available for 2-member groups. New expenses default to an equal split."
@@ -243,46 +243,46 @@ watch(groupId, load);
               : "Pin a percentage split (e.g. 60/40) to prefill new expenses. Cleared automatically if a 3rd member joins."
         }}
       </p>
-      <form v-if="isPair" class="split-form" @submit.prevent="onSaveSplit">
-        <div class="split-row">
-          <span class="split-name">{{ members[0].display_name }}</span>
-          <input v-model="split1" type="number" step="0.01" min="0" max="100" required class="field-input-num split-num" />
-          <span class="muted">%</span>
+      <form v-if="isPair" class="flex flex-col gap-2" @submit.prevent="onSaveSplit">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="flex-1">{{ members[0].display_name }}</span>
+          <input v-model="split1" type="number" step="0.01" min="0" max="100" required class="field-input-num w-20" />
+          <span class="text-sm text-subtle-foreground">%</span>
         </div>
-        <div class="split-row">
-          <span class="split-name">{{ members[1].display_name }}</span>
-          <input v-model="split2" type="number" step="0.01" min="0" max="100" required class="field-input-num split-num" />
-          <span class="muted">%</span>
+        <div class="flex items-center gap-2 text-sm">
+          <span class="flex-1">{{ members[1].display_name }}</span>
+          <input v-model="split2" type="number" step="0.01" min="0" max="100" required class="field-input-num w-20" />
+          <span class="text-sm text-subtle-foreground">%</span>
         </div>
-        <p class="hint">Must sum to 100.</p>
-        <div class="split-actions">
+        <p class="text-xs text-subtle-foreground">Must sum to 100.</p>
+        <div class="flex justify-end">
           <button type="submit" class="btn-primary btn-sm">{{ hasDefaultSplit ? "Update default" : "Pin default" }}</button>
         </div>
       </form>
-      <div v-if="hasDefaultSplit && isPair" class="split-clear">
+      <div v-if="hasDefaultSplit && isPair" class="mt-2 flex justify-end">
         <button type="button" class="btn-secondary btn-sm" @click="onClearSplit">Clear default</button>
       </div>
     </section>
 
     <!-- Export / Import (wired in D6) -->
-    <section class="panel">
-      <h2 class="panel-title">Export</h2>
-      <p class="muted mb">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Export</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">
         Download every expense and settlement in this group as a CSV file. The format is a superset of Splitwise's export.
       </p>
-      <div class="right">
+      <div class="flex justify-end">
         <RouterLink :to="`/groups/${groupId}/export`" class="btn-primary">
           <Icon name="download" /><span>Export CSV</span>
         </RouterLink>
       </div>
     </section>
 
-    <section class="panel">
-      <h2 class="panel-title">Import expenses</h2>
-      <p class="muted mb">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Import expenses</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">
         Bulk-add expenses from a DoTheSplit-shaped CSV. Splits use this group's default rule.
       </p>
-      <div class="right">
+      <div class="flex justify-end">
         <RouterLink :to="`/groups/${groupId}/import-expenses`" class="btn-primary">
           <Icon name="upload" /><span>Import expenses</span>
         </RouterLink>
@@ -292,13 +292,13 @@ watch(groupId, load);
     <!-- Leave (non-creator) -->
     <section v-if="!isCreator" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Leave group</h2>
-      <p class="muted mb">Removes you from this group. Your past expenses, splits, and settlements stay in the ledger.</p>
-      <Alert v-if="myNetCents !== 0" tone="info" class="mb">
-        You have a non-zero balance of <span class="mono">{{ formatMoney(myNetCents, group.default_currency) }}</span> in this group.
+      <p class="mb-3 text-sm text-subtle-foreground">Removes you from this group. Your past expenses, splits, and settlements stay in the ledger.</p>
+      <Alert v-if="myNetCents !== 0" tone="info" class="mb-3">
+        You have a non-zero balance of <span class="[font-family:var(--font-mono)]">{{ formatMoney(myNetCents, group.default_currency) }}</span> in this group.
         {{ myNetCents > 0 ? "Leaving without settling up means others won't be reminded to pay you back." : "Leaving without settling up means you won't be reminded to pay your share." }}
         Consider settling up first.
       </Alert>
-      <div class="right">
+      <div class="flex justify-end">
         <button type="button" class="btn-danger" @click="leaveConfirm = true">
           <Icon name="right-from-bracket" /><span>Leave group</span>
         </button>
@@ -306,14 +306,14 @@ watch(groupId, load);
     </section>
 
     <!-- Transfer ownership (creator, >1 member) -->
-    <section v-if="isCreator && members.length > 1" class="panel">
-      <h2 class="panel-title">Transfer ownership</h2>
-      <p class="muted mb">
+    <section v-if="isCreator && members.length > 1" class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Transfer ownership</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">
         Hand the group to another member. You stay in the group as a regular member, and the new owner takes over creator-only powers.
       </p>
-      <form class="transfer" @submit.prevent="transferConfirm = true">
-        <label class="field-select-row transfer-field">
-          <span>New owner <span class="req">*</span></span>
+      <form class="flex flex-col gap-2 sm:flex-row sm:items-end" @submit.prevent="transferConfirm = true">
+        <label class="field-select-row sm:flex-1">
+          <span>New owner <span class="text-destructive">*</span></span>
           <select v-model="newOwnerId" required class="field-select">
             <option value="">Pick a member…</option>
             <option v-for="m in members.filter((x) => x.user_id !== group!.created_by)" :key="m.user_id" :value="m.user_id">
@@ -328,8 +328,8 @@ watch(groupId, load);
     <!-- Delete (creator) -->
     <section v-if="isCreator" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
-      <p class="muted mb">Deleting the group removes all its expenses, settlements and recurring templates. This cannot be undone.</p>
-      <div class="right">
+      <p class="mb-3 text-sm text-subtle-foreground">Deleting the group removes all its expenses, settlements and recurring templates. This cannot be undone.</p>
+      <div class="flex justify-end">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
           <Icon name="trash" /><span>Delete group</span>
         </button>
@@ -371,148 +371,3 @@ watch(groupId, load);
     />
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 0.5rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.subhead {
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--subtle-foreground);
-}
-.banner {
-  margin-bottom: 0.75rem;
-}
-.panel {
-  margin-bottom: 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.panel-title {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.self-end {
-  align-self: flex-end;
-}
-.hint {
-  font-size: 0.75rem;
-  color: var(--subtle-foreground);
-}
-.muted {
-  font-size: 0.875rem;
-  color: var(--subtle-foreground);
-}
-.mb {
-  margin-bottom: 0.75rem;
-}
-.mt {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.members {
-  margin-bottom: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  list-style: none;
-}
-.member {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.member-who {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-.trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.member-actions {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-.badge {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.add-member {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-.add-member-field {
-  flex: 1;
-}
-.split-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.split-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-.split-name {
-  flex: 1;
-}
-.split-num {
-  width: 5rem;
-}
-.split-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-.split-clear {
-  margin-top: 0.5rem;
-  display: flex;
-  justify-content: flex-end;
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-.req {
-  color: var(--destructive);
-}
-.transfer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-@media (min-width: 640px) {
-  .transfer {
-    flex-direction: row;
-    align-items: flex-end;
-  }
-  .transfer-field {
-    flex: 1;
-  }
-}
-</style>

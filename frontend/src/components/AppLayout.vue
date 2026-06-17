@@ -67,19 +67,24 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="flex min-h-[100dvh] flex-col">
     <a href="#main" class="skip-link">Skip to content</a>
-    <header class="hdr">
-      <div class="hdr-inner">
-        <RouterLink :to="user ? '/groups' : '/'" class="brand">
-          <img src="/logo.svg" alt="" aria-hidden="true" width="40" height="40" class="brand-logo" />
+    <header class="border-b border-border bg-[color-mix(in_oklch,var(--card)_70%,transparent)] backdrop-blur-[8px]">
+      <div class="mx-auto flex max-w-6xl items-center justify-between pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-3 pl-[max(1rem,env(safe-area-inset-left))]">
+        <RouterLink :to="user ? '/groups' : '/'" class="flex items-center gap-2 text-lg font-semibold">
+          <img src="/logo.svg" alt="" aria-hidden="true" width="40" height="40" class="-my-1.5 h-10 w-10" />
           <span>DoTheSplit</span>
         </RouterLink>
 
-        <div v-if="user" class="hdr-actions">
-          <RouterLink v-if="user.is_admin" to="/admin" class="admin-link" aria-label="Admin">
+        <div v-if="user" class="flex items-center gap-2 sm:gap-3">
+          <RouterLink
+            v-if="user.is_admin"
+            to="/admin"
+            class="inline-flex items-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-500/60 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+            aria-label="Admin"
+          >
             <Icon name="shield-halved" />
-            <span class="admin-label">Admin</span>
+            <span class="hidden sm:inline">Admin</span>
           </RouterLink>
 
           <RouterLink to="/search" aria-label="Search" title="Search" class="user-menu-icon-btn">
@@ -103,7 +108,7 @@ onBeforeUnmount(() => {
                 :size="24"
                 bordered
               />
-              <span class="user-name">{{ user.display_name }}</span>
+              <span class="hidden text-sm sm:inline">{{ user.display_name }}</span>
               <Icon name="chevron-down" :size="12" />
             </button>
             <div
@@ -129,44 +134,44 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <nav v-else class="guest-nav">
+        <nav v-else class="flex gap-4 text-sm [&_a:hover]:underline">
           <RouterLink to="/login">Log in</RouterLink>
           <RouterLink to="/register">Register</RouterLink>
         </nav>
       </div>
     </header>
 
-    <div v-if="back" class="back-row">
-      <RouterLink :to="back.to" class="btn-secondary btn-sm">
+    <div v-if="back" class="mx-auto w-full max-w-6xl px-2 pt-3">
+      <RouterLink :to="back.to" class="btn-secondary btn-sm self-start">
         <Icon name="arrow-left-long" />
         <span>Back to {{ back.label }}</span>
       </RouterLink>
     </div>
 
-    <main id="main" class="main" :class="wide ? 'main-wide' : 'main-default'">
+    <main id="main" class="mx-auto w-full flex-1 p-2" :class="wide ? 'max-w-6xl' : 'max-w-3xl'">
       <slot />
     </main>
 
-    <footer class="ftr">
-      <div class="ftr-inner">
+    <footer class="border-t border-border bg-[color-mix(in_oklch,var(--card)_70%,transparent)] pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-muted-foreground">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <span>
           DoTheSplit &middot;
           <a
             v-if="isReleasedVersion"
             :href="`https://github.com/julian-alarcon/dothesplit/releases/tag/v${buildVersion}`"
-            class="mono link"
+            class="[font-family:var(--font-mono)] hover:underline"
             rel="noopener noreferrer"
             target="_blank"
             >v{{ buildVersion }}</a
           >
-          <code v-else class="mono">{{ buildVersion }}</code>
+          <code v-else class="[font-family:var(--font-mono)]">{{ buildVersion }}</code>
           &middot;
-          <span v-if="buildCommit === 'dev'">build <code class="mono">dev</code></span>
+          <span v-if="buildCommit === 'dev'">build <code class="[font-family:var(--font-mono)]">dev</code></span>
           <span v-else>
             build
             <a
               :href="`https://github.com/julian-alarcon/dothesplit/commit/${buildCommit}`"
-              class="mono link"
+              class="[font-family:var(--font-mono)] hover:underline"
               rel="noopener noreferrer"
               target="_blank"
               >{{ buildCommit }}</a
@@ -178,146 +183,3 @@ onBeforeUnmount(() => {
     </footer>
   </div>
 </template>
-
-<style scoped>
-.shell {
-  display: flex;
-  min-height: 100dvh;
-  flex-direction: column;
-}
-
-.hdr {
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in oklch, var(--card) 70%, transparent);
-  backdrop-filter: blur(8px);
-}
-.hdr-inner {
-  margin-inline: auto;
-  display: flex;
-  max-width: 72rem;
-  align-items: center;
-  justify-content: space-between;
-  padding: max(0.75rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
-    0.75rem max(1rem, env(safe-area-inset-left));
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-.brand-logo {
-  height: 2.5rem;
-  width: 2.5rem;
-  margin-block: -0.375rem;
-}
-.hdr-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-@media (min-width: 640px) {
-  .hdr-actions {
-    gap: 0.75rem;
-  }
-}
-.admin-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid oklch(82.8% 0.189 84.429 / 0.6); /* amber-400/60 */
-  background: oklch(98.7% 0.022 95.277); /* amber-50 */
-  padding: 0.375rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: oklch(41.4% 0.112 45.904); /* amber-900 */
-}
-.admin-link:hover {
-  background: oklch(96.2% 0.059 95.617); /* amber-100 */
-}
-.admin-link:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px oklch(76.9% 0.188 70.08); /* ring-amber-500 */
-}
-:root[data-theme="dark"] .admin-link,
-:root[data-theme="high-contrast"] .admin-link {
-  border-color: oklch(76.9% 0.188 70.08 / 0.6); /* amber-500/60 */
-  background: oklch(27.9% 0.077 45.635 / 0.4); /* amber-950/40 */
-  color: oklch(92.4% 0.12 95.746); /* amber-200 */
-}
-:root[data-theme="dark"] .admin-link:hover,
-:root[data-theme="high-contrast"] .admin-link:hover {
-  background: oklch(41.4% 0.112 45.904 / 0.4); /* amber-900/40 */
-}
-.admin-label {
-  display: none;
-}
-.user-name {
-  display: none;
-  font-size: 0.875rem;
-}
-@media (min-width: 640px) {
-  .admin-label,
-  .user-name {
-    display: inline;
-  }
-}
-.guest-nav {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-}
-.guest-nav a:hover {
-  text-decoration: underline;
-}
-
-.back-row {
-  margin-inline: auto;
-  width: 100%;
-  max-width: 72rem;
-  padding: 0.75rem 0.5rem 0;
-}
-.back-row .btn-secondary {
-  align-self: flex-start;
-}
-
-.main {
-  margin-inline: auto;
-  width: 100%;
-  flex: 1;
-  padding: 0.5rem;
-}
-.main-default {
-  max-width: 48rem;
-}
-.main-wide {
-  max-width: 72rem;
-}
-
-.ftr {
-  border-top: 1px solid var(--border);
-  background: color-mix(in oklch, var(--card) 70%, transparent);
-  padding-top: 0.75rem;
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.ftr-inner {
-  margin-inline: auto;
-  display: flex;
-  max-width: 72rem;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.link:hover {
-  text-decoration: underline;
-}
-</style>

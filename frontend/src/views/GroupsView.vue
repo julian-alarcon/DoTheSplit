@@ -51,7 +51,7 @@ onMounted(async () => {
       <li v-for="g in groups" :key="g.id">
         <RouterLink
           :to="`/groups/${g.id}`"
-          class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-[var(--hover-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-hover-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <span class="flex min-w-0 flex-col">
             <span class="truncate font-medium">{{ g.name }}</span>

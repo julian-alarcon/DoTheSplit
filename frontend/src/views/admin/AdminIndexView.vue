@@ -20,7 +20,7 @@ const cards = [
         v-for="c in cards"
         :key="c.to"
         :to="c.to"
-        class="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-[var(--hover-surface)]"
+        class="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-hover-surface"
       >
         <Icon :name="c.icon" :size="20" />
         <div>

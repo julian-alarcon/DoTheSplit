@@ -43,37 +43,16 @@ const sizeClass = computed(() => `avatar-${props.size}`);
     alt=""
     :width="size"
     :height="size"
-    class="avatar avatar-img"
-    :class="[sizeClass, { bordered }]"
+    class="avatar inline-block shrink-0 rounded-sm align-middle"
+    :class="[sizeClass, { 'border border-border': bordered }]"
   />
   <span
     v-else
     role="img"
     :aria-label="displayName"
-    class="avatar avatar-initials"
-    :class="[sizeClass, { bordered }]"
+    class="avatar inline-flex shrink-0 items-center justify-center rounded-sm align-middle font-semibold leading-none"
+    :class="[sizeClass, { 'border border-border': bordered }]"
   >
     {{ initials }}
   </span>
 </template>
-
-<style scoped>
-.avatar {
-  border-radius: 0.25rem;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-.avatar-img {
-  display: inline-block;
-}
-.avatar-initials {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  line-height: 1;
-}
-.bordered {
-  border: 1px solid var(--border);
-}
-</style>

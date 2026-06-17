@@ -103,14 +103,14 @@ watch(groupId, load);
 
       <form v-else class="flex flex-col gap-4 rounded-md border border-border bg-card p-3" @submit.prevent="onSubmit">
         <label class="field-select-row">
-          <span>Paid by <span class="text-[var(--destructive)]">*</span></span>
+          <span>Paid by <span class="text-destructive">*</span></span>
           <select v-model="form.fromUserId" required class="field-select">
             <option v-for="m in members" :key="m.user_id" :value="m.user_id">{{ m.display_name }}</option>
           </select>
         </label>
 
         <label class="field-select-row">
-          <span>Paid to <span class="text-[var(--destructive)]">*</span></span>
+          <span>Paid to <span class="text-destructive">*</span></span>
           <select v-model="form.toUserId" required class="field-select">
             <option value="">Pick a member…</option>
             <option v-for="m in members" :key="m.user_id" :value="m.user_id">{{ m.display_name }}</option>
@@ -144,7 +144,7 @@ watch(groupId, load);
           <li v-for="(d, i) in simplified" :key="i">
             <button
               type="button"
-              class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-[var(--hover-surface)]"
+              class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-left transition-colors hover:bg-hover-surface"
               title="Use this transfer in the form above"
               @click="applySuggestion(d)"
             >

@@ -309,56 +309,64 @@ defineExpose({ dirty, hasInitial });
 </script>
 
 <template>
-  <div class="split">
+  <div class="flex flex-col gap-2">
     <button
       type="button"
       class="btn-secondary w-full justify-between gap-3 px-3 text-left font-normal whitespace-normal"
       aria-label="Edit details"
       @click="open"
     >
-      <span class="split-summary">{{ summary }}</span>
-      <span class="split-trigger-end">
-        <span class="details-label">Details</span>
+      <span class="min-w-0 flex-1 text-muted-foreground">{{ summary }}</span>
+      <span class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+        <span class="hidden sm:inline">Details</span>
         <Icon name="chevron-right" />
       </span>
     </button>
 
-    <dialog ref="dialog" class="split-dialog" aria-modal="true" aria-label="Details">
-      <div class="split-body">
-        <div class="split-head">
-          <h3 class="split-title">Details</h3>
-          <button type="button" class="split-close" aria-label="Close" title="Close" @click="cancel">
+    <dialog
+      ref="dialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
+      aria-modal="true"
+      aria-label="Details"
+    >
+      <div class="flex flex-col gap-4 p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-medium">Details</h3>
+          <button type="button" class="cursor-pointer rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Close" title="Close" @click="cancel">
             <Icon name="xmark" :size="14" />
           </button>
         </div>
 
-        <fieldset class="split-modes">
+        <fieldset class="flex gap-4 border-0 text-sm">
           <legend class="sr-only">Split mode</legend>
-          <label class="split-mode-opt">
+          <label class="flex cursor-pointer items-center gap-1.5">
             <input
               type="radio"
               name="split_mode"
               value="equal"
+              class="accent-primary"
               :checked="mode === 'equal'"
               @change="onModeChange('equal')"
             />
             <span>Equal</span>
           </label>
-          <label class="split-mode-opt">
+          <label class="flex cursor-pointer items-center gap-1.5">
             <input
               type="radio"
               name="split_mode"
               value="exact"
+              class="accent-primary"
               :checked="mode === 'exact'"
               @change="onModeChange('exact')"
             />
             <span>Exact amounts</span>
           </label>
-          <label class="split-mode-opt">
+          <label class="flex cursor-pointer items-center gap-1.5">
             <input
               type="radio"
               name="split_mode"
               value="percent"
+              class="accent-primary"
               :checked="mode === 'percent'"
               @change="onModeChange('percent')"
             />
@@ -366,37 +374,38 @@ defineExpose({ dirty, hasInitial });
           </label>
         </fieldset>
 
-        <ul class="split-rows">
-          <li v-for="s in state" :key="s.userID" class="split-row">
+        <ul class="flex max-h-80 list-none flex-col gap-1 overflow-auto">
+          <li v-for="s in state" :key="s.userID" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted">
             <input
               type="checkbox"
+              class="shrink-0 accent-primary"
               :checked="s.included"
               :aria-label="`Include ${memberByID.get(s.userID)?.display_name ?? s.userID}`"
               @change="onToggle(s, ($event.target as HTMLInputElement).checked)"
             />
-            <span class="split-label">{{ twoPersonLabel(s.userID) }}</span>
+            <span class="min-w-0 flex-1 truncate text-sm">{{ twoPersonLabel(s.userID) }}</span>
             <input
               type="number"
               step="0.01"
               min="0"
-              class="field-input-num split-value"
-              :class="{ 'split-value-hidden': mode === 'equal' }"
+              class="field-input-num w-20 shrink-0"
+              :class="{ invisible: mode === 'equal' }"
               :disabled="!s.included || mode === 'equal'"
               :value="rowInputValue(s)"
               @input="onValueInput(s, ($event.target as HTMLInputElement).value)"
             />
-            <span class="split-preview">{{ rowPreview(s) }}</span>
+            <span class="w-16 shrink-0 text-right text-xs text-muted-foreground [font-family:var(--font-mono)]">{{ rowPreview(s) }}</span>
           </li>
         </ul>
 
-        <div class="split-totals">
-          <span class="split-remaining">{{ remainingText }}</span>
-          <span class="split-total">{{ totalText }}</span>
+        <div class="flex min-h-[1.25em] items-center justify-between gap-3 border-t border-border pt-3 text-sm">
+          <span class="text-muted-foreground">{{ remainingText }}</span>
+          <span class="[font-family:var(--font-mono)]">{{ totalText }}</span>
         </div>
 
-        <p class="split-err">{{ errorText }}</p>
+        <p class="min-h-[1.25em] text-xs text-destructive">{{ errorText }}</p>
 
-        <div class="split-actions">
+        <div class="flex justify-end gap-2">
           <button type="button" class="btn-secondary btn-sm" @click="cancel">Cancel</button>
           <button type="button" class="btn-primary btn-sm" :disabled="!valid" @click="done">Done</button>
         </div>
@@ -404,158 +413,3 @@ defineExpose({ dirty, hasInitial });
     </dialog>
   </div>
 </template>
-
-<style scoped>
-.split {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.split-summary {
-  min-width: 0;
-  flex: 1;
-  color: var(--muted-foreground);
-}
-.split-trigger-end {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.375rem;
-  color: var(--muted-foreground);
-}
-.details-label {
-  display: none;
-}
-@media (min-width: 640px) {
-  .details-label {
-    display: inline;
-  }
-}
-.split-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 28rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.split-dialog::backdrop {
-  background: var(--backdrop);
-}
-.split-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-}
-.split-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.split-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.split-close {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.split-close:hover {
-  background: var(--muted);
-}
-.split-modes {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-  border: 0;
-}
-.split-mode-opt {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  cursor: pointer;
-}
-.split-mode-opt input {
-  accent-color: var(--primary);
-}
-.split-rows {
-  display: flex;
-  max-height: 20rem;
-  flex-direction: column;
-  gap: 0.25rem;
-  overflow: auto;
-  list-style: none;
-}
-.split-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.375rem;
-  padding: 0.375rem 0.5rem;
-}
-.split-row:hover {
-  background: var(--muted);
-}
-.split-row input[type="checkbox"] {
-  flex-shrink: 0;
-  accent-color: var(--primary);
-}
-.split-label {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.875rem;
-}
-.split-value {
-  width: 5rem;
-  flex-shrink: 0;
-}
-.split-value-hidden {
-  visibility: hidden;
-}
-.split-preview {
-  width: 4rem;
-  flex-shrink: 0;
-  text-align: right;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.split-totals {
-  display: flex;
-  min-height: 1.25em;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-top: 1px solid var(--border);
-  padding-top: 0.75rem;
-  font-size: 0.875rem;
-}
-.split-remaining {
-  color: var(--muted-foreground);
-}
-.split-total {
-  font-family: var(--font-mono);
-}
-.split-err {
-  min-height: 1.25em;
-  font-size: 0.75rem;
-  color: var(--destructive);
-}
-.split-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-</style>

@@ -151,7 +151,7 @@ function fmtDate(s: string) {
         <input type="file" accept=".csv,text/csv" required class="field-input field-file" @change="onPick" />
         <span class="field-label" data-required>CSV file</span>
       </label>
-      <p v-if="pickError" class="mt-2 text-sm text-[var(--destructive)]" role="alert">{{ pickError }}</p>
+      <p v-if="pickError" class="mt-2 text-sm text-destructive" role="alert">{{ pickError }}</p>
       <p v-if="busy" class="text-muted-foreground">Parsing…</p>
     </section>
 
@@ -166,7 +166,7 @@ function fmtDate(s: string) {
         <CurrencySelect v-model="defaultCurrency" @change="refreshPreview" />
       </label>
 
-      <p v-if="mixedCurrencies" class="warn">
+      <p v-if="mixedCurrencies" class="rounded-md border border-[color-mix(in_oklch,oklch(0.7_0.15_80)_50%,var(--border))] bg-[color-mix(in_oklch,oklch(0.7_0.15_80)_12%,var(--card))] p-3 text-sm">
         This CSV mixes multiple currencies. DoTheSplit groups use a single currency; amounts are kept
         as-is but stored under the chosen one. Detected:
         <span class="[font-family:var(--font-mono)]">{{ preview.csv_currencies.join(", ") }}</span>.
@@ -195,7 +195,7 @@ function fmtDate(s: string) {
         <ul class="flex list-none flex-col gap-1">
           <li v-for="name in memberNames" :key="name" class="flex items-center justify-between gap-2">
             <span class="truncate">{{ name }}</span>
-            <span class="[font-family:var(--font-mono)]" :class="(balanceByName.get(name) ?? 0) >= 0 ? 'text-[var(--primary)]' : 'text-[var(--destructive)]'">
+            <span class="[font-family:var(--font-mono)]" :class="(balanceByName.get(name) ?? 0) >= 0 ? 'text-primary' : 'text-destructive'">
               {{ formatMoney(balanceByName.get(name) ?? 0, defaultCurrency) }}
             </span>
           </li>
@@ -245,7 +245,7 @@ function fmtDate(s: string) {
         <pre class="mt-2 max-h-64 overflow-auto rounded-sm bg-muted p-2 text-xs leading-normal [font-family:var(--font-mono)]">{{ preview.skipped.join("\n") }}</pre>
       </details>
 
-      <p v-if="importError" class="text-sm text-[var(--destructive)]" role="alert">{{ importError }}</p>
+      <p v-if="importError" class="text-sm text-destructive" role="alert">{{ importError }}</p>
 
       <div class="flex items-center justify-between gap-3">
         <button type="button" class="btn-secondary btn-sm" @click="back">Pick another file</button>
@@ -254,13 +254,3 @@ function fmtDate(s: string) {
     </section>
   </div>
 </template>
-
-<style scoped>
-.warn {
-  border-radius: 0.375rem;
-  border: 1px solid color-mix(in oklch, oklch(0.7 0.15 80) 50%, var(--border));
-  background: color-mix(in oklch, oklch(0.7 0.15 80) 12%, var(--card));
-  padding: 0.75rem;
-  font-size: 0.875rem;
-}
-</style>

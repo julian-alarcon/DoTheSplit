@@ -138,12 +138,12 @@ async function onDelete(password: string) {
 
 <template>
   <AppLayout>
-    <div class="wrap">
-      <div class="hero">
+    <div class="mx-auto flex max-w-2xl flex-col gap-2">
+      <div class="mb-2 flex items-center gap-4">
         <Avatar :display-name="user.display_name" :src="previewUrl ?? storedAvatarUrl" :size="56" />
         <div>
-          <h1 class="name">{{ user.display_name }}</h1>
-          <p class="email">{{ user.email }}</p>
+          <h1 class="text-2xl font-semibold">{{ user.display_name }}</h1>
+          <p class="text-sm text-muted-foreground">{{ user.email }}</p>
         </div>
       </div>
 
@@ -151,54 +151,54 @@ async function onDelete(password: string) {
       <Alert v-if="okMsg" tone="success">{{ okMsg }}</Alert>
 
       <!-- Display name -->
-      <section class="panel">
-        <h2 class="panel-title">Display name</h2>
-        <form class="form" @submit.prevent="saveName">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Display name</h2>
+        <form class="flex flex-col gap-3" @submit.prevent="saveName">
           <Field v-model="displayName" label="Display name" type="text" required minlength="1" maxlength="80" error="Required" />
-          <div class="right"><button type="submit" class="btn-primary">Save name</button></div>
+          <div class="flex justify-end"><button type="submit" class="btn-primary">Save name</button></div>
         </form>
       </section>
 
       <!-- Avatar -->
-      <section class="panel">
-        <h2 class="panel-title">Avatar</h2>
-        <p class="muted mb">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Avatar</h2>
+        <p class="mb-3 text-sm text-subtle-foreground">
           Pick any image. We'll pixelate it in your browser to a fun 8×8 mosaic and upload only that 64-pixel tile.
         </p>
-        <div class="avatar-row">
-          <div class="avatar-slot">
+        <div class="flex items-center gap-4">
+          <div class="shrink-0 overflow-hidden rounded-sm border border-border">
             <Avatar :display-name="user.display_name" :src="previewUrl ?? storedAvatarUrl" :size="64" />
           </div>
           <input type="file" accept="image/*" class="field-file" @change="onFilePick" />
         </div>
-        <div class="right gap mt">
+        <div class="mt-3 flex justify-end gap-2">
           <button v-if="user.has_avatar" type="button" class="btn-secondary" @click="removeAvatar">Remove avatar</button>
           <button type="button" class="btn-primary" :disabled="!pendingB64 || avatarBusy" @click="saveAvatar">Save avatar</button>
         </div>
       </section>
 
       <!-- Password -->
-      <section class="panel">
-        <h2 class="panel-title">Password</h2>
-        <p class="muted mb">Change your password or recover it by email.</p>
-        <div class="right">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Password</h2>
+        <p class="mb-3 text-sm text-subtle-foreground">Change your password or recover it by email.</p>
+        <div class="flex justify-end">
           <RouterLink to="/settings/password" class="btn-primary">Manage password</RouterLink>
         </div>
       </section>
 
       <!-- Email -->
-      <section class="panel">
-        <h2 class="panel-title">Email address</h2>
-        <p class="muted mb">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Email address</h2>
+        <p class="mb-3 text-sm text-subtle-foreground">
           Current address: <strong>{{ user.email }}</strong>. Changing it sends a 6-digit code to the new address; your old address keeps working until you confirm.
         </p>
-        <form class="form" @submit.prevent="requestEmail">
+        <form class="flex flex-col gap-3" @submit.prevent="requestEmail">
           <Field v-model="newEmail" label="New email" type="email" required maxlength="254" error="Enter a valid email address" />
           <Field v-model="emailPassword" label="Current password" type="password" required autocomplete="current-password" error="Required" />
-          <div class="right"><button type="submit" class="btn-primary">Send code to new email</button></div>
+          <div class="flex justify-end"><button type="submit" class="btn-primary">Send code to new email</button></div>
         </form>
-        <form v-if="showEmailConfirm" class="form confirm" @submit.prevent="confirmEmail">
-          <p class="muted">Enter the 6-digit code we just sent to your new address.</p>
+        <form v-if="showEmailConfirm" class="mt-4 flex flex-col gap-3 border-t border-border pt-4" @submit.prevent="confirmEmail">
+          <p class="text-sm text-subtle-foreground">Enter the 6-digit code we just sent to your new address.</p>
           <Field
             v-model="emailCode"
             label="6-digit code"
@@ -209,26 +209,26 @@ async function onDelete(password: string) {
             pattern="[0-9]{6}"
             minlength="6"
             maxlength="6"
-            class="code-input"
+            class="text-center tracking-[0.4em]"
             error="Enter the 6-digit code from your email"
           />
-          <div class="right"><button type="submit" class="btn-primary">Confirm new email</button></div>
+          <div class="flex justify-end"><button type="submit" class="btn-primary">Confirm new email</button></div>
         </form>
       </section>
 
       <!-- Notifications -->
-      <section class="panel">
-        <h2 class="panel-title">Notifications</h2>
-        <p class="muted mb">Choose which transactions should reach you.</p>
-        <div class="right">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Notifications</h2>
+        <p class="mb-3 text-sm text-subtle-foreground">Choose which transactions should reach you.</p>
+        <div class="flex justify-end">
           <RouterLink to="/settings/notifications" class="btn-primary">Manage notifications</RouterLink>
         </div>
       </section>
 
       <!-- Preferences -->
-      <section class="panel">
-        <h2 class="panel-title">Preferences</h2>
-        <form class="form" @submit.prevent="savePrefs">
+      <section class="rounded-md border border-border bg-card p-3">
+        <h2 class="mb-3 font-medium">Preferences</h2>
+        <form class="flex flex-col gap-3" @submit.prevent="savePrefs">
           <label class="field-select-row">
             <span>Week starts on</span>
             <select v-model.number="weekStart" class="field-select">
@@ -236,18 +236,18 @@ async function onDelete(password: string) {
               <option :value="0">Sunday</option>
             </select>
           </label>
-          <p class="hint">Used by the calendar in date pickers across the app.</p>
-          <div class="right"><button type="submit" class="btn-primary">Save preferences</button></div>
+          <p class="-mt-1 text-xs text-subtle-foreground">Used by the calendar in date pickers across the app.</p>
+          <div class="flex justify-end"><button type="submit" class="btn-primary">Save preferences</button></div>
         </form>
       </section>
 
       <!-- Danger zone -->
       <section class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
         <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
-        <p class="muted mb">
+        <p class="mb-3 text-sm text-subtle-foreground">
           Deleting your account removes your email, password and avatar. Your name is replaced with a stable tombstone so shared expenses other members still depend on stay traceable. This cannot be undone.
         </p>
-        <div class="right">
+        <div class="flex justify-end">
           <button type="button" class="btn-danger" @click="deleteOpen = true">
             <Icon name="trash" /><span>Delete account</span>
           </button>
@@ -265,84 +265,3 @@ async function onDelete(password: string) {
     />
   </AppLayout>
 </template>
-
-<style scoped>
-.wrap {
-  margin-inline: auto;
-  display: flex;
-  max-width: 42rem;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.hero {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
-}
-.name {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.email {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.panel {
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.panel-title {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.confirm {
-  margin-top: 1rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-.gap {
-  gap: 0.5rem;
-}
-.mt {
-  margin-top: 0.75rem;
-}
-.mb {
-  margin-bottom: 0.75rem;
-}
-.muted {
-  font-size: 0.875rem;
-  color: var(--subtle-foreground);
-}
-.hint {
-  margin-top: -0.25rem;
-  font-size: 0.75rem;
-  color: var(--subtle-foreground);
-}
-.avatar-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.avatar-slot {
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: 0.25rem;
-  border: 1px solid var(--border);
-}
-:deep(.code-input) {
-  text-align: center;
-  letter-spacing: 0.4em;
-}
-</style>

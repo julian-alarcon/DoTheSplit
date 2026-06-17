@@ -53,7 +53,7 @@ watch(groupId, load);
   <AppLayout v-if="group" :back="{ to: `/groups/${groupId}`, label: group.name }">
     <h1 class="mb-4 text-2xl font-semibold">Activity</h1>
     <p v-if="loaded && items.length === 0" class="text-sm text-muted-foreground">No activity yet.</p>
-    <ul v-else class="feed list-none">
+    <ul v-else class="list-none divide-y divide-border">
       <ActivityRow
         v-for="item in items"
         :key="item.id"
@@ -70,12 +70,3 @@ watch(groupId, load);
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.feed > :deep(li) {
-  border-top: 1px solid var(--border);
-}
-.feed > :deep(li:first-child) {
-  border-top: 0;
-}
-</style>

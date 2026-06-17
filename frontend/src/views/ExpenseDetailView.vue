@@ -225,21 +225,21 @@ onMounted(async () => {
 
 <template>
   <AppLayout v-if="expense && group" :back="{ to: `/groups/${groupId}`, label: group.name }">
-    <div class="head">
+    <div class="mb-6 flex items-center gap-3">
       <CategoryIcon
         :slug="currentCategory?.slug"
         :group-label="currentCategory?.group_label"
         :size="40"
       />
       <div>
-        <div class="head-title">
-          <h1 class="title">{{ expense.description }}</h1>
-          <span v-if="expenseCadence" class="cadence">
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-2xl font-semibold">{{ expense.description }}</h1>
+          <span v-if="expenseCadence" class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             <Icon name="arrows-rotate" :size="11" />
             Repeats {{ cadenceLabels[expenseCadence] ?? expenseCadence }}
           </span>
         </div>
-        <p class="meta">
+        <p class="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
           <span>{{ dateFmt.format(new Date(expense.incurred_at)) }} · paid by</span>
           <MemberAvatar
             :user-id="expense.payer_id"
@@ -254,18 +254,18 @@ onMounted(async () => {
       </div>
     </div>
 
-    <Alert v-if="saveError" tone="error" class="banner">Could not save. Check your input and try again.</Alert>
+    <Alert v-if="saveError" tone="error" class="mb-3 flex items-center gap-2">Could not save. Check your input and try again.</Alert>
 
-    <Alert v-if="isDeleted" tone="info" class="banner">
+    <Alert v-if="isDeleted" tone="info" class="mb-3 flex items-center gap-2">
       <Icon name="trash" :size="14" />
       <span>This expense was deleted on {{ deletedAtFmt }}. It no longer affects balances. Restore it below to bring it back.</span>
     </Alert>
 
     <!-- Edit -->
-    <section v-if="!isDeleted" class="panel">
-      <h2 class="panel-title">Edit</h2>
-      <form v-if="canEdit" class="edit-form" @submit.prevent="onSave">
-        <div class="cat-row">
+    <section v-if="!isDeleted" class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Edit</h2>
+      <form v-if="canEdit" class="flex flex-col gap-4" @submit.prevent="onSave">
+        <div class="flex items-end gap-2">
           <button type="button" class="field-category-trigger" aria-label="Choose category" @click="categoryDialog?.showModal()">
             <CategoryIcon
               :slug="selectedCategory?.slug ?? currentCategory?.slug"
@@ -273,7 +273,7 @@ onMounted(async () => {
               :size="38"
             />
           </button>
-          <div class="cat-desc">
+          <div class="flex flex-1 flex-col">
             <label class="field">
               <input v-model="form.description" class="field-input" required maxlength="200" placeholder=" " />
               <span class="field-label" data-required>What was it?</span>
@@ -308,21 +308,21 @@ onMounted(async () => {
           :initial-splits="initialSplits"
         />
 
-        <div class="edit-actions">
+        <div class="flex items-center justify-end gap-2">
           <DatePicker v-model="form.incurredAt" variant="compact" :week-start="weekStart" />
           <button type="submit" class="btn-primary" :disabled="submitting">Save changes</button>
         </div>
-        <p class="hint">Leave the split as-is to keep current shares (rescaled proportionally if the amount changes).</p>
+        <p class="text-xs text-subtle-foreground">Leave the split as-is to keep current shares (rescaled proportionally if the amount changes).</p>
       </form>
-      <p v-else class="muted">Only group members can edit this expense.</p>
+      <p v-else class="text-sm text-subtle-foreground">Only group members can edit this expense.</p>
     </section>
 
     <!-- Splits -->
-    <section class="panel">
-      <h2 class="panel-title">Splits</h2>
-      <ul class="splits">
-        <li v-for="s in expense.splits" :key="s.user_id" class="split-row">
-          <span class="split-who">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">Splits</h2>
+      <ul class="flex list-none flex-col gap-2 text-sm">
+        <li v-for="s in expense.splits" :key="s.user_id" class="flex items-center justify-between gap-2">
+          <span class="flex min-w-0 items-center gap-2">
             <MemberAvatar
               :user-id="s.user_id"
               :display-name="nameByID.get(s.user_id) ?? s.user_id"
@@ -330,20 +330,20 @@ onMounted(async () => {
               :avatar-updated-at="memberByID.get(s.user_id)?.avatar_updated_at"
               :size="18"
             />
-            <span class="trunc">{{ nameByID.get(s.user_id) ?? s.user_id }}</span>
+            <span class="truncate">{{ nameByID.get(s.user_id) ?? s.user_id }}</span>
           </span>
-          <span class="split-amt">{{ money(s.share_cents) }}</span>
+          <span class="shrink-0 [font-family:var(--font-mono)]">{{ money(s.share_cents) }}</span>
         </li>
       </ul>
     </section>
 
     <!-- History -->
-    <section class="panel">
-      <h2 class="panel-title">History</h2>
-      <ul class="history">
-        <li class="hist-row">
-          <span class="hist-field">Created</span>
-          <span class="hist-by">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">History</h2>
+      <ul class="flex list-none flex-col text-sm">
+        <li class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
+          <span class="font-medium">Created</span>
+          <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar
               :user-id="expense.created_by"
               :display-name="nameByID.get(expense.created_by) ?? '?'"
@@ -354,14 +354,14 @@ onMounted(async () => {
             <span>{{ nameByID.get(expense.created_by) ?? "?" }} · {{ dateTimeFmt.format(new Date(expense.created_at)) }}</span>
           </span>
         </li>
-        <li v-for="r in revisions" :key="r.id" class="hist-row">
+        <li v-for="r in revisions" :key="r.id" class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
           <span>
-            <span class="hist-field">{{ fieldLabel[r.field] ?? r.field }}</span>:
-            <span class="strike">{{ renderValue(r.field, r.old_value) }}</span>
-            <Icon name="arrow-right" :size="11" class="hist-arrow" />
+            <span class="font-medium">{{ fieldLabel[r.field] ?? r.field }}</span>:
+            <span class="text-muted-foreground line-through">{{ renderValue(r.field, r.old_value) }}</span>
+            <Icon name="arrow-right" :size="11" class="mx-1 align-middle text-muted-foreground" />
             <span>{{ renderValue(r.field, r.new_value) }}</span>
           </span>
-          <span class="hist-by">
+          <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar
               :user-id="r.edited_by"
               :display-name="nameByID.get(r.edited_by) ?? '?'"
@@ -378,18 +378,18 @@ onMounted(async () => {
     <!-- Danger / Restore -->
     <section v-if="canEdit" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
-      <p class="muted mb">Soft-deletes this expense. It will stop affecting balances, but the edit history is kept.</p>
-      <div class="right">
+      <p class="mb-3 text-sm text-subtle-foreground">Soft-deletes this expense. It will stop affecting balances, but the edit history is kept.</p>
+      <div class="flex justify-end">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
           <Icon name="trash" /><span>Delete expense</span>
         </button>
       </div>
     </section>
 
-    <section v-if="isMember && isDeleted" class="panel">
-      <h2 class="restore-title">Restore</h2>
-      <p class="muted mb">Brings this expense back. It will count toward balances again, with its splits and edit history intact.</p>
-      <div class="right">
+    <section v-if="isMember && isDeleted" class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Restore</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">Brings this expense back. It will count toward balances again, with its splits and edit history intact.</p>
+      <div class="flex justify-end">
         <button type="button" class="btn-primary" @click="restoreConfirm = true">
           <Icon name="trash-arrow-up" /><span>Restore expense</span>
         </button>
@@ -414,15 +414,20 @@ onMounted(async () => {
       @confirm="onRestore"
     />
 
-    <dialog ref="categoryDialog" class="cat-dialog" aria-modal="true" aria-label="Choose category">
-      <div class="cat-dialog-body">
-        <div class="cat-dialog-head">
-          <h3 class="cat-dialog-title">Choose category</h3>
-          <button type="button" class="cat-close" aria-label="Close" @click="categoryDialog?.close()">
+    <dialog
+      ref="categoryDialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
+      aria-modal="true"
+      aria-label="Choose category"
+    >
+      <div class="flex flex-col gap-3 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-medium">Choose category</h3>
+          <button type="button" class="cursor-pointer rounded-md px-2 py-1 text-muted-foreground hover:bg-muted" aria-label="Close" @click="categoryDialog?.close()">
             <Icon name="xmark" :size="14" />
           </button>
         </div>
-        <ul class="cat-list">
+        <ul class="flex max-h-[60vh] list-none flex-col gap-0.5 overflow-auto">
           <template v-for="(c, i) in categories" :key="c.id">
             <li v-if="isNewGroupRow(i)" class="field-category-group">{{ c.group_label }}</li>
             <li>
@@ -437,223 +442,3 @@ onMounted(async () => {
     </dialog>
   </AppLayout>
 </template>
-
-<style scoped>
-.head {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.head-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.cadence {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border-radius: 9999px;
-  background: var(--muted);
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.banner {
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.panel {
-  margin-bottom: 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.panel-title {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.cat-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-.cat-desc {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-.edit-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-.hint,
-.muted {
-  font-size: 0.75rem;
-  color: var(--subtle-foreground);
-}
-.muted {
-  font-size: 0.875rem;
-}
-.mb {
-  margin-bottom: 0.75rem;
-}
-.splits {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  list-style: none;
-}
-.split-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.split-who {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.5rem;
-}
-.trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.split-amt {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-}
-.history {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.875rem;
-  list-style: none;
-}
-.hist-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  border-top: 1px solid var(--border);
-  padding: 0.5rem 0;
-}
-.hist-row:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-@media (min-width: 640px) {
-  .hist-row {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-}
-.hist-field {
-  font-weight: 500;
-}
-.strike {
-  color: var(--muted-foreground);
-  text-decoration: line-through;
-}
-.hist-arrow {
-  margin: 0 0.25rem;
-  color: var(--muted-foreground);
-  vertical-align: middle;
-}
-.hist-by {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.restore-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-.cat-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.cat-dialog::backdrop {
-  background: var(--backdrop);
-}
-.cat-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-}
-.cat-dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.cat-dialog-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.cat-close {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.cat-list {
-  display: flex;
-  max-height: 60vh;
-  flex-direction: column;
-  gap: 0.125rem;
-  overflow: auto;
-  list-style: none;
-}
-</style>

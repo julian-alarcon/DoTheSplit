@@ -202,9 +202,9 @@ onMounted(async () => {
 
 <template>
   <AppLayout :back="{ to: '/groups', label: 'Groups' }">
-    <h1 class="title">Search</h1>
+    <h1 class="mb-4 text-2xl font-semibold">Search</h1>
 
-    <form class="search-form" @submit.prevent="onSubmit">
+    <form class="mb-4 flex flex-col gap-3" @submit.prevent="onSubmit">
       <label class="field">
         <input
           v-model="q"
@@ -217,74 +217,74 @@ onMounted(async () => {
         />
         <span class="field-label">Search expense and settlement notes</span>
       </label>
-      <div class="search-actions">
+      <div class="flex justify-end">
         <button type="submit" class="btn-primary">
           <Icon name="magnifying-glass" /><span>Search</span>
         </button>
       </div>
 
-      <details :open="filtersOpen" class="filters">
-        <summary class="filter-toggle btn-secondary btn-xs">
+      <details :open="filtersOpen" class="flex flex-col gap-3">
+        <summary class="btn-secondary btn-xs w-fit list-none [&::-webkit-details-marker]:hidden">
           <Icon name="filter" :size="12" />
           <span>Filter</span>
         </summary>
-        <div class="filter-row">
-          <span class="filter-label">Filter:</span>
-          <button type="button" class="chip" @click="groupDialog?.showModal()">
-            <span class="muted">Group:</span>
-            <span class="chip-val">{{ selectedGroupLabel }}</span>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filter:</span>
+          <button type="button" class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-card-foreground transition-colors hover:bg-hover-surface hover:text-hover-foreground" @click="groupDialog?.showModal()">
+            <span class="text-muted-foreground">Group:</span>
+            <span class="max-w-40 truncate">{{ selectedGroupLabel }}</span>
             <Icon name="chevron-down" :size="10" />
           </button>
-          <button type="button" class="chip" @click="categoryDialog?.showModal()">
-            <span class="muted">Category:</span>
+          <button type="button" class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-card-foreground transition-colors hover:bg-hover-surface hover:text-hover-foreground" @click="categoryDialog?.showModal()">
+            <span class="text-muted-foreground">Category:</span>
             <CategoryIcon
               v-if="selectedCategory"
               :slug="selectedCategory.slug"
               :group-label="selectedCategory.group_label"
               :size="14"
             />
-            <span class="chip-val">{{ selectedCategoryLabel }}</span>
+            <span class="max-w-40 truncate">{{ selectedCategoryLabel }}</span>
             <Icon name="chevron-down" :size="10" />
           </button>
         </div>
       </details>
     </form>
 
-    <Alert v-if="queryError" tone="info" class="banner">{{ queryError }}</Alert>
+    <Alert v-if="queryError" tone="info" class="mb-4">{{ queryError }}</Alert>
 
-    <p v-if="q.trim().length < 2" class="muted">
+    <p v-if="q.trim().length < 2" class="text-muted-foreground">
       Type at least 2 characters to search across all your groups.
     </p>
-    <p v-else-if="items.length === 0 && !queryError" class="muted">
-      No matches for <span class="strong">{{ usedQuery }}</span
+    <p v-else-if="items.length === 0 && !queryError" class="text-muted-foreground">
+      No matches for <span class="font-medium">{{ usedQuery }}</span
       >.
     </p>
 
-    <ul v-else class="results">
+    <ul v-else class="flex list-none flex-col gap-2">
       <template v-for="(row, i) in rows" :key="i">
-        <li v-if="row.kind === 'group-header'" class="group-header">
-          <RouterLink :to="`/groups/${row.group.id}`" class="gh-name">{{ row.group.name }}</RouterLink>
-          <span class="gh-count">{{ row.count }} {{ row.count === 1 ? "match" : "matches" }}</span>
+        <li v-if="row.kind === 'group-header'" class="flex items-baseline justify-between gap-3 px-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <RouterLink :to="`/groups/${row.group.id}`" class="truncate hover:underline">{{ row.group.name }}</RouterLink>
+          <span class="tabular-nums normal-case">{{ row.count }} {{ row.count === 1 ? "match" : "matches" }}</span>
         </li>
         <li v-else-if="row.item.expense">
           <RouterLink
             :to="`/groups/${row.item.expense.group_id}/expenses/${row.item.expense.id}`"
-            class="hit"
+            class="flex items-stretch justify-between gap-1.5 rounded-md border border-border bg-card px-4 py-3 hover:bg-hover-surface"
           >
-            <div class="hit-left">
-              <span class="hit-date" :title="categoryByID.get(row.item.expense.category_id)?.label ?? ''">
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none" :title="categoryByID.get(row.item.expense.category_id)?.label ?? ''">
                 <CategoryIcon
                   :slug="categoryByID.get(row.item.expense.category_id)?.slug"
                   :group-label="categoryByID.get(row.item.expense.category_id)?.group_label"
                   :size="28"
                 />
-                <span class="hit-month">{{ monthFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
-                <span class="hit-day">{{ dayFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
-                <span class="hit-year">{{ yearFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
+                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ yearFmt.format(new Date(row.item.expense.incurred_at)) }}</span>
               </span>
-              <div class="hit-body">
-                <div class="hit-desc">{{ row.item.expense.description }}</div>
-                <div class="hit-sub">
+              <div class="min-w-0">
+                <div class="truncate font-medium">{{ row.item.expense.description }}</div>
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span>paid by</span>
                   <MemberAvatar
                     :user-id="row.item.expense.payer_id"
@@ -293,40 +293,40 @@ onMounted(async () => {
                     :avatar-updated-at="groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.expense.payer_id)?.avatar_updated_at : null"
                     :size="12"
                   />
-                  <span class="trunc">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.expense.payer_id)?.display_name : "?") }}</span>
+                  <span class="truncate">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.expense.payer_id)?.display_name : "?") }}</span>
                 </div>
               </div>
             </div>
-            <div class="hit-right">
-              <span class="hit-stake">
+            <div class="flex shrink-0 flex-col items-end justify-between gap-1">
+              <span class="text-[11px] tabular-nums">
                 <template v-if="viewerStake(row.item.expense).kind === 'lent'">
-                  <span class="stake-lent">you lent </span>
-                  <span class="mono">{{ moneyFormatter(row.item.expense.currency).format((viewerStake(row.item.expense) as { cents: number }).cents / 100) }}</span>
+                  <span class="text-emerald-900 dark:text-emerald-200">you lent </span>
+                  <span class="[font-family:var(--font-mono)]">{{ moneyFormatter(row.item.expense.currency).format((viewerStake(row.item.expense) as { cents: number }).cents / 100) }}</span>
                 </template>
                 <template v-else-if="viewerStake(row.item.expense).kind === 'owes'">
-                  <span class="stake-owes">you owe </span>
-                  <span class="mono">{{ moneyFormatter(row.item.expense.currency).format((viewerStake(row.item.expense) as { cents: number }).cents / 100) }}</span>
+                  <span class="text-amber-700 dark:text-amber-200">you owe </span>
+                  <span class="[font-family:var(--font-mono)]">{{ moneyFormatter(row.item.expense.currency).format((viewerStake(row.item.expense) as { cents: number }).cents / 100) }}</span>
                 </template>
-                <span v-else class="muted">not involved</span>
+                <span v-else class="text-muted-foreground">not involved</span>
               </span>
-              <span class="hit-amount">{{ moneyFormatter(row.item.expense.currency).format(row.item.expense.amount_cents / 100) }}</span>
+              <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{ moneyFormatter(row.item.expense.currency).format(row.item.expense.amount_cents / 100) }}</span>
             </div>
           </RouterLink>
         </li>
         <li v-else-if="row.item.settlement">
           <RouterLink
             :to="`/groups/${row.item.settlement.group_id}/settlements/${row.item.settlement.id}`"
-            class="hit hit-settlement"
+            class="flex items-stretch justify-between gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60"
           >
-            <div class="hit-left">
-              <span class="hit-date" title="Settlement">
-                <span class="settle-icon"><Icon name="arrow-right" :size="14" /></span>
-                <span class="hit-month">{{ monthFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
-                <span class="hit-day">{{ dayFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
-                <span class="hit-year">{{ yearFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="inline-flex w-7 shrink-0 flex-col items-center justify-center leading-none" title="Settlement">
+                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"><Icon name="arrow-right" :size="14" /></span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ monthFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
+                <span class="text-xs font-semibold tabular-nums text-muted-foreground">{{ dayFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
+                <span class="text-[8px] font-semibold uppercase tracking-wider text-muted-foreground">{{ yearFmt.format(new Date(row.item.settlement.settled_at)) }}</span>
               </span>
-              <div class="hit-body">
-                <div class="hit-settle-title">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-1.5 font-medium">
                   <MemberAvatar
                     :user-id="row.item.settlement.from_user_id"
                     :display-name="groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.from_user_id)?.display_name ?? '?' : '?'"
@@ -334,8 +334,8 @@ onMounted(async () => {
                     :avatar-updated-at="groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.from_user_id)?.avatar_updated_at : null"
                     :size="16"
                   />
-                  <span class="trunc">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.from_user_id)?.display_name : "?") }}</span>
-                  <span class="muted">paid</span>
+                  <span class="truncate">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.from_user_id)?.display_name : "?") }}</span>
+                  <span class="text-muted-foreground">paid</span>
                   <MemberAvatar
                     :user-id="row.item.settlement.to_user_id"
                     :display-name="groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.to_user_id)?.display_name ?? '?' : '?'"
@@ -343,30 +343,35 @@ onMounted(async () => {
                     :avatar-updated-at="groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.to_user_id)?.avatar_updated_at : null"
                     :size="16"
                   />
-                  <span class="trunc">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.to_user_id)?.display_name : "?") }}</span>
+                  <span class="truncate">{{ shortName(groupForItem(row.item) ? memberByID(groupForItem(row.item)!).get(row.item.settlement.to_user_id)?.display_name : "?") }}</span>
                 </div>
-                <div class="hit-sub">
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span>settlement</span>
-                  <span v-if="row.item.settlement.note" class="trunc">· {{ row.item.settlement.note }}</span>
+                  <span v-if="row.item.settlement.note" class="truncate">· {{ row.item.settlement.note }}</span>
                 </div>
               </div>
             </div>
-            <span class="hit-amount">{{ formatMoney(row.item.settlement.amount_cents, groupForItem(row.item)?.default_currency ?? "EUR") }}</span>
+            <span class="shrink-0 self-center text-lg tabular-nums [font-family:var(--font-mono)]">{{ formatMoney(row.item.settlement.amount_cents, groupForItem(row.item)?.default_currency ?? "EUR") }}</span>
           </RouterLink>
         </li>
       </template>
     </ul>
 
     <!-- Group filter dialog -->
-    <dialog ref="groupDialog" class="filter-dialog" aria-modal="true" aria-label="Filter by group">
-      <div class="filter-dialog-body">
-        <div class="filter-dialog-head">
-          <h3 class="filter-dialog-title">Filter by group</h3>
-          <button type="button" class="fd-close" aria-label="Close" @click="groupDialog?.close()">
+    <dialog
+      ref="groupDialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
+      aria-modal="true"
+      aria-label="Filter by group"
+    >
+      <div class="flex flex-col gap-3 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-medium">Filter by group</h3>
+          <button type="button" class="cursor-pointer rounded-md px-2 py-1 text-muted-foreground" aria-label="Close" @click="groupDialog?.close()">
             <Icon name="xmark" :size="14" />
           </button>
         </div>
-        <ul class="fd-list">
+        <ul class="flex max-h-[60vh] list-none flex-col gap-0.5 overflow-auto">
           <li>
             <button type="button" class="field-category-option" @click="pickGroup('')">
               <Icon name="layer-group" :size="16" /><span>All groups</span>
@@ -382,15 +387,20 @@ onMounted(async () => {
     </dialog>
 
     <!-- Category filter dialog -->
-    <dialog ref="categoryDialog" class="filter-dialog" aria-modal="true" aria-label="Filter by category">
-      <div class="filter-dialog-body">
-        <div class="filter-dialog-head">
-          <h3 class="filter-dialog-title">Filter by category</h3>
-          <button type="button" class="fd-close" aria-label="Close" @click="categoryDialog?.close()">
+    <dialog
+      ref="categoryDialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-md border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
+      aria-modal="true"
+      aria-label="Filter by category"
+    >
+      <div class="flex flex-col gap-3 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-lg font-medium">Filter by category</h3>
+          <button type="button" class="cursor-pointer rounded-md px-2 py-1 text-muted-foreground" aria-label="Close" @click="categoryDialog?.close()">
             <Icon name="xmark" :size="14" />
           </button>
         </div>
-        <ul class="fd-list">
+        <ul class="flex max-h-[60vh] list-none flex-col gap-0.5 overflow-auto">
           <li>
             <button type="button" class="field-category-option" @click="pickCategory('')">
               <Icon name="layer-group" :size="16" /><span>All categories</span>
@@ -410,296 +420,3 @@ onMounted(async () => {
     </dialog>
   </AppLayout>
 </template>
-
-<style scoped>
-.title {
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.search-form {
-  margin-bottom: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.search-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-.filters {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-/* btn-secondary btn-sm supplies the look; only the <summary> marker resets
-   and fit-content width are specific to this disclosure trigger. */
-.filter-toggle {
-  width: fit-content;
-  list-style: none;
-}
-.filter-toggle::-webkit-details-marker {
-  display: none;
-}
-.filter-row {
-  margin-top: 0.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.filter-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.chip {
-  display: inline-flex;
-  cursor: pointer;
-  align-items: center;
-  gap: 0.375rem;
-  border-radius: 9999px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--card-foreground);
-  padding: 0.25rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-.chip:hover {
-  background: var(--hover-surface);
-  color: var(--hover-foreground, var(--card-foreground));
-}
-.chip-val {
-  max-width: 10rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.muted {
-  color: var(--muted-foreground);
-}
-.strong {
-  font-weight: 500;
-}
-.banner {
-  margin-bottom: 1rem;
-}
-.results {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  list-style: none;
-}
-.group-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 0.25rem 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.gh-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gh-name:hover {
-  text-decoration: underline;
-}
-.gh-count {
-  font-variant-numeric: tabular-nums;
-  text-transform: none;
-}
-.hit {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 0.375rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem 1rem;
-}
-.hit:hover {
-  background: var(--hover-surface);
-}
-.hit-settlement {
-  border-color: oklch(90.5% 0.093 164.15); /* emerald-200 */
-  background: oklch(97.9% 0.021 166.113); /* emerald-50 */
-}
-.hit-settlement:hover {
-  background: oklch(95% 0.052 163.051); /* emerald-100 */
-}
-:root[data-theme="dark"] .hit-settlement,
-:root[data-theme="high-contrast"] .hit-settlement {
-  border-color: oklch(37.8% 0.077 168.94); /* emerald-900 */
-  background: oklch(26.2% 0.051 172.552 / 0.4); /* emerald-950/40 */
-}
-:root[data-theme="dark"] .hit-settlement:hover,
-:root[data-theme="high-contrast"] .hit-settlement:hover {
-  background: oklch(26.2% 0.051 172.552 / 0.6); /* emerald-950/60 */
-}
-.hit-left {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.75rem;
-}
-.hit-date {
-  flex-shrink: 0;
-  display: inline-flex;
-  width: 1.75rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.settle-icon {
-  display: inline-flex;
-  height: 1.75rem;
-  width: 1.75rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: oklch(95% 0.052 163.051); /* emerald-100 */
-  color: oklch(50.8% 0.118 165.612); /* emerald-700 */
-}
-:root[data-theme="dark"] .settle-icon,
-:root[data-theme="high-contrast"] .settle-icon {
-  background: oklch(37.8% 0.077 168.94); /* emerald-900 */
-  color: oklch(84.5% 0.143 164.978); /* emerald-300 */
-}
-.hit-month,
-.hit-year {
-  font-size: 8px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.hit-day {
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-.hit-body {
-  min-width: 0;
-}
-.hit-desc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.hit-settle-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  font-weight: 500;
-}
-.hit-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-.trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hit-right {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.25rem;
-}
-.hit-stake {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.stake-lent {
-  color: oklch(37.8% 0.077 168.94); /* emerald-900 */
-}
-:root[data-theme="dark"] .stake-lent,
-:root[data-theme="high-contrast"] .stake-lent {
-  color: oklch(90.5% 0.093 164.15); /* emerald-200 */
-}
-.stake-owes {
-  color: oklch(55.5% 0.163 48.998); /* amber-700 */
-}
-:root[data-theme="dark"] .stake-owes,
-:root[data-theme="high-contrast"] .stake-owes {
-  color: oklch(92.4% 0.12 95.746); /* amber-200 */
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.hit-amount {
-  align-self: center;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 1.125rem;
-  font-variant-numeric: tabular-nums;
-}
-.filter-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.filter-dialog::backdrop {
-  background: var(--backdrop);
-}
-.filter-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-}
-.filter-dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.filter-dialog-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.fd-close {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.fd-list {
-  display: flex;
-  max-height: 60vh;
-  flex-direction: column;
-  gap: 0.125rem;
-  overflow: auto;
-  list-style: none;
-}
-</style>

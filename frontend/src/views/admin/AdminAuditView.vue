@@ -40,13 +40,13 @@ onMounted(load);
     </form>
 
     <ul class="grid list-none gap-2">
-      <li v-for="e in items" :key="e.id" class="entry rounded-md border border-border bg-card p-3 text-sm" :class="{ failed: !e.success }">
+      <li v-for="e in items" :key="e.id" class="rounded-md border p-3 text-sm" :class="e.success ? 'border-border bg-card' : 'border-[color-mix(in_oklch,var(--destructive)_50%,var(--border))] bg-[color-mix(in_oklch,var(--destructive)_8%,var(--card))]'">
         <div class="flex flex-wrap items-center gap-2">
           <code class="rounded-sm bg-muted px-1.5 py-px text-xs [font-family:var(--font-mono)]">{{ e.action }}</code>
           <span class="text-xs text-muted-foreground">{{ fmtTs(e.created_at) }}</span>
-          <span v-if="!e.success" class="text-xs font-medium text-[var(--destructive)]">FAILED</span>
+          <span v-if="!e.success" class="text-xs font-medium text-destructive">FAILED</span>
         </div>
-        <div class="entry-meta mt-1 text-xs text-muted-foreground">
+        <div class="mt-1 text-xs text-muted-foreground [&_code]:[font-family:var(--font-mono)]">
           actor <code>{{ e.actor_user_id.slice(0, 8) }}</code>
           <template v-if="e.target_user_id"> · target user <code>{{ e.target_user_id.slice(0, 8) }}</code></template>
           <template v-if="e.target_group_id"> · target group <code>{{ e.target_group_id.slice(0, 8) }}</code></template>
@@ -61,13 +61,3 @@ onMounted(load);
     </nav>
   </AppLayout>
 </template>
-
-<style scoped>
-.entry.failed {
-  border-color: color-mix(in oklch, var(--destructive) 50%, var(--border));
-  background: color-mix(in oklch, var(--destructive) 8%, var(--card));
-}
-.entry-meta code {
-  font-family: var(--font-mono);
-}
-</style>

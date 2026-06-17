@@ -261,7 +261,7 @@ watch(value, (v) => {
 </script>
 
 <template>
-  <div :class="['dp', variant === 'compact' ? 'dp-compact' : 'dp-default']">
+  <div :class="variant === 'compact' ? 'inline-flex items-center gap-2' : 'flex flex-col gap-1'">
     <template v-if="variant === 'compact'">
       <button
         type="button"
@@ -270,36 +270,41 @@ watch(value, (v) => {
         :title="ariaLabel"
         @click="open"
       >
-        <span class="dp-icon" aria-hidden="true">
-          <Icon name="layer-group" :size="28" class="dp-cal" />
-          <span class="dp-day">{{ triggerDay }}</span>
+        <span class="relative inline-block h-7 w-7" aria-hidden="true">
+          <Icon name="layer-group" :size="28" class="absolute inset-0 text-muted-foreground" />
+          <span class="absolute inset-x-0 top-[12px] flex h-[14px] items-center justify-center text-[10px] font-semibold leading-none text-foreground">{{ triggerDay }}</span>
         </span>
       </button>
-      <span v-if="showCadence && cadenceBadge" class="dp-cadence-badge">{{
+      <span v-if="showCadence && cadenceBadge" class="text-xs text-muted-foreground">{{
         cadenceBadge
       }}</span>
     </template>
 
     <template v-else>
-      <div class="dp-trigger-row">
-        <button type="button" class="dp-trigger" @click="open">
-          <span class="dp-icon" aria-hidden="true">
-            <Icon name="layer-group" :size="28" class="dp-cal" />
-            <span class="dp-day">{{ triggerDay }}</span>
+      <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+        <button type="button" class="flex cursor-pointer items-center gap-2 rounded-md text-left text-sm hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" @click="open">
+          <span class="relative inline-block h-7 w-7" aria-hidden="true">
+            <Icon name="layer-group" :size="28" class="absolute inset-0 text-muted-foreground" />
+            <span class="absolute inset-x-0 top-[12px] flex h-[14px] items-center justify-center text-[10px] font-semibold leading-none text-foreground">{{ triggerDay }}</span>
           </span>
-          <span class="dp-label">{{ triggerLabel }}</span>
+          <span class="font-medium">{{ triggerLabel }}</span>
         </button>
       </div>
-      <span v-if="caption" class="dp-caption">{{ caption }}</span>
+      <span v-if="caption" class="text-xs text-muted-foreground">{{ caption }}</span>
     </template>
 
-    <dialog ref="dialog" class="dp-dialog" aria-modal="true" aria-label="Pick date">
-      <div class="dp-body">
-        <div class="dp-head">
-          <h3 class="dp-title">Pick date</h3>
+    <dialog
+      ref="dialog"
+      class="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-96 rounded-lg border border-border bg-popover p-0 text-popover-foreground shadow-[0_20px_50px_rgba(0,0,0,0.35)] backdrop:bg-backdrop"
+      aria-modal="true"
+      aria-label="Pick date"
+    >
+      <div class="flex flex-col gap-4 p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-medium">Pick date</h3>
           <button
             type="button"
-            class="dp-close"
+            class="cursor-pointer rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted"
             aria-label="Close"
             title="Close"
             @click="cancel"
@@ -308,9 +313,9 @@ watch(value, (v) => {
           </button>
         </div>
 
-        <div class="dp-monthnav">
-          <h4 class="dp-monthtitle">{{ calTitle }}</h4>
-          <div class="dp-monthbtns">
+        <div class="flex items-center justify-between">
+          <h4 class="text-sm font-medium">{{ calTitle }}</h4>
+          <div class="flex items-center gap-2">
             <button
               type="button"
               class="btn-icon"
@@ -332,20 +337,20 @@ watch(value, (v) => {
           </div>
         </div>
 
-        <div class="dp-weekdays">
+        <div class="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
           <div v-for="(w, i) in weekdayHeaders" :key="i">{{ w }}</div>
         </div>
 
-        <div ref="gridEl" class="dp-grid" role="grid" @keydown="onGridKeydown">
+        <div ref="gridEl" class="grid grid-cols-7 gap-1" role="grid" @keydown="onGridKeydown">
           <template v-for="(cell, i) in cells" :key="i">
-            <div v-if="cell.kind === 'blank'" class="dp-blank" aria-hidden="true" />
+            <div v-if="cell.kind === 'blank'" class="h-9" aria-hidden="true" />
             <button
               v-else
               type="button"
-              class="dp-cell"
+              class="h-9 cursor-pointer rounded-md text-sm tabular-nums hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               :class="{
-                'dp-cell-pending': cell.iso === pending,
-                'dp-cell-today': cell.iso === today && cell.iso !== pending,
+                'bg-primary text-primary-foreground hover:brightness-[0.92]': cell.iso === pending,
+                'shadow-[inset_0_0_0_1px_var(--border)]': cell.iso === today && cell.iso !== pending,
               }"
               :data-iso="cell.iso"
               :aria-label="formatLongDate(cell.iso)"
@@ -358,13 +363,13 @@ watch(value, (v) => {
           </template>
         </div>
 
-        <div class="dp-foot">
-          <div class="dp-foot-top">
+        <div class="flex flex-col gap-3 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <button type="button" class="btn-secondary btn-sm" @click="goToday">
               Today
             </button>
-            <label v-if="showCadence" class="dp-repeat">
-              <span class="dp-repeat-lbl">
+            <label v-if="showCadence" class="ml-auto flex items-center gap-1.5 text-sm">
+              <span class="flex items-center gap-1 text-muted-foreground">
                 <Icon name="arrows-rotate" />
                 <span>Repeat</span>
               </span>
@@ -375,7 +380,7 @@ watch(value, (v) => {
               </select>
             </label>
           </div>
-          <div class="dp-foot-actions">
+          <div class="flex items-center justify-end gap-2">
             <button type="button" class="btn-secondary btn-sm" @click="cancel">
               Cancel
             </button>
@@ -388,207 +393,3 @@ watch(value, (v) => {
     </dialog>
   </div>
 </template>
-
-<style scoped>
-.dp-default {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.dp-compact {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.dp-trigger-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.5rem 0.75rem;
-}
-.dp-trigger {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-align: left;
-  font-size: 0.875rem;
-  cursor: pointer;
-  border-radius: 0.375rem;
-}
-.dp-trigger:hover {
-  opacity: 0.8;
-}
-.dp-trigger:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.dp-icon {
-  position: relative;
-  display: inline-block;
-  height: 1.75rem;
-  width: 1.75rem;
-}
-.dp-cal {
-  position: absolute;
-  inset: 0;
-  color: var(--muted-foreground);
-}
-.dp-day {
-  position: absolute;
-  inset-inline: 0;
-  top: 12px;
-  display: flex;
-  height: 14px;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--foreground);
-}
-.dp-label {
-  font-weight: 500;
-}
-.dp-caption {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.dp-cadence-badge {
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-
-.dp-dialog {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  padding: 0;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-.dp-dialog::backdrop {
-  background: var(--backdrop);
-}
-.dp-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-}
-.dp-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.dp-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-.dp-close {
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.dp-close:hover {
-  background: var(--muted);
-}
-.dp-monthnav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.dp-monthtitle {
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.dp-monthbtns {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.dp-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.25rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.dp-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.25rem;
-}
-.dp-blank {
-  height: 2.25rem;
-}
-.dp-cell {
-  height: 2.25rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.dp-cell:hover {
-  background: var(--muted);
-}
-.dp-cell:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.dp-cell-today {
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-.dp-cell-pending {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.dp-cell-pending:hover {
-  background: var(--primary);
-  filter: brightness(0.92);
-}
-.dp-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  border-top: 1px solid var(--border);
-  padding-top: 0.75rem;
-}
-.dp-foot-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.dp-repeat {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
-}
-.dp-repeat-lbl {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: var(--muted-foreground);
-}
-.dp-foot-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-</style>

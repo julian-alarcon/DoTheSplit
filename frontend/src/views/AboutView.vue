@@ -66,7 +66,7 @@ const inter = (credits as { inter?: {
       <section class="mb-8">
         <h2 class="mb-2 text-lg font-semibold">Backend dependencies</h2>
         <p class="mb-3 text-sm text-muted-foreground">Direct Go modules from <code class="[font-family:var(--font-mono)]">api/go.mod</code>.</p>
-        <div class="table-wrap overflow-x-auto rounded-md border border-border">
+        <div class="overflow-x-auto rounded-md border border-border [&_th]:bg-muted [&_th]:text-left [&_th]:px-3 [&_th]:py-2 [&_th]:font-medium [&_td]:border-t [&_td]:border-border [&_td]:px-3 [&_td]:py-2">
           <table class="w-full border-collapse text-sm">
             <thead>
               <tr>
@@ -89,7 +89,7 @@ const inter = (credits as { inter?: {
       <section class="mb-8">
         <h2 class="mb-2 text-lg font-semibold">Frontend dependencies</h2>
         <p class="mb-3 text-sm text-muted-foreground">Direct npm packages.</p>
-        <div class="table-wrap overflow-x-auto rounded-md border border-border">
+        <div class="overflow-x-auto rounded-md border border-border [&_th]:bg-muted [&_th]:text-left [&_th]:px-3 [&_th]:py-2 [&_th]:font-medium [&_td]:border-t [&_td]:border-border [&_td]:px-3 [&_td]:py-2">
           <table class="w-full border-collapse text-sm">
             <thead>
               <tr>
@@ -122,16 +122,3 @@ const inter = (credits as { inter?: {
     </div>
   </AppLayout>
 </template>
-
-<style scoped>
-.table-wrap th {
-  background: var(--muted);
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  font-weight: 500;
-}
-.table-wrap td {
-  border-top: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
-}
-</style>

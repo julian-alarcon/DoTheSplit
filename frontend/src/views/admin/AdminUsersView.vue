@@ -93,7 +93,7 @@ onMounted(load);
         <li v-for="u in items" :key="u.id">
           <RouterLink
             :to="`/admin/users/${u.id}`"
-            class="flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors hover:bg-[var(--hover-surface)]"
+            class="flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors hover:bg-hover-surface"
           >
             <MemberAvatar :user-id="u.id" :display-name="u.display_name" :has-avatar="u.has_avatar" :size="32" />
             <div class="min-w-0 flex-1">
@@ -105,7 +105,7 @@ onMounted(load);
               <div class="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span class="rounded-sm bg-muted px-1.5 py-px">{{ u.role }}</span>
                 <span>created {{ fmtDate(u.created_at) }}</span>
-                <span v-if="u.deleted_at" class="text-[var(--destructive)]">deleted {{ fmtDate(u.deleted_at) }}</span>
+                <span v-if="u.deleted_at" class="text-destructive">deleted {{ fmtDate(u.deleted_at) }}</span>
               </div>
             </div>
             <span class="ml-auto text-muted-foreground" aria-hidden="true">›</span>

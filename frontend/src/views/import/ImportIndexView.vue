@@ -16,7 +16,7 @@ const sources = [
       <li v-for="s in sources" :key="s.to">
         <RouterLink
           :to="s.to"
-          class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-[var(--hover-surface)]"
+          class="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 transition-colors hover:bg-hover-surface"
         >
           <span class="flex min-w-0 flex-col">
             <span class="font-medium">{{ s.title }}</span>

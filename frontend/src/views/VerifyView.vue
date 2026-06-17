@@ -75,7 +75,7 @@ async function onResend() {
           pattern="[0-9]{6}"
           maxlength="6"
           minlength="6"
-          class="code-input"
+          class="text-center tracking-[0.4em]"
           error="Enter the 6-digit code from your email"
         />
         <button
@@ -97,11 +97,3 @@ async function onResend() {
     </section>
   </AppLayout>
 </template>
-
-<style scoped>
-/* Targets the inner <input> rendered by the Field child component. */
-:deep(.code-input) {
-  text-align: center;
-  letter-spacing: 0.4em;
-}
-</style>

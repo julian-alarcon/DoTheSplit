@@ -114,7 +114,7 @@ onMounted(load);
           <dd>{{ fmtDate(target.created_at) }}</dd>
           <template v-if="isDeleted">
             <dt class="text-muted-foreground">Deleted</dt>
-            <dd class="text-[var(--destructive)]">{{ fmtDate(target.deleted_at) }}</dd>
+            <dd class="text-destructive">{{ fmtDate(target.deleted_at) }}</dd>
           </template>
         </dl>
         <p v-if="isSelf" class="mt-3 text-xs text-muted-foreground">
@@ -147,7 +147,7 @@ onMounted(load);
 
         <section class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
           <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
-          <p class="mb-3 text-sm text-[var(--subtle-foreground)]">Soft-deletes the account. Email and password are scrubbed and the display name becomes a tombstone so historical ledger entries stay traceable.</p>
+          <p class="mb-3 text-sm text-subtle-foreground">Soft-deletes the account. Email and password are scrubbed and the display name becomes a tombstone so historical ledger entries stay traceable.</p>
           <div class="flex justify-end">
             <button type="button" class="btn-danger" @click="deleteOpen = true">
               <Icon name="trash" /><span>Delete user</span>

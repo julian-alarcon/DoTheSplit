@@ -118,26 +118,26 @@ onMounted(async () => {
 
 <template>
   <AppLayout v-if="settlement && group" :back="{ to: `/groups/${groupId}`, label: group.name }">
-    <div class="head">
-      <span class="head-icon"><Icon name="arrow-right" :size="18" /></span>
+    <div class="mb-6 flex items-center gap-3">
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[color-mix(in_oklch,var(--primary)_20%,var(--card))] text-primary"><Icon name="arrow-right" :size="18" /></span>
       <div>
-        <h1 class="title">Settlement</h1>
-        <p class="meta">
+        <h1 class="text-2xl font-semibold">Settlement</h1>
+        <p class="text-sm text-muted-foreground">
           {{ dateFmt.format(new Date(settlement.settled_at)) }} ·
           {{ moneyFmt.format(settlement.amount_cents / 100) }}
         </p>
       </div>
     </div>
 
-    <Alert v-if="saveError" tone="error" class="banner">Could not save. Check your input and try again.</Alert>
-    <Alert v-if="isDeleted" tone="info" class="banner">
+    <Alert v-if="saveError" tone="error" class="mb-3 flex items-center gap-2">Could not save. Check your input and try again.</Alert>
+    <Alert v-if="isDeleted" tone="info" class="mb-3 flex items-center gap-2">
       <Icon name="trash" :size="14" />
       <span>This settlement was deleted on {{ deletedAtFmt }}. Balances no longer count it. Restore it below to bring it back.</span>
     </Alert>
 
-    <section class="panel">
-      <h2 class="panel-title">{{ canEdit ? "Edit" : "Details" }}</h2>
-      <form v-if="canEdit" class="form" @submit.prevent="onSave">
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">{{ canEdit ? "Edit" : "Details" }}</h2>
+      <form v-if="canEdit" class="flex flex-col gap-4" @submit.prevent="onSave">
         <label class="field-select-row">
           <span>Paid by</span>
           <select v-model="form.fromUserId" class="field-select">
@@ -161,15 +161,15 @@ onMounted(async () => {
           <input v-model="form.note" maxlength="200" placeholder=" " class="field-input" />
           <span class="field-label">Note</span>
         </label>
-        <div class="actions">
+        <div class="flex items-center justify-end gap-2">
           <DatePicker v-model="form.settledAt" variant="compact" :week-start="weekStart" />
           <button type="submit" class="btn-primary" :disabled="submitting">Save changes</button>
         </div>
       </form>
-      <dl v-else class="details">
-        <div class="detail">
-          <dt class="muted">From</dt>
-          <dd class="detail-who">
+      <dl v-else class="flex flex-col text-sm">
+        <div class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-subtle-foreground">From</dt>
+          <dd class="flex items-center gap-1.5">
             <MemberAvatar
               :user-id="settlement.from_user_id"
               :display-name="nameByID.get(settlement.from_user_id) ?? '?'"
@@ -180,9 +180,9 @@ onMounted(async () => {
             <span>{{ nameByID.get(settlement.from_user_id) ?? "?" }}</span>
           </dd>
         </div>
-        <div class="detail">
-          <dt class="muted">To</dt>
-          <dd class="detail-who">
+        <div class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-subtle-foreground">To</dt>
+          <dd class="flex items-center gap-1.5">
             <MemberAvatar
               :user-id="settlement.to_user_id"
               :display-name="nameByID.get(settlement.to_user_id) ?? '?'"
@@ -193,29 +193,29 @@ onMounted(async () => {
             <span>{{ nameByID.get(settlement.to_user_id) ?? "?" }}</span>
           </dd>
         </div>
-        <div class="detail">
-          <dt class="muted">Amount</dt>
-          <dd class="mono">{{ moneyFmt.format(settlement.amount_cents / 100) }}</dd>
+        <div class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-subtle-foreground">Amount</dt>
+          <dd class="[font-family:var(--font-mono)]">{{ moneyFmt.format(settlement.amount_cents / 100) }}</dd>
         </div>
-        <div class="detail">
-          <dt class="muted">Date</dt>
+        <div class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-subtle-foreground">Date</dt>
           <dd>{{ dateFmt.format(new Date(settlement.settled_at)) }}</dd>
         </div>
-        <div v-if="settlement.note" class="detail">
-          <dt class="muted">Note</dt>
-          <dd class="note-val">{{ settlement.note }}</dd>
+        <div v-if="settlement.note" class="flex flex-col gap-1 border-t border-border py-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          <dt class="text-subtle-foreground">Note</dt>
+          <dd class="break-words">{{ settlement.note }}</dd>
         </div>
       </dl>
     </section>
 
-    <section class="panel">
-      <h2 class="panel-title">History</h2>
-      <ul class="history">
-        <li class="hist-row">
-          <span class="hist-field">Recorded</span>
-          <span class="muted small">{{ dateTimeFmt.format(new Date(settlement.created_at)) }}</span>
+    <section class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-3 font-medium">History</h2>
+      <ul class="flex list-none flex-col text-sm">
+        <li class="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
+          <span class="font-medium">Recorded</span>
+          <span class="text-xs text-subtle-foreground">{{ dateTimeFmt.format(new Date(settlement.created_at)) }}</span>
         </li>
-        <li v-if="settledAtDiffers" class="hist-note">
+        <li v-if="settledAtDiffers" class="py-2 text-xs text-muted-foreground">
           Backdated to {{ dateFmt.format(new Date(settlement.settled_at)) }}.
         </li>
       </ul>
@@ -223,18 +223,18 @@ onMounted(async () => {
 
     <section v-if="canEdit" class="rounded-md border border-red-200 bg-card p-4 dark:border-red-900">
       <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Danger zone</h2>
-      <p class="muted mb">Soft-deletes this settlement. Balances will revert to the state before this payment was recorded.</p>
-      <div class="right">
+      <p class="mb-3 text-sm text-subtle-foreground">Soft-deletes this settlement. Balances will revert to the state before this payment was recorded.</p>
+      <div class="flex justify-end">
         <button type="button" class="btn-danger" @click="deleteConfirm = true">
           <Icon name="trash" /><span>Delete settlement</span>
         </button>
       </div>
     </section>
 
-    <section v-if="isMember && isDeleted" class="panel">
-      <h2 class="restore-title">Restore</h2>
-      <p class="muted mb">Brings this settlement back. Balances will count this payment again.</p>
-      <div class="right">
+    <section v-if="isMember && isDeleted" class="mb-4 rounded-md border border-border bg-card p-3">
+      <h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Restore</h2>
+      <p class="mb-3 text-sm text-subtle-foreground">Brings this settlement back. Balances will count this payment again.</p>
+      <div class="flex justify-end">
         <button type="button" class="btn-primary" @click="restoreConfirm = true">
           <Icon name="trash-arrow-up" /><span>Restore settlement</span>
         </button>
@@ -260,146 +260,3 @@ onMounted(async () => {
     />
   </AppLayout>
 </template>
-
-<style scoped>
-.head {
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.head-icon {
-  display: inline-flex;
-  height: 2.5rem;
-  width: 2.5rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: color-mix(in oklch, var(--primary) 20%, var(--card));
-  color: var(--primary);
-}
-.title {
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-.meta {
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-}
-.banner {
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.panel {
-  margin-bottom: 1rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.75rem;
-}
-.panel-title {
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-.details {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.875rem;
-}
-.detail {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  border-top: 1px solid var(--border);
-  padding: 0.5rem 0;
-}
-.detail:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-@media (min-width: 640px) {
-  .detail {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-}
-.detail-who {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-.muted {
-  color: var(--subtle-foreground);
-}
-.small {
-  font-size: 0.75rem;
-}
-.mb {
-  margin-bottom: 0.75rem;
-}
-.mono {
-  font-family: var(--font-mono);
-}
-.note-val {
-  word-break: break-word;
-}
-.history {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.875rem;
-  list-style: none;
-}
-.hist-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem 0;
-}
-.hist-row:first-child {
-  padding-top: 0;
-}
-@media (min-width: 640px) {
-  .hist-row {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-}
-.hist-field {
-  font-weight: 500;
-}
-.hist-note {
-  padding: 0.5rem 0;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.restore-title {
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-}
-.right {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

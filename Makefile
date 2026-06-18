@@ -60,7 +60,7 @@ embed-frontend: build-frontend ## Copy the built SPA into the Go embed dir
 	cp -r frontend/dist/. $(WEBUI_DIST)/
 
 build: embed-frontend ## Build Go binaries with the SPA embedded
-	cd api && go build -o bin/api ./cmd/api && go build -o bin/worker ./cmd/worker
+	cd api && go build -trimpath -ldflags="-s -w" -o bin/api ./cmd/api && go build -trimpath -ldflags="-s -w" -o bin/worker ./cmd/worker
 
 up: ## Rebuild + start the full stack, baking git SHA + frontend/package.json version into images
 	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) \

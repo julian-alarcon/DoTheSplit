@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -130,6 +131,21 @@ func Load() (*Config, error) {
 		PasswordPepper:      pep,
 		JWTSigningKey:       jwt,
 	}, nil
+}
+
+// SlogLevel maps the LOG_LEVEL string to a slog.Level, defaulting to Info for
+// empty or unrecognised values.
+func (c *Config) SlogLevel() slog.Level {
+	switch strings.ToLower(strings.TrimSpace(c.LogLevel)) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
 // readSecret returns the value of `name`, preferring `name+"_FILE"` when set.

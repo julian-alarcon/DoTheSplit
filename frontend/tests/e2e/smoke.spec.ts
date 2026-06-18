@@ -29,14 +29,28 @@ test.describe.configure({ mode: "serial" });
 test("first-run setup mints an admin", async ({ page }) => {
   test.skip(!TOKEN, "SETUP_TOKEN env var is required for E2E (see docker compose logs api)");
 
+  // This serial suite shares one stack, and Playwright doesn't reset the DB
+  // between retries, so a retry of this test runs against an instance where the
+  // admin already exists. In that state /setup redirects to /login and the
+  // token field is gone. Detect both resting states and stay meaningful on
+  // retry: either mint the admin via /setup, or (already minted) log in. Both
+  // assert the admin exists and the app reaches /groups.
   await page.goto("/setup");
-  await expect(page.getByLabel("Setup token")).toBeVisible();
+  const tokenField = page.getByLabel("Setup token");
+  const loginButton = page.getByRole("button", { name: /log in/i });
+  await expect(tokenField.or(loginButton)).toBeVisible();
 
-  await page.getByLabel("Setup token").fill(TOKEN!);
-  await page.getByLabel("Display name").fill(ADMIN_NAME);
-  await page.getByLabel("Email").fill(ADMIN_EMAIL);
-  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-  await page.getByRole("button", { name: /create admin/i }).click();
+  if (await tokenField.isVisible()) {
+    await tokenField.fill(TOKEN!);
+    await page.getByLabel("Display name").fill(ADMIN_NAME);
+    await page.getByLabel("Email").fill(ADMIN_EMAIL);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: /create admin/i }).click();
+  } else {
+    await page.getByLabel("Email").fill(ADMIN_EMAIL);
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await loginButton.click();
+  }
 
   // Successful setup auto-logs-in via the token flow and lands on /groups.
   await expect(page).toHaveURL(/\/groups\/?$/);
@@ -45,14 +59,21 @@ test("first-run setup mints an admin", async ({ page }) => {
 test("admin can create a new group", async ({ page }) => {
   test.skip(!TOKEN, "SETUP_TOKEN env var required");
 
-  // The SPA restores the session from the httpOnly refresh cookie on reload;
-  // if that has lapsed, log back in through the token flow.
+  // Each Playwright test runs in a fresh context with no cookies, so the SPA's
+  // boot refresh always 401s and redirects to /login. (On a real reload with a
+  // live refresh cookie it would land on /groups instead.) `goto` resolves on
+  // the /groups document load, BEFORE that client-side redirect settles, so we
+  // must wait for the SPA to come to rest rather than reading page.url()
+  // eagerly. Race the two possible resting states: the authenticated landing
+  // (the "New group" link) or the login form.
   await page.goto("/groups");
-  await page.waitForURL(/\/(groups|login)\/?$/);
-  if (page.url().includes("/login")) {
+  const newGroupLink = page.getByRole("link", { name: /new group/i }).first();
+  const loginButton = page.getByRole("button", { name: /log in/i });
+  await expect(newGroupLink.or(loginButton)).toBeVisible();
+  if (await loginButton.isVisible()) {
     await page.getByLabel("Email").fill(ADMIN_EMAIL);
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-    await page.getByRole("button", { name: /log in/i }).click();
+    await loginButton.click();
     await expect(page).toHaveURL(/\/groups\/?$/);
   }
 

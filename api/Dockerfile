@@ -24,11 +24,11 @@ COPY api/ ./
 # Drop the SPA bundle into the embed dir so //go:embed picks up the real
 # assets instead of the committed .gitkeep placeholder.
 COPY --from=web /app/dist/ ./internal/webui/dist/
-RUN CGO_ENABLED=0 go build \
-      -ldflags="-X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT}" \
+RUN CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT}" \
       -o /out/api ./cmd/api \
- && CGO_ENABLED=0 go build \
-      -ldflags="-X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT}" \
+ && CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT}" \
       -o /out/worker ./cmd/worker
 
 # --- Stage 3: distroless runtime --------------------------------------------

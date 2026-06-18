@@ -181,7 +181,7 @@ func (s *Server) RemoveGroupMember(c *gin.Context) {
 		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case errors.Is(err, service.ErrBalanceNotZero):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(c, http.StatusBadRequest, "bad_request", "This member still has an outstanding balance. Settle up so their balance is zero, then remove them. Otherwise their share of the group's expenses would be dropped from the ledger.")
 		return
 	case err != nil:
 		writeErr(c, http.StatusInternalServerError, "internal", err.Error())

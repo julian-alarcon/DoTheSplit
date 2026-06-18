@@ -37,6 +37,7 @@ Any change that touches the HTTP surface goes through the same loop:
 
 ```bash
 make gen            # regenerate Go + TS types from docs/openapi.yaml
+make lint           # golangci-lint (Go) + eslint (SPA) - both gate CI
 cd api && go vet ./...
 cd api && go build ./...
 cd frontend && npm run check    # vue-tsc type-check
@@ -65,7 +66,7 @@ The E2E suite in [api/internal/server/server_test.go](../api/internal/server/ser
   ```bash
   docker compose up -d --build
   TOKEN=$(docker compose logs api | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
-  cd frontend && SETUP_TOKEN=$TOKEN npm run test:e2e
+  SETUP_TOKEN=$TOKEN make test-e2e
   ```
 
   CI runs the same flow on every PR; locally it's optional, useful when changing SPA-to-API wiring.
@@ -287,8 +288,10 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | Target            | What it does                                                       |
 | ----------------- | ------------------------------------------------------------------ |
 | `make gen`        | Regenerate Go + TS API bindings from `docs/openapi.yaml`           |
+| `make lint`       | Lint everything: golangci-lint (Go) + eslint (SPA)                 |
 | `make migrate-up` | Apply all pending migrations                                       |
 | `make test-go`    | Full Go test suite (unit + integration via testcontainers)         |
+| `make test-e2e`   | Playwright e2e (needs the stack up + `SETUP_TOKEN`)                |
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
 | `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |
 | `make build`      | Build the SPA, embed it, then build Go binaries (`bin/api`, `bin/worker`) |

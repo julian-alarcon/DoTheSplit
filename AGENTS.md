@@ -131,7 +131,9 @@ Invariants for adding tests:
 - **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
 - **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
 
-Run everything with `make test`. Go alone: `cd api && go test ./... -race`. SPA unit alone: `cd frontend && npm test`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `cd frontend && SETUP_TOKEN=... npm run test:e2e`.
+Run everything with `make test`. Go alone: `make test-go`. SPA unit alone: `make test-frontend`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `SETUP_TOKEN=... make test-e2e`.
+
+Linting also gates CI on every PR: `make lint` runs golangci-lint (Go, pinned in the `lint-go` target) and eslint (SPA). Run it before pushing.
 
 ## Running the app
 

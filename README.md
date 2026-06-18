@@ -101,6 +101,7 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 make gen            # regenerate Go + TS API bindings from openapi.yaml
 make migrate-up     # apply DB migrations
 make dev            # run api + frontend against a local postgres
+make lint           # golangci-lint (Go) + eslint (SPA)
 make test           # unit + integration tests
 ```
 

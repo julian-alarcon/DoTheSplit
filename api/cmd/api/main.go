@@ -33,14 +33,17 @@ func main() {
 		return
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
+	// Config decides the log level, so parse it before building the real
+	// logger; a throwaway boot logger covers a failed config load.
+	bootLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("load config", slog.String("err", err.Error()))
+		bootLogger.Error("load config", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

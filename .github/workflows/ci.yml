@@ -28,11 +28,26 @@ jobs:
           cache-dependency-path: api/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
+        run: make lint-go
+
+  lint-frontend:
+    name: lint / frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          version: latest
-          working-directory: api
-          args: --timeout=5m
+          node-version-file: frontend/.nvmrc
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: install
+        working-directory: frontend
+        run: npm ci
+
+      - name: eslint
+        run: make lint-frontend
 
   test-go:
     name: test / go (race)
@@ -66,8 +81,7 @@ jobs:
         run: docker pull postgres:16-alpine
 
       - name: go test (race)
-        working-directory: api
-        run: go test ./... -race -coverprofile=coverage.out
+        run: make test-go GOTEST_FLAGS="-coverprofile=coverage.out"
 
       - name: upload coverage
         if: always()
@@ -93,18 +107,11 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: generate api types
-        working-directory: frontend
-        run: npx openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts
-
-      - name: type check
-        working-directory: frontend
-        run: npm run check
-
       - name: vitest
-        working-directory: frontend
-        run: npm test
+        run: make test-frontend
 
+      # `npm run build` (vue-tsc --build && vite build) also type-checks; the
+      # verify-openapi job guards the committed schema.d.ts against drift.
       - name: build
         working-directory: frontend
         run: npm run build

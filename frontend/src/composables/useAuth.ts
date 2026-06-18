@@ -35,6 +35,11 @@ async function login(email: string, password: string): Promise<{ ok: boolean; co
   }
   setAccessToken(data.access_token, data.expires_in);
   await fetchMe();
+  // We just established a session, so the boot refresh is unnecessary - and
+  // worse, a second refresh racing the rotating cookie would spend the same
+  // token twice and the reuse-detection would revoke the whole chain. Mark the
+  // session ready so the router guard skips boot() on the post-login redirect.
+  state.ready = true;
   return { ok: true };
 }
 

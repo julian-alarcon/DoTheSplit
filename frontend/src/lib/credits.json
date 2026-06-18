@@ -117,7 +117,7 @@
     },
     {
       "name": "@playwright/test",
-      "version": "1.60.0",
+      "version": "1.61.0",
       "license": "Apache-2.0",
       "url": "https://github.com/microsoft/playwright"
     },
@@ -138,6 +138,36 @@
       "version": "6.0.7",
       "license": "MIT",
       "url": "https://github.com/vitejs/vite-plugin-vue"
+    },
+    {
+      "name": "@vue/eslint-config-typescript",
+      "version": "14.8.0",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/eslint-config-typescript"
+    },
+    {
+      "name": "eslint",
+      "version": "10.5.0",
+      "license": "MIT",
+      "url": "https://github.com/eslint/eslint"
+    },
+    {
+      "name": "eslint-plugin-vue",
+      "version": "10.9.2",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/eslint-plugin-vue"
+    },
+    {
+      "name": "globals",
+      "version": "17.6.0",
+      "license": "MIT",
+      "url": "https://github.com/sindresorhus/globals"
+    },
+    {
+      "name": "jiti",
+      "version": "2.7.0",
+      "license": "MIT",
+      "url": "https://github.com/unjs/jiti"
     },
     {
       "name": "jsdom",
@@ -162,6 +192,12 @@
       "version": "5.9.3",
       "license": "Apache-2.0",
       "url": "https://github.com/microsoft/TypeScript"
+    },
+    {
+      "name": "typescript-eslint",
+      "version": "8.61.1",
+      "license": "MIT",
+      "url": "https://github.com/typescript-eslint/typescript-eslint"
     },
     {
       "name": "vite",

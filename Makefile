@@ -1,4 +1,4 @@
-.PHONY: help gen gen-go gen-ts-frontend migrate-up migrate-down test test-go test-frontend dev dev-api dev-frontend lint lint-go build build-frontend embed-frontend tidy up licenses sbom compliance
+.PHONY: help gen gen-go gen-ts-frontend migrate-up migrate-down test test-go test-frontend test-e2e dev dev-api dev-frontend lint lint-go lint-frontend build build-frontend embed-frontend tidy up licenses sbom compliance
 
 # Where the built Vue SPA is copied so the Go binary can //go:embed it.
 WEBUI_DIST := api/internal/webui/dist
@@ -7,8 +7,11 @@ SHELL := /bin/bash
 
 DATABASE_URL ?= postgres://dts:dts@localhost:5432/dts?sslmode=disable
 
+# Extra flags for `go test` (e.g. CI passes -coverprofile=coverage.out).
+GOTEST_FLAGS ?=
+
 help:
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 gen: gen-go gen-ts-frontend ## Regenerate server + client bindings from docs/openapi.yaml
 
@@ -29,10 +32,13 @@ migrate-down: ## Roll back the most recent migration
 test: test-go test-frontend ## Run all tests
 
 test-go: ## Run Go unit + integration tests
-	cd api && go test ./... -race
+	cd api && go test ./... -race $(GOTEST_FLAGS)
 
 test-frontend: ## Run Vue SPA unit tests
-	cd frontend && npm test --silent || true
+	cd frontend && npm test --silent
+
+test-e2e: ## Run Playwright e2e (needs the stack up + SETUP_TOKEN set)
+	cd frontend && npm run test:e2e
 
 dev-api: ## Run the API locally
 	cd api && go run ./cmd/api
@@ -46,10 +52,13 @@ dev: ## Run api + frontend concurrently (requires two terminals)
 tidy: ## go mod tidy
 	cd api && go mod tidy
 
-lint: lint-go ## Lint everything
+lint: lint-go lint-frontend ## Lint everything
 
 lint-go: ## Lint Go
 	cd api && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
+
+lint-frontend: ## Lint the Vue SPA (ESLint)
+	cd frontend && npm run lint
 
 build-frontend: ## Build the Vue SPA static bundle (frontend/dist)
 	cd frontend && npm ci && npm run build

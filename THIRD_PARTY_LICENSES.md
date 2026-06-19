@@ -32,43 +32,25 @@ Generated from `go-licenses csv ./cmd/api ./cmd/worker` against [api/go.mod](api
 
 | Module | License | Source |
 |---|---|---|
-| github.com/gabriel-vasile/mimetype | MIT | https://github.com/gabriel-vasile/mimetype/blob/v1.4.12/LICENSE |
 | github.com/getkin/kin-openapi/openapi3 | MIT | https://github.com/getkin/kin-openapi/blob/v0.140.0/LICENSE |
-| github.com/gin-contrib/sse | MIT | https://github.com/gin-contrib/sse/blob/v1.1.0/LICENSE |
-| github.com/gin-gonic/gin | MIT | https://github.com/gin-gonic/gin/blob/v1.12.0/LICENSE |
-| github.com/goccy/go-yaml | MIT | https://github.com/goccy/go-yaml/blob/v1.19.2/LICENSE |
 | github.com/golang-jwt/jwt/v5 | MIT | https://github.com/golang-jwt/jwt/blob/v5.3.1/LICENSE |
 | github.com/google/uuid | BSD-3-Clause | https://github.com/google/uuid/blob/v1.6.0/LICENSE |
 | github.com/go-openapi/jsonpointer | Apache-2.0 | https://github.com/go-openapi/jsonpointer/blob/v0.22.5/LICENSE |
 | github.com/go-openapi/swag/jsonname | Apache-2.0 | https://github.com/go-openapi/swag/blob/jsonname/v0.25.5/jsonname/LICENSE |
-| github.com/go-playground/locales | MIT | https://github.com/go-playground/locales/blob/v0.14.1/LICENSE |
-| github.com/go-playground/universal-translator | MIT | https://github.com/go-playground/universal-translator/blob/v0.18.1/LICENSE |
-| github.com/go-playground/validator/v10 | MIT | https://github.com/go-playground/validator/blob/v10.30.1/LICENSE |
 | github.com/jackc/pgpassfile | MIT | https://github.com/jackc/pgpassfile/blob/v1.0.0/LICENSE |
 | github.com/jackc/pgservicefile | MIT | https://github.com/jackc/pgservicefile/blob/5a60cdf6a761/LICENSE |
 | github.com/jackc/pgx/v5 | MIT | https://github.com/jackc/pgx/blob/v5.10.0/LICENSE |
 | github.com/jackc/puddle/v2 | MIT | https://github.com/jackc/puddle/blob/v2.2.2/LICENSE |
 | github.com/kelseyhightower/envconfig | MIT | https://github.com/kelseyhightower/envconfig/blob/v1.4.0/LICENSE |
-| github.com/leodido/go-urn | MIT | https://github.com/leodido/go-urn/blob/v1.4.0/LICENSE |
-| github.com/mattn/go-isatty | MIT | https://github.com/mattn/go-isatty/blob/v0.0.20/LICENSE |
 | github.com/oapi-codegen/runtime/types | Apache-2.0 | https://github.com/oapi-codegen/runtime/blob/v1.4.1/LICENSE |
 | github.com/oasdiff/yaml3 | MIT | https://github.com/oasdiff/yaml3/blob/v0.0.13/LICENSE |
 | github.com/oasdiff/yaml | BSD-3-Clause | https://github.com/oasdiff/yaml/blob/v0.1.0/LICENSE |
 | github.com/oasdiff/yaml | MIT | https://github.com/oasdiff/yaml/blob/v0.1.0/LICENSE |
-| github.com/pelletier/go-toml/v2 | MIT | https://github.com/pelletier/go-toml/blob/v2.2.4/LICENSE |
-| github.com/pkg/errors | BSD-2-Clause | https://github.com/pkg/errors/blob/v0.9.1/LICENSE |
-| github.com/quic-go/qpack | MIT | https://github.com/quic-go/qpack/blob/v0.6.0/LICENSE.md |
-| github.com/quic-go/quic-go | MIT | https://github.com/quic-go/quic-go/blob/v0.59.0/LICENSE |
 | github.com/santhosh-tekuri/jsonschema/v6 | Apache-2.0 | https://github.com/santhosh-tekuri/jsonschema/blob/v6.0.2/LICENSE |
-| github.com/ugorji/go/codec | MIT | https://github.com/ugorji/go/blob/codec/v1.3.1/codec/LICENSE |
-| github.com/ulule/limiter/v3 | MIT | https://github.com/ulule/limiter/blob/v3.11.2/LICENSE |
 | golang.org/x/crypto | BSD-3-Clause | https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE |
-| golang.org/x/net | BSD-3-Clause | https://cs.opensource.google/go/x/net/+/v0.55.0:LICENSE |
 | golang.org/x/sync/semaphore | BSD-3-Clause | https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE |
-| golang.org/x/sys | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE |
+| golang.org/x/sys/cpu | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE |
 | golang.org/x/text | BSD-3-Clause | https://cs.opensource.google/go/x/text/+/v0.38.0:LICENSE |
-| go.mongodb.org/mongo-driver/v2 | Apache-2.0 | https://github.com/mongodb/mongo-go-driver/blob/v2.5.0/LICENSE |
-| google.golang.org/protobuf | BSD-3-Clause | https://github.com/protocolbuffers/protobuf-go/blob/v1.36.10/LICENSE |
 
 ## Frontend (npm packages)
 

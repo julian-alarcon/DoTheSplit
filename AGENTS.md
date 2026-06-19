@@ -8,9 +8,9 @@ See also: [BLUEPRINT.md](BLUEPRINT.md) for product scope and [README.md](README.
 
 DoTheSplit - a expense-sharing app.
 
-- **Backend**: Go 1.26, Gin, pgx/v5, `golang-migrate`, `oapi-codegen`. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
+- **Backend**: Go 1.26, standard-library `net/http` (the 1.22+ `ServeMux` with method+wildcard patterns), pgx/v5, `golang-migrate`, `oapi-codegen`. No web framework. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
 - **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
-- **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware sets the `dts_user` context key, so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
+- **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware attaches the authenticated user to the request context (`middleware.WithUser`, read via `middleware.User(r.Context())`), so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
 - **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
 - **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only).
@@ -50,7 +50,7 @@ handlers → services → repositories → DB
 - **Handlers** ([api/internal/handlers/](api/internal/handlers/)): bind JSON, call services, translate errors to HTTP status codes. No business logic. Use `errors.Is` on service sentinels.
 - **Services** ([api/internal/service/](api/internal/service/)): validate, orchestrate, enforce invariants. Return sentinel errors (`ErrNotMember`, `ErrBadSplit`, etc.). Use transactions for anything that writes more than one table.
 - **Repositories** ([api/internal/repo/](api/internal/repo/)): pgx SQL, no domain rules. Map `pgx.ErrNoRows` → `repo.ErrNotFound`.
-- **Router** ([api/internal/server/router.go](api/internal/server/router.go)): register endpoints; guard non-auth routes with `mw.RequireSession()`.
+- **Router** ([api/internal/server/router.go](api/internal/server/router.go)): register endpoints on a `net/http.ServeMux` with method+pattern routes (`"POST /v1/groups/{id}/expenses"`, read params via `r.PathValue`); compose global + per-route middleware with `mw.Chain`, gating authenticated routes with `mw.RequireSession()` (and `mw.RequireAdmin()` for admin). Middleware are `func(http.Handler) http.Handler`; the authenticated user and request id travel through the request context, not a framework context.
 
 Rules of thumb:
 

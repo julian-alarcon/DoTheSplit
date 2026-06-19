@@ -5,43 +5,42 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
-func (s *Server) ListExpenses(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) ListExpenses(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	exps, err := s.Expenses.List(c.Request.Context(), u.ID, groupID)
+	exps, err := s.Expenses.List(r.Context(), u.ID, groupID)
 	if err != nil {
 		if errors.Is(err, service.ErrNotMember) {
-			writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+			writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 			return
 		}
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 	out := make([]apigen.Expense, 0, len(exps))
 	for i := range exps {
 		out = append(out, toAPIExpense(&exps[i]))
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) CreateExpense(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) CreateExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req apigen.CreateExpenseRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	// Leave zero when omitted; the service anchors the default to noon UTC.
@@ -67,7 +66,7 @@ func (s *Server) CreateExpense(c *gin.Context) {
 		splits[i] = service.SplitInput{UserID: sp.UserId, Value: v}
 	}
 
-	out, err := s.Expenses.Create(c.Request.Context(), u.ID, service.CreateExpenseInput{
+	out, err := s.Expenses.Create(r.Context(), u.ID, service.CreateExpenseInput{
 		GroupID:     groupID,
 		PayerID:     req.PayerId,
 		CategoryID:  req.CategoryId,
@@ -81,54 +80,54 @@ func (s *Server) CreateExpense(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrUnknownCategory):
-		writeErr(c, http.StatusBadRequest, "bad_request", "unknown category_id")
+		writeErr(w, http.StatusBadRequest, "bad_request", "unknown category_id")
 		return
 	case errors.Is(err, service.ErrPayerNotMember), errors.Is(err, service.ErrSplitNotMember),
 		errors.Is(err, service.ErrBadSplit):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, toAPIExpense(out))
+	writeJSON(w, http.StatusCreated, toAPIExpense(out))
 }
 
 // GetExpense returns one expense (member-only).
-func (s *Server) GetExpense(c *gin.Context) {
-	u := middleware.User(c)
-	id, ok := parseUUID(c, "id")
+func (s *Server) GetExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	e, err := s.Expenses.Get(c.Request.Context(), u.ID, id)
+	e, err := s.Expenses.Get(r.Context(), u.ID, id)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		writeErr(w, http.StatusNotFound, "not_found", "expense not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIExpense(e))
+	writeJSON(w, http.StatusOK, toAPIExpense(e))
 }
 
 // UpdateExpense edits description / amount / category / payer / splits.
 // Any group member may edit; the change is recorded in the revision history.
-func (s *Server) UpdateExpense(c *gin.Context) {
-	u := middleware.User(c)
-	id, ok := parseUUID(c, "id")
+func (s *Server) UpdateExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req apigen.UpdateExpenseRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	in := service.UpdateExpenseInput{
@@ -155,112 +154,112 @@ func (s *Server) UpdateExpense(c *gin.Context) {
 		in.Splits = splits
 	}
 
-	out, err := s.Expenses.Update(c.Request.Context(), u.ID, id, in)
+	out, err := s.Expenses.Update(r.Context(), u.ID, id, in)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		writeErr(w, http.StatusNotFound, "not_found", "expense not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrUnknownCategory):
-		writeErr(c, http.StatusBadRequest, "bad_request", "unknown category_id")
+		writeErr(w, http.StatusBadRequest, "bad_request", "unknown category_id")
 		return
 	case errors.Is(err, service.ErrPayerNotMember):
-		writeErr(c, http.StatusBadRequest, "bad_request", "payer is not a group member")
+		writeErr(w, http.StatusBadRequest, "bad_request", "payer is not a group member")
 		return
 	case errors.Is(err, service.ErrSplitNotMember):
-		writeErr(c, http.StatusBadRequest, "bad_request", "split user is not a group member")
+		writeErr(w, http.StatusBadRequest, "bad_request", "split user is not a group member")
 		return
 	case errors.Is(err, service.ErrBadSplit):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIExpense(out))
+	writeJSON(w, http.StatusOK, toAPIExpense(out))
 }
 
 // ListExpenseRevisions returns the edit history for an expense.
-func (s *Server) ListExpenseRevisions(c *gin.Context) {
-	u := middleware.User(c)
-	id, ok := parseUUID(c, "id")
+func (s *Server) ListExpenseRevisions(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	revs, err := s.Expenses.ListRevisions(c.Request.Context(), u.ID, id)
+	revs, err := s.Expenses.ListRevisions(r.Context(), u.ID, id)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		writeErr(w, http.StatusNotFound, "not_found", "expense not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 	out := make([]apigen.ExpenseRevision, 0, len(revs))
 	for i := range revs {
-		r := revs[i]
+		rev := revs[i]
 		out = append(out, apigen.ExpenseRevision{
-			Id:        r.ID,
-			ExpenseId: r.ExpenseID,
-			EditedBy:  r.EditedBy,
-			EditedAt:  r.EditedAt,
-			Field:     apigen.ExpenseRevisionField(r.Field),
-			OldValue:  r.OldValue,
-			NewValue:  r.NewValue,
+			Id:        rev.ID,
+			ExpenseId: rev.ExpenseID,
+			EditedBy:  rev.EditedBy,
+			EditedAt:  rev.EditedAt,
+			Field:     apigen.ExpenseRevisionField(rev.Field),
+			OldValue:  rev.OldValue,
+			NewValue:  rev.NewValue,
 		})
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) DeleteExpense(c *gin.Context) {
-	u := middleware.User(c)
-	expenseID, ok := parseUUID(c, "id")
+func (s *Server) DeleteExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	expenseID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	err := s.Expenses.Delete(c.Request.Context(), u.ID, expenseID)
+	err := s.Expenses.Delete(r.Context(), u.ID, expenseID)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		writeErr(w, http.StatusNotFound, "not_found", "expense not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // RestoreExpense un-deletes a soft-deleted expense (any group member).
-func (s *Server) RestoreExpense(c *gin.Context) {
-	u := middleware.User(c)
-	expenseID, ok := parseUUID(c, "id")
+func (s *Server) RestoreExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	expenseID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	out, err := s.Expenses.Restore(c.Request.Context(), u.ID, expenseID)
+	out, err := s.Expenses.Restore(r.Context(), u.ID, expenseID)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "expense not found")
+		writeErr(w, http.StatusNotFound, "not_found", "expense not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrAlreadyActive):
-		writeErr(c, http.StatusConflict, "conflict", "expense is not deleted")
+		writeErr(w, http.StatusConflict, "conflict", "expense is not deleted")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIExpense(out))
+	writeJSON(w, http.StatusOK, toAPIExpense(out))
 }
 
 func toAPIExpense(e *repo.Expense) apigen.Expense {

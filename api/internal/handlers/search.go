@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
@@ -13,53 +12,54 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
-func (s *Server) Search(c *gin.Context) {
-	u := middleware.User(c)
-	q := c.Query("q")
+func (s *Server) Search(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	query := r.URL.Query()
+	q := query.Get("q")
 
 	limit := 0
-	if raw := c.Query("limit"); raw != "" {
+	if raw := query.Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil {
-			writeErr(c, http.StatusBadRequest, "bad_request", "limit must be an integer")
+			writeErr(w, http.StatusBadRequest, "bad_request", "limit must be an integer")
 			return
 		}
 		limit = n
 	}
 
 	var groupIDs []uuid.UUID
-	for _, raw := range c.QueryArray("group_id") {
+	for _, raw := range query["group_id"] {
 		if raw == "" {
 			continue
 		}
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			writeErr(c, http.StatusBadRequest, "bad_request", "group_id must be a UUID")
+			writeErr(w, http.StatusBadRequest, "bad_request", "group_id must be a UUID")
 			return
 		}
 		groupIDs = append(groupIDs, id)
 	}
 
 	var categoryID *uuid.UUID
-	if raw := c.Query("category_id"); raw != "" {
+	if raw := query.Get("category_id"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
-			writeErr(c, http.StatusBadRequest, "bad_request", "category_id must be a UUID")
+			writeErr(w, http.StatusBadRequest, "bad_request", "category_id must be a UUID")
 			return
 		}
 		categoryID = &id
 	}
 
-	res, err := s.SearchSvc.Search(c.Request.Context(), u.ID, q, groupIDs, categoryID, limit)
+	res, err := s.SearchSvc.Search(r.Context(), u.ID, q, groupIDs, categoryID, limit)
 	switch {
 	case errors.Is(err, service.ErrBadSearchQuery):
-		writeErr(c, http.StatusBadRequest, "bad_request", "q must be at least 2 characters")
+		writeErr(w, http.StatusBadRequest, "bad_request", "q must be at least 2 characters")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPISearchResponse(res))
+	writeJSON(w, http.StatusOK, toAPISearchResponse(res))
 }
 
 func toAPISearchResponse(r *service.SearchResult) apigen.SearchResponse {

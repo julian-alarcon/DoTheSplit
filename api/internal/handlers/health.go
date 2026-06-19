@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 )
 
@@ -17,20 +16,20 @@ type healthStatus struct {
 	Commit  string `json:"commit"`
 }
 
-func (s *Server) Healthz(c *gin.Context) {
-	c.JSON(http.StatusOK, healthStatus{Status: "ok", Version: s.Version, Commit: s.Commit})
+func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, healthStatus{Status: "ok", Version: s.Version, Commit: s.Commit})
 }
 
-func (s *Server) Readyz(c *gin.Context) {
-	if err := s.Pool.Ping(c.Request.Context()); err != nil {
+func (s *Server) Readyz(w http.ResponseWriter, r *http.Request) {
+	if err := s.Pool.Ping(r.Context()); err != nil {
 		// Don't echo the raw driver error to the client: it can leak
 		// connection-string fragments and infrastructure detail. Log it
 		// server-side and return a static message.
 		slog.Error("readyz: database ping failed", slog.String("err", err.Error()))
-		c.JSON(http.StatusServiceUnavailable, apigen.Error{
+		writeJSON(w, http.StatusServiceUnavailable, apigen.Error{
 			Code: "not_ready", Message: "database unreachable",
 		})
 		return
 	}
-	c.JSON(http.StatusOK, healthStatus{Status: "ok", Version: s.Version, Commit: s.Commit})
+	writeJSON(w, http.StatusOK, healthStatus{Status: "ok", Version: s.Version, Commit: s.Commit})
 }

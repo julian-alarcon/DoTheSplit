@@ -12,7 +12,7 @@ Open-source expense-sharing app.
 
 ## Tech Stack
 
-- Backend: Go with [Gin](https://github.com/gin-gonic/gin) HTTP web framework
+- Backend: Go with the standard-library [`net/http`](https://pkg.go.dev/net/http) server (1.22+ `ServeMux` routing; no third-party web framework)
 - Frontend: Vue 3 SPA (client-side-rendered) + Vite, built to static files and embedded into the Go binary (mobile-first, PWA-ready; future mobile via wrapper)
 - Database: PostgreSQL 18 (encryption at rest)
 - Infra: Docker Compose on TrueNAS (services: `postgres`, `migrate`, `api`, `worker`; the api binary serves the embedded SPA, so there is no separate `web` service)

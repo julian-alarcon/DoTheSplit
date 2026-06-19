@@ -4,43 +4,42 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
-func (s *Server) ListRecurringExpenses(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) ListRecurringExpenses(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	list, err := s.Recurring.List(c.Request.Context(), u.ID, groupID)
+	list, err := s.Recurring.List(r.Context(), u.ID, groupID)
 	if errors.Is(err, service.ErrNotMember) {
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	}
 	if err != nil {
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 	out := make([]apigen.RecurringExpense, 0, len(list))
 	for i := range list {
 		out = append(out, toAPIRecurring(&list[i]))
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) CreateRecurringExpense(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) CreateRecurringExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req apigen.CreateRecurringExpenseRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	currency := ""
@@ -55,7 +54,7 @@ func (s *Server) CreateRecurringExpense(c *gin.Context) {
 		}
 		splits[i] = service.SplitInput{UserID: sp.UserId, Value: v}
 	}
-	out, err := s.Recurring.Create(c.Request.Context(), u.ID, service.CreateRecurringInput{
+	out, err := s.Recurring.Create(r.Context(), u.ID, service.CreateRecurringInput{
 		GroupID:     groupID,
 		PayerID:     req.PayerId,
 		CategoryID:  req.CategoryId,
@@ -69,37 +68,37 @@ func (s *Server) CreateRecurringExpense(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrUnknownCategory):
-		writeErr(c, http.StatusBadRequest, "bad_request", "unknown category_id")
+		writeErr(w, http.StatusBadRequest, "bad_request", "unknown category_id")
 		return
 	case err != nil:
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, toAPIRecurring(out))
+	writeJSON(w, http.StatusCreated, toAPIRecurring(out))
 }
 
-func (s *Server) DeleteRecurringExpense(c *gin.Context) {
-	u := middleware.User(c)
-	id, ok := parseUUID(c, "id")
+func (s *Server) DeleteRecurringExpense(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	err := s.Recurring.Delete(c.Request.Context(), u.ID, id)
+	err := s.Recurring.Delete(r.Context(), u.ID, id)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "not found")
+		writeErr(w, http.StatusNotFound, "not_found", "not found")
 		return
 	case errors.Is(err, service.ErrForbidden):
-		writeErr(c, http.StatusForbidden, "forbidden", "not permitted")
+		writeErr(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toAPIRecurring(e *repo.RecurringExpense) apigen.RecurringExpense {

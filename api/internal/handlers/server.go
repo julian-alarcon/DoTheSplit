@@ -1,4 +1,4 @@
-// Package handlers implements the HTTP surface using Gin.
+// Package handlers implements the HTTP surface using net/http.
 package handlers
 
 import (
@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
+	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
@@ -42,28 +42,49 @@ type Server struct {
 	Users            *repo.UserRepo
 	Audit            *repo.AuditRepo
 
+	// IP resolves the originating client IP under the configured trusted-proxy
+	// policy. Populated by server.New; used by audit logging and step-up.
+	IP *middleware.TrustedProxies
+
 	// Version and Commit are stamped into the binary at build time and
 	// reported by /healthz so deployments can self-identify.
 	Version string
 	Commit  string
 }
 
-func writeErr(c *gin.Context, status int, code, message string) {
-	c.JSON(status, apigen.Error{Code: code, Message: message})
+// clientIP resolves the request's client IP via the configured trusted-proxy
+// policy, tolerating a nil IP (e.g. a Server built directly in a unit test).
+func (s *Server) clientIP(r *http.Request) string {
+	if s.IP == nil {
+		return ""
+	}
+	return s.IP.ClientIP(r)
+}
+
+// writeJSON encodes v as the response body with the given status. Replaces
+// gin's c.JSON.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeErr(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, apigen.Error{Code: code, Message: message})
 }
 
 // bindStrictJSON decodes the request body into dst, rejecting unknown fields
 // and any trailing tokens. Matches additionalProperties: false in the spec.
 // On failure it writes a 400 and returns false; callers should return early.
-func bindStrictJSON(c *gin.Context, dst any) bool {
-	dec := json.NewDecoder(c.Request.Body)
+func bindStrictJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		writeErr(c, http.StatusBadRequest, "bad_request", "invalid JSON body: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body: "+err.Error())
 		return false
 	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeErr(c, http.StatusBadRequest, "bad_request", "unexpected trailing JSON")
+		writeErr(w, http.StatusBadRequest, "bad_request", "unexpected trailing JSON")
 		return false
 	}
 	return true
@@ -75,15 +96,28 @@ func bindStrictJSON(c *gin.Context, dst any) bool {
 const refreshCookieName = "dts_refresh"
 const refreshCookiePath = "/v1/auth"
 
-func (s *Server) setRefreshCookie(c *gin.Context, token string, ttl time.Duration) {
-	maxAge := int(ttl / time.Second)
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(refreshCookieName, token, maxAge,
-		refreshCookiePath, s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
+func (s *Server) setRefreshCookie(w http.ResponseWriter, token string, ttl time.Duration) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    token,
+		Path:     refreshCookiePath,
+		Domain:   s.Cfg.CookieDomain,
+		MaxAge:   int(ttl / time.Second),
+		Secure:   s.Cfg.CookieSecure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
-func (s *Server) clearRefreshCookie(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(refreshCookieName, "", -1,
-		refreshCookiePath, s.Cfg.CookieDomain, s.Cfg.CookieSecure, true)
+func (s *Server) clearRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    "",
+		Path:     refreshCookiePath,
+		Domain:   s.Cfg.CookieDomain,
+		MaxAge:   -1,
+		Secure:   s.Cfg.CookieSecure,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }

@@ -5,100 +5,99 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (s *Server) Register(c *gin.Context) {
+func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	var req apigen.RegisterRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
-	res, err := s.Auth.Register(c.Request.Context(), string(req.Email), req.Password, req.DisplayName)
+	res, err := s.Auth.Register(r.Context(), string(req.Email), req.Password, req.DisplayName)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrSetupRequired):
-			writeErr(c, http.StatusForbidden, "setup_required",
+			writeErr(w, http.StatusForbidden, "setup_required",
 				"instance is in first-run setup mode; visit /setup")
 		case errors.Is(err, service.ErrEmailTaken):
-			writeErr(c, http.StatusConflict, "email_taken", "email already registered")
+			writeErr(w, http.StatusConflict, "email_taken", "email already registered")
 		default:
-			writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		}
 		return
 	}
 	user := toAPIUser(res.User)
-	c.JSON(http.StatusCreated, apigen.RegisterResponse{
+	writeJSON(w, http.StatusCreated, apigen.RegisterResponse{
 		User:                 user,
 		VerificationRequired: res.VerificationRequired,
 	})
 }
 
-func (s *Server) VerifyEmail(c *gin.Context) {
+func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req apigen.VerifyEmailRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
-	u, err := s.Auth.VerifyEmail(c.Request.Context(), string(req.Email), req.Code)
+	u, err := s.Auth.VerifyEmail(r.Context(), string(req.Email), req.Code)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCode):
-			writeErr(c, http.StatusBadRequest, "invalid_code", "verification code is incorrect")
+			writeErr(w, http.StatusBadRequest, "invalid_code", "verification code is incorrect")
 		case errors.Is(err, service.ErrCodeExpired):
-			writeErr(c, http.StatusGone, "code_expired", "verification code has expired or is no longer valid")
+			writeErr(w, http.StatusGone, "code_expired", "verification code has expired or is no longer valid")
 		case errors.Is(err, service.ErrVerifyRateLimited):
-			writeErr(c, http.StatusTooManyRequests, "too_many_attempts", "too many incorrect attempts; request a new code")
+			writeErr(w, http.StatusTooManyRequests, "too_many_attempts", "too many incorrect attempts; request a new code")
 		default:
-			writeErr(c, http.StatusInternalServerError, "internal", "verify failed")
+			writeErr(w, http.StatusInternalServerError, "internal", "verify failed")
 		}
 		return
 	}
-	c.JSON(http.StatusOK, toAPIUser(u))
+	writeJSON(w, http.StatusOK, toAPIUser(u))
 }
 
-func (s *Server) ResendVerification(c *gin.Context) {
+func (s *Server) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req apigen.ResendVerificationRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	// Always 204 to avoid account enumeration.
-	_ = s.Auth.ResendVerification(c.Request.Context(), string(req.Email))
-	c.Status(http.StatusNoContent)
+	_ = s.Auth.ResendVerification(r.Context(), string(req.Email))
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) RequestPasswordReset(c *gin.Context) {
+func (s *Server) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req apigen.PasswordResetRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	// Always 204 to avoid account enumeration.
-	_ = s.Auth.RequestPasswordReset(c.Request.Context(), string(req.Email))
-	c.Status(http.StatusNoContent)
+	_ = s.Auth.RequestPasswordReset(r.Context(), string(req.Email))
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) ConfirmPasswordReset(c *gin.Context) {
+func (s *Server) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req apigen.PasswordResetConfirm
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
-	u, err := s.Auth.ConfirmPasswordReset(c.Request.Context(), string(req.Email), req.Code, req.NewPassword)
+	u, err := s.Auth.ConfirmPasswordReset(r.Context(), string(req.Email), req.Code, req.NewPassword)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCode):
-			writeErr(c, http.StatusBadRequest, "invalid_code", "verification code is incorrect")
+			writeErr(w, http.StatusBadRequest, "invalid_code", "verification code is incorrect")
 		case errors.Is(err, service.ErrCodeExpired):
-			writeErr(c, http.StatusGone, "code_expired", "verification code has expired or is no longer valid")
+			writeErr(w, http.StatusGone, "code_expired", "verification code has expired or is no longer valid")
 		case errors.Is(err, service.ErrVerifyRateLimited):
-			writeErr(c, http.StatusTooManyRequests, "too_many_attempts", "too many incorrect attempts; request a new code")
+			writeErr(w, http.StatusTooManyRequests, "too_many_attempts", "too many incorrect attempts; request a new code")
 		default:
-			writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		}
 		return
 	}
-	c.JSON(http.StatusOK, toAPIUser(u))
+	writeJSON(w, http.StatusOK, toAPIUser(u))
 }
 
 // IssueToken exchanges credentials for a JWT access token + rotating refresh
@@ -106,51 +105,51 @@ func (s *Server) ConfirmPasswordReset(c *gin.Context) {
 // the response body omits it. (Native clients have no cookie jar, but since the
 // server can't tell them apart from the request, we always set the cookie and
 // also return the refresh token in the body so native can read it.)
-func (s *Server) IssueToken(c *gin.Context) {
+func (s *Server) IssueToken(w http.ResponseWriter, r *http.Request) {
 	var req apigen.LoginRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
-	_, pair, err := s.Auth.IssueTokenPair(c.Request.Context(), string(req.Email), req.Password)
+	_, pair, err := s.Auth.IssueTokenPair(r.Context(), string(req.Email), req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrEmailUnverified):
-			writeErr(c, http.StatusForbidden, "email_unverified", "email address not yet verified")
+			writeErr(w, http.StatusForbidden, "email_unverified", "email address not yet verified")
 		case errors.Is(err, service.ErrTokenAuthDisabled):
-			writeErr(c, http.StatusServiceUnavailable, "token_auth_disabled", "token auth is not configured")
+			writeErr(w, http.StatusServiceUnavailable, "token_auth_disabled", "token auth is not configured")
 		default:
-			writeErr(c, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
+			writeErr(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
 		}
 		return
 	}
-	s.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTTL)
-	c.JSON(http.StatusOK, tokenResponse(pair))
+	s.setRefreshCookie(w, pair.RefreshToken, pair.RefreshTTL)
+	writeJSON(w, http.StatusOK, tokenResponse(pair))
 }
 
 // RefreshToken rotates the refresh token and mints a new access token.
-func (s *Server) RefreshToken(c *gin.Context) {
-	refresh := s.readRefreshToken(c)
-	pair, err := s.Auth.RefreshTokenPair(c.Request.Context(), refresh)
+func (s *Server) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	refresh := s.readRefreshToken(r)
+	pair, err := s.Auth.RefreshTokenPair(r.Context(), refresh)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTokenAuthDisabled):
-			writeErr(c, http.StatusServiceUnavailable, "token_auth_disabled", "token auth is not configured")
+			writeErr(w, http.StatusServiceUnavailable, "token_auth_disabled", "token auth is not configured")
 		default:
-			s.clearRefreshCookie(c)
-			writeErr(c, http.StatusUnauthorized, "invalid_token", "refresh token is invalid or expired")
+			s.clearRefreshCookie(w)
+			writeErr(w, http.StatusUnauthorized, "invalid_token", "refresh token is invalid or expired")
 		}
 		return
 	}
-	s.setRefreshCookie(c, pair.RefreshToken, pair.RefreshTTL)
-	c.JSON(http.StatusOK, tokenResponse(pair))
+	s.setRefreshCookie(w, pair.RefreshToken, pair.RefreshTTL)
+	writeJSON(w, http.StatusOK, tokenResponse(pair))
 }
 
 // RevokeToken revokes the presented refresh token (token-client logout).
-func (s *Server) RevokeToken(c *gin.Context) {
-	refresh := s.readRefreshToken(c)
-	_ = s.Auth.RevokeRefreshToken(c.Request.Context(), refresh)
-	s.clearRefreshCookie(c)
-	c.Status(http.StatusNoContent)
+func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request) {
+	refresh := s.readRefreshToken(r)
+	_ = s.Auth.RevokeRefreshToken(r.Context(), refresh)
+	s.clearRefreshCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func tokenResponse(p *service.TokenPair) apigen.TokenResponse {
@@ -166,26 +165,26 @@ func tokenResponse(p *service.TokenPair) apigen.TokenResponse {
 // readRefreshToken prefers the request body's refresh_token (native clients),
 // falling back to the dts_refresh cookie (web). The body read is best-effort;
 // an absent/invalid body is fine.
-func (s *Server) readRefreshToken(c *gin.Context) string {
+func (s *Server) readRefreshToken(r *http.Request) string {
 	var req apigen.RefreshRequest
-	dec := json.NewDecoder(c.Request.Body)
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err == nil && req.RefreshToken != nil && *req.RefreshToken != "" {
 		return *req.RefreshToken
 	}
-	if ck, err := c.Cookie(refreshCookieName); err == nil {
-		return ck
+	if ck, err := r.Cookie(refreshCookieName); err == nil {
+		return ck.Value
 	}
 	return ""
 }
 
-func (s *Server) Me(c *gin.Context) {
-	u := middleware.User(c)
+func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
 	if u == nil {
-		writeErr(c, http.StatusUnauthorized, "unauthorized", "authentication required")
+		writeErr(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
 	}
-	c.JSON(http.StatusOK, toAPIUser(u))
+	writeJSON(w, http.StatusOK, toAPIUser(u))
 }
 
 func toAPIUser(u *service.User) apigen.User {

@@ -2,28 +2,32 @@ package middleware
 
 import (
 	"log/slog"
+	"net/http"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 // Logger emits a structured access log per request. Designed to stay quiet
-// about health checks so they don't flood the log.
-func Logger(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		path := c.Request.URL.Path
-		c.Next()
-		if path == "/healthz" || path == "/readyz" {
-			return
-		}
-		logger.Info("http",
-			slog.String("method", c.Request.Method),
-			slog.String("path", path),
-			slog.Int("status", c.Writer.Status()),
-			slog.Duration("dur", time.Since(start)),
-			slog.String("ip", c.ClientIP()),
-			slog.String("req_id", c.GetString("request_id")),
-		)
+// about health checks so they don't flood the log. The client IP is resolved
+// through the shared trusted-proxy policy so forged X-Forwarded-For headers
+// don't pollute the logs.
+func Logger(logger *slog.Logger, ip *TrustedProxies) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			path := r.URL.Path
+			rec := &statusRecorder{ResponseWriter: w}
+			next.ServeHTTP(rec, r)
+			if path == "/healthz" || path == "/readyz" {
+				return
+			}
+			logger.Info("http",
+				slog.String("method", r.Method),
+				slog.String("path", path),
+				slog.Int("status", rec.Status()),
+				slog.Duration("dur", time.Since(start)),
+				slog.String("ip", ip.ClientIP(r)),
+				slog.String("req_id", RequestID(r.Context())),
+			)
+		})
 	}
 }

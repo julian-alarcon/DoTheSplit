@@ -8,7 +8,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
@@ -17,55 +16,55 @@ import (
 )
 
 // parseUUID reads a path param and writes 400 on invalid UUIDs.
-func parseUUID(c *gin.Context, key string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(c.Param(key))
+func parseUUID(w http.ResponseWriter, r *http.Request, key string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(r.PathValue(key))
 	if err != nil {
-		writeErr(c, http.StatusBadRequest, "bad_request", "invalid id")
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid id")
 		return uuid.Nil, false
 	}
 	return id, true
 }
 
-func (s *Server) ListGroups(c *gin.Context) {
-	u := middleware.User(c)
-	groups, membersByGroup, err := s.Groups.List(c.Request.Context(), u.ID)
+func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groups, membersByGroup, err := s.Groups.List(r.Context(), u.ID)
 	if err != nil {
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 	out := make([]apigen.Group, 0, len(groups))
 	for _, g := range groups {
 		out = append(out, toAPIGroup(&g, membersByGroup[g.ID]))
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) CreateGroup(c *gin.Context) {
-	u := middleware.User(c)
+func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
 	var req apigen.CreateGroupRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	currency := ""
 	if req.DefaultCurrency != nil {
 		currency = *req.DefaultCurrency
 	}
-	g, members, err := s.Groups.Create(c.Request.Context(), req.Name, currency, u.ID)
+	g, members, err := s.Groups.Create(r.Context(), req.Name, currency, u.ID)
 	if err != nil {
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, toAPIGroup(g, members))
+	writeJSON(w, http.StatusCreated, toAPIGroup(g, members))
 }
 
-func (s *Server) UpdateGroup(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) UpdateGroup(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req apigen.UpdateGroupRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	in := service.UpdateGroupInput{
@@ -80,114 +79,114 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 		}
 		in.DefaultSplit = &entries
 	}
-	g, members, err := s.Groups.Update(c.Request.Context(), groupID, u.ID, in)
+	g, members, err := s.Groups.Update(r.Context(), groupID, u.ID, in)
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
 		return
 	case errors.Is(err, service.ErrNotCreator):
-		writeErr(c, http.StatusForbidden, "forbidden", "only the group creator can transfer ownership")
+		writeErr(w, http.StatusForbidden, "forbidden", "only the group creator can transfer ownership")
 		return
 	case errors.Is(err, service.ErrNewOwnerNotMember):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case errors.Is(err, service.ErrBadCurrency), errors.Is(err, service.ErrBadDefaultSplit):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case errors.Is(err, service.ErrCurrencyLocked):
-		writeErr(c, http.StatusConflict, "currency_locked", err.Error())
+		writeErr(w, http.StatusConflict, "currency_locked", err.Error())
 		return
 	case err != nil:
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIGroup(g, members))
+	writeJSON(w, http.StatusOK, toAPIGroup(g, members))
 }
 
-func (s *Server) DeleteGroup(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	err := s.Groups.Delete(c.Request.Context(), groupID, u.ID)
+	err := s.Groups.Delete(r.Context(), groupID, u.ID)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
 		return
 	case errors.Is(err, service.ErrNotCreator):
-		writeErr(c, http.StatusForbidden, "forbidden", "only the group creator can delete the group")
+		writeErr(w, http.StatusForbidden, "forbidden", "only the group creator can delete the group")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) AddGroupMember(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) AddGroupMember(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req apigen.AddMemberRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
-	m, err := s.Groups.AddMember(c.Request.Context(), groupID, u.ID, string(req.Email))
+	m, err := s.Groups.AddMember(r.Context(), groupID, u.ID, string(req.Email))
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrInviteeNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "invitee is not registered")
+		writeErr(w, http.StatusNotFound, "not_found", "invitee is not registered")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, toAPIMember(m))
+	writeJSON(w, http.StatusCreated, toAPIMember(m))
 }
 
 // RemoveGroupMember removes a member from a group. The creator can remove
 // any non-creator member; any member can remove themselves (leave). Requires
 // the target's net balance to be zero.
-func (s *Server) RemoveGroupMember(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
-	targetID, ok := parseUUID(c, "userId")
+	targetID, ok := parseUUID(w, r, "userId")
 	if !ok {
 		return
 	}
-	err := s.Groups.RemoveMember(c.Request.Context(), groupID, u.ID, targetID)
+	err := s.Groups.RemoveMember(r.Context(), groupID, u.ID, targetID)
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "member not found")
+		writeErr(w, http.StatusNotFound, "not_found", "member not found")
 		return
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrNotCreator):
-		writeErr(c, http.StatusForbidden, "forbidden", "only the group creator can remove other members")
+		writeErr(w, http.StatusForbidden, "forbidden", "only the group creator can remove other members")
 		return
 	case errors.Is(err, service.ErrCannotRemoveCreator):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case errors.Is(err, service.ErrBalanceNotZero):
-		writeErr(c, http.StatusBadRequest, "bad_request", "This member still has an outstanding balance. Settle up so their balance is zero, then remove them. Otherwise their share of the group's expenses would be dropped from the ledger.")
+		writeErr(w, http.StatusBadRequest, "bad_request", "This member still has an outstanding balance. Settle up so their balance is zero, then remove them. Otherwise their share of the group's expenses would be dropped from the ledger.")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toAPIGroup(g *repo.Group, members []repo.GroupMember) apigen.Group {
@@ -216,31 +215,31 @@ func toAPIGroup(g *repo.Group, members []repo.GroupMember) apigen.Group {
 // ExportGroupCSV streams the full group ledger as a Splitwise-compatible
 // CSV with dothesplit-only metadata columns. Any group member can call
 // it (membership enforced by the service).
-func (s *Server) ExportGroupCSV(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) ExportGroupCSV(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var buf bytes.Buffer
-	res, err := s.Exporter.Export(c.Request.Context(), &buf, u.ID, groupID)
+	res, err := s.Exporter.Export(r.Context(), &buf, u.ID, groupID)
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 
 	filename := fmt.Sprintf("%s_%s_export.csv", slugifyForFilename(res.GroupName), res.GeneratedAt.Format("2006-01-02"))
-	c.Header("Content-Type", "text/csv; charset=utf-8")
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	c.Status(http.StatusOK)
-	_, _ = c.Writer.Write(buf.Bytes())
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf.Bytes())
 }
 
 // slugifyForFilename produces a filesystem-safe slug. Lowercase ASCII

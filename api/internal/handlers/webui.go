@@ -7,11 +7,10 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/webui"
 )
 
-// spaFS is the embedded SPA filesystem, loaded once at startup.
+// spaServer serves the embedded SPA filesystem, loaded once at startup.
 type spaServer struct {
 	files     fs.FS
 	indexHTML []byte
@@ -23,7 +22,7 @@ type spaServer struct {
 // hashes filenames); everything else falls back to index.html so the client
 // router can take over (deep links, reloads). The Go API's /v1, /healthz, and
 // /readyz routes are registered before this catch-all, so they win.
-func (s *Server) NewSPAHandler() (gin.HandlerFunc, error) {
+func (s *Server) NewSPAHandler() (http.HandlerFunc, error) {
 	files, err := webui.FS()
 	if err != nil {
 		return nil, err
@@ -44,25 +43,25 @@ func (s *Server) NewSPAHandler() (gin.HandlerFunc, error) {
 // a clear error instead of an HTML page where they expected JSON.
 var apiPrefixes = []string{"/v1/", "/healthz", "/readyz"}
 
-func (srv *spaServer) handle(c *gin.Context) {
-	urlPath := c.Request.URL.Path
+func (srv *spaServer) handle(w http.ResponseWriter, r *http.Request) {
+	urlPath := r.URL.Path
 	for _, p := range apiPrefixes {
 		if urlPath == strings.TrimSuffix(p, "/") || strings.HasPrefix(urlPath, p) {
-			writeErr(c, http.StatusNotFound, "not_found", "no such endpoint")
+			writeErr(w, http.StatusNotFound, "not_found", "no such endpoint")
 			return
 		}
 	}
 
 	// Only GET/HEAD reach the SPA. A non-GET to an unknown path is a 404 from
 	// the API surface, not an SPA route.
-	if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
-		c.Status(http.StatusNotFound)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	reqPath := strings.TrimPrefix(path.Clean(urlPath), "/")
 	if reqPath == "" {
-		srv.serveIndex(c)
+		srv.serveIndex(w)
 		return
 	}
 
@@ -71,46 +70,48 @@ func (srv *spaServer) handle(c *gin.Context) {
 		// Unknown path with a file extension is a genuine 404 (missing asset);
 		// an extensionless path is a client route → serve the shell.
 		if path.Ext(reqPath) != "" {
-			c.Status(http.StatusNotFound)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		srv.serveIndex(c)
+		srv.serveIndex(w)
 		return
 	}
 	defer func() { _ = f.Close() }()
 
 	stat, err := f.Stat()
 	if err != nil || stat.IsDir() {
-		srv.serveIndex(c)
+		srv.serveIndex(w)
 		return
 	}
 	seeker, ok := f.(io.ReadSeeker)
 	if !ok {
-		srv.serveIndex(c)
+		srv.serveIndex(w)
 		return
 	}
 
 	// Hashed assets under assets/ are immutable; everything else is revalidated.
 	if strings.HasPrefix(reqPath, "assets/") {
-		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
-		c.Header("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "no-cache")
 	}
-	srv.securityHeaders(c)
-	http.ServeContent(c.Writer, c.Request, stat.Name(), stat.ModTime(), seeker)
+	srv.securityHeaders(w)
+	http.ServeContent(w, r, stat.Name(), stat.ModTime(), seeker)
 }
 
-func (srv *spaServer) serveIndex(c *gin.Context) {
-	c.Header("Cache-Control", "no-cache")
-	srv.securityHeaders(c)
-	c.Data(http.StatusOK, "text/html; charset=utf-8", srv.indexHTML)
+func (srv *spaServer) serveIndex(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-cache")
+	srv.securityHeaders(w)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(srv.indexHTML)
 }
 
 // securityHeaders applies a strict CSP suited to a CSR SPA: no inline scripts
 // (Vite emits external modules), connect-back to same origin only. HSTS is
 // added only over HTTPS.
-func (srv *spaServer) securityHeaders(c *gin.Context) {
-	c.Header("Content-Security-Policy", strings.Join([]string{
+func (srv *spaServer) securityHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Security-Policy", strings.Join([]string{
 		"default-src 'self'",
 		"script-src 'self'",
 		"style-src 'self' 'unsafe-inline'",
@@ -123,6 +124,6 @@ func (srv *spaServer) securityHeaders(c *gin.Context) {
 		"frame-ancestors 'none'",
 	}, "; "))
 	if srv.cookieSec {
-		c.Header("Strict-Transport-Security", "max-age=31536000")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 	}
 }

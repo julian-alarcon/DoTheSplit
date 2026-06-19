@@ -78,7 +78,7 @@ jobs:
         # Surfaces registry-pull failures as a clear step-level error
         # instead of as a confusing testcontainers wait timeout deep inside
         # a test run.
-        run: docker pull postgres:16-alpine
+        run: docker pull postgres:18-alpine
 
       - name: go test (race)
         run: make test-go GOTEST_FLAGS="-coverprofile=coverage.out"

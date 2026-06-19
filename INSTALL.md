@@ -223,8 +223,7 @@ Datasets:
 
 - `ssd-storage/apps-data/dothesplit`
 
-The Custom App wizard cannot create directories on save, so create them up front
-from the shell:
+Then create the host directories:
 
 ```sh
 mkdir -p /mnt/ssd-storage/apps-data/dothesplit/pgdata
@@ -233,7 +232,7 @@ chown -R 70:70 /mnt/ssd-storage/apps-data/dothesplit/pgdata
 chmod 700      /mnt/ssd-storage/apps-data/dothesplit/pgdata
 ```
 
-About UID **70**: the `postgres:18.3-alpine3.22` image ships an internal `postgres` user with UID/GID 70 (the Alpine convention; the Debian-based `postgres` images use 999 instead), and that's the user the engine drops to after `initdb`. **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres will refuse to start on a directory it can't own.
+About UID **70**: the `postgres:18.4-alpine3.22` image ships an internal `postgres` user with UID/GID 70 (the Alpine convention; the Debian-based `postgres` images use 999 instead), and that's the user the engine drops to after `initdb`. **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres will refuse to start on a directory it can't own.
 
 The `migrations` directory does not need special ownership; the `migrate` container reads it `:ro`.
 
@@ -276,7 +275,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
 
 1. **Apps → Discover Apps → Custom App**.
 2. **Application Name**: `dothesplit`.
-3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. Both `api` and `web` use pinned GHCR release images instead of building from source. Substitute your release tag for `v1.0.0`:
+3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. The `api` and `worker` services use the pinned GHCR release image (one image serves both the JSON API and the embedded SPA) instead of building from source. Substitute your release tag for `v1.0.0`:
 
    ```yaml
    services:
@@ -425,7 +424,7 @@ The web footer also shows the running version, linked to the GitHub Release.
 ### Updates
 
 1. Refresh the migrations directory to the new release (re-run the `curl | tar` command from Step 2 with the new tag).
-2. **Apps → dothesplit → Edit** → bump the `image:` tags for `api`, `worker`, and `web` to the new `:X.Y.Z` and click **Save**.
+2. **Apps → dothesplit → Edit** → bump the `image:` tags for `api` and `worker` (they share one image) to the new `:X.Y.Z` and click **Save**.
 
 The `migrate` one-shot runs again on every up; it is idempotent and applies any new `*.up.sql` files. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for the special case of major Postgres version bumps.
 
@@ -445,13 +444,12 @@ When `COOKIE_SECURE=true` the `dts_refresh` cookie gains the `Secure` flag (sent
 
 ## Rootless posture
 
-For reference, the four containers run as follows:
+For reference, the containers run as follows:
 
 | Service    | User                                         | Filesystem  | Notes                                                                                                                                                           |
 | ---------- | -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`      | `nonroot:nonroot` (UID 65532)                | `read_only` | Distroless image, all caps dropped                                                                                                                              |
+| `api`      | `nonroot:nonroot` (UID 65532)                | `read_only` | Distroless image (also serves the embedded SPA), all caps dropped                                                                                               |
 | `worker`   | `nonroot:nonroot` (UID 65532)                | `read_only` | Same image as `api`                                                                                                                                             |
-| `web`      | `node` (UID 1000)                            | `read_only` | Node 24 Alpine                                                                                                                                                  |
 | `postgres` | starts as root, drops to `postgres` (UID 70) | writable    | Standard upstream behaviour; needs root for `initdb`, runs as 70 thereafter, which is why the TrueNAS path chowns `pgdata` to 70 rather than the `apps` UID 568 |
 
 On TrueNAS specifically: the data directory belongs to the database engine, not to the shared `apps` user pool, so deviating from the `Apps` permission preset for `pgdata` is intentional.

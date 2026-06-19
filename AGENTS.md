@@ -111,7 +111,7 @@ The only cookie the API sets is the rotating refresh token, `dts_refresh`: httpO
 - Emails: `email_hash = HMAC-SHA256(normalize(email), EMAIL_HMAC_KEY)` for lookups; `email_encrypted = key_id ‖ nonce ‖ AES-GCM(EMAIL_ENC_KEY, …)` for display. Keys are 32-byte base64 from env; fail fast if missing.
 - `/auth/token`, `/auth/register`, and the other credential-bearing `/auth/*` endpoints (verify, password-reset) are rate-limited; keep them on the `authG` group in the router.
 - Security headers middleware emits HSTS only when `COOKIE_SECURE=true`.
-- Never log `email`, `password`, or session tokens. The redaction list lives in the logger middleware - add new sensitive field names there when introducing any.
+- Never log `email`, `password`, or session tokens. The access logger ([api/internal/middleware/logger.go](api/internal/middleware/logger.go)) logs only method, path, status, duration, client IP, and request id - never request bodies. Don't add body/field logging there; if you ever do, redact sensitive fields first.
 
 ## Testing
 

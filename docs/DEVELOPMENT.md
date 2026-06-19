@@ -16,6 +16,7 @@ cp .env.example .env
 echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"   >> .env
 echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"  >> .env
 echo "PASSWORD_PEPPER=$(openssl rand -base64 32)" >> .env
+echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> .env
 
 docker compose up -d --build
 ```
@@ -197,7 +198,7 @@ Every email address goes into the `users.email_encrypted` column as `key_id ‖ 
 - **`nonce`** is 12 random bytes generated per row - required for AES-GCM, and the reason two users with the same email get two different ciphertexts.
 - **AES-GCM** is authenticated encryption: the auth tag is appended after the ciphertext, so any tampering with the row (or with `key_id` / `nonce`) makes decryption fail rather than producing garbage plaintext.
 
-The plaintext is only kept in memory for the duration of a request (e.g. when rendering an email template, when an admin views the user detail page, or when the SMTP outbox dispatcher mails it). Logs explicitly redact email fields ([api/internal/middleware/logging.go](../api/internal/middleware/logging.go)).
+The plaintext is only kept in memory for the duration of a request (e.g. when rendering an email template, when an admin views the user detail page, or when the SMTP outbox dispatcher mails it). The access logger ([api/internal/middleware/logger.go](../api/internal/middleware/logger.go)) never logs request bodies, only method, path, status, duration, client IP, and request id, so emails and passwords can't leak through it.
 
 #### `EMAIL_HMAC_KEY` - login lookups without storing the address
 

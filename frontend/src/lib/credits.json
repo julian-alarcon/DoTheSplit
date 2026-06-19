@@ -24,12 +24,6 @@
   },
   "backend": [
     {
-      "name": "github.com/getkin/kin-openapi",
-      "version": "v0.140.0",
-      "license": "MIT",
-      "url": "https://github.com/getkin/kin-openapi"
-    },
-    {
       "name": "github.com/golang-jwt/jwt/v5",
       "version": "v5.3.1",
       "license": "MIT",
@@ -46,12 +40,6 @@
       "version": "v5.10.0",
       "license": "MIT",
       "url": "https://github.com/jackc/pgx"
-    },
-    {
-      "name": "github.com/kelseyhightower/envconfig",
-      "version": "v1.4.0",
-      "license": "MIT",
-      "url": "https://github.com/kelseyhightower/envconfig"
     },
     {
       "name": "github.com/oapi-codegen/runtime",

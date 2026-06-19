@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
-
-	"github.com/kelseyhightower/envconfig"
 )
 
 type Config struct {
@@ -58,20 +57,21 @@ type Config struct {
 // contents are used as the value of `FOO`. The `_FILE` form takes precedence
 // when both are set so a Docker secret always wins over an inherited env var.
 func Load() (*Config, error) {
-	var raw struct {
-		HTTPAddr            string `envconfig:"API_HTTP_ADDR"            default:":8080"`
-		WebOrigin           string `envconfig:"WEB_ORIGIN"               default:"http://localhost:8080"`
-		LogLevel            string `envconfig:"LOG_LEVEL"                default:"info"`
-		CookieSecure        bool   `envconfig:"COOKIE_SECURE"            default:"false"`
-		CookieDomain        string `envconfig:"COOKIE_DOMAIN"            default:""`
-		AccessTokenTTLMin   int    `envconfig:"ACCESS_TOKEN_TTL_MINUTES" default:"15"`
-		RefreshTokenTTLDay  int    `envconfig:"REFRESH_TOKEN_TTL_DAYS"   default:"30"`
-		AuthRateLimitPerMin int    `envconfig:"AUTH_RATE_LIMIT_PER_MIN"  default:"10"`
-		CapacitorOrigins    string `envconfig:"CAPACITOR_ORIGINS"        default:"capacitor://localhost,https://localhost"`
-		TrustedProxies      string `envconfig:"TRUSTED_PROXIES"          default:""`
+	accessTTL, err := envInt("ACCESS_TOKEN_TTL_MINUTES", 15)
+	if err != nil {
+		return nil, err
 	}
-	if err := envconfig.Process("", &raw); err != nil {
-		return nil, fmt.Errorf("envconfig: %w", err)
+	refreshTTL, err := envInt("REFRESH_TOKEN_TTL_DAYS", 30)
+	if err != nil {
+		return nil, err
+	}
+	authRate, err := envInt("AUTH_RATE_LIMIT_PER_MIN", 10)
+	if err != nil {
+		return nil, err
+	}
+	cookieSecure, err := envBool("COOKIE_SECURE", false)
+	if err != nil {
+		return nil, err
 	}
 
 	dbURL, err := readSecret("DATABASE_URL")
@@ -115,22 +115,58 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		HTTPAddr:            raw.HTTPAddr,
+		HTTPAddr:            envStr("API_HTTP_ADDR", ":8080"),
 		DatabaseURL:         dbURL,
-		WebOrigin:           raw.WebOrigin,
-		LogLevel:            raw.LogLevel,
-		CookieSecure:        raw.CookieSecure,
-		CookieDomain:        raw.CookieDomain,
-		AccessTokenTTLMin:   raw.AccessTokenTTLMin,
-		RefreshTokenTTLDay:  raw.RefreshTokenTTLDay,
-		AuthRateLimitPerMin: raw.AuthRateLimitPerMin,
-		CapacitorOrigins:    splitList(raw.CapacitorOrigins),
-		TrustedProxies:      splitList(raw.TrustedProxies),
+		WebOrigin:           envStr("WEB_ORIGIN", "http://localhost:8080"),
+		LogLevel:            envStr("LOG_LEVEL", "info"),
+		CookieSecure:        cookieSecure,
+		CookieDomain:        envStr("COOKIE_DOMAIN", ""),
+		AccessTokenTTLMin:   accessTTL,
+		RefreshTokenTTLDay:  refreshTTL,
+		AuthRateLimitPerMin: authRate,
+		CapacitorOrigins:    splitList(envStr("CAPACITOR_ORIGINS", "capacitor://localhost,https://localhost")),
+		TrustedProxies:      splitList(envStr("TRUSTED_PROXIES", "")),
 		EmailEncKey:         enc,
 		EmailHMACKey:        mac,
 		PasswordPepper:      pep,
 		JWTSigningKey:       jwt,
 	}, nil
+}
+
+// envStr returns the env var value, or def when unset. (An explicitly empty
+// value is returned as-is, matching envconfig's behavior.)
+func envStr(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return def
+}
+
+// envInt parses an integer env var, falling back to def when unset/empty.
+func envInt(key string, def int) (int, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s: must be an integer: %w", key, err)
+	}
+	return n, nil
+}
+
+// envBool parses a boolean env var, falling back to def when unset/empty.
+// Accepts the same forms as strconv.ParseBool (1/t/true/0/f/false, any case).
+func envBool(key string, def bool) (bool, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return def, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s: must be a boolean: %w", key, err)
+	}
+	return b, nil
 }
 
 // SlogLevel maps the LOG_LEVEL string to a slog.Level, defaulting to Info for

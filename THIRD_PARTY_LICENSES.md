@@ -32,21 +32,13 @@ Generated from `go-licenses csv ./cmd/api ./cmd/worker` against [api/go.mod](api
 
 | Module | License | Source |
 |---|---|---|
-| github.com/getkin/kin-openapi/openapi3 | MIT | https://github.com/getkin/kin-openapi/blob/v0.140.0/LICENSE |
 | github.com/golang-jwt/jwt/v5 | MIT | https://github.com/golang-jwt/jwt/blob/v5.3.1/LICENSE |
 | github.com/google/uuid | BSD-3-Clause | https://github.com/google/uuid/blob/v1.6.0/LICENSE |
-| github.com/go-openapi/jsonpointer | Apache-2.0 | https://github.com/go-openapi/jsonpointer/blob/v0.22.5/LICENSE |
-| github.com/go-openapi/swag/jsonname | Apache-2.0 | https://github.com/go-openapi/swag/blob/jsonname/v0.25.5/jsonname/LICENSE |
 | github.com/jackc/pgpassfile | MIT | https://github.com/jackc/pgpassfile/blob/v1.0.0/LICENSE |
 | github.com/jackc/pgservicefile | MIT | https://github.com/jackc/pgservicefile/blob/5a60cdf6a761/LICENSE |
 | github.com/jackc/pgx/v5 | MIT | https://github.com/jackc/pgx/blob/v5.10.0/LICENSE |
 | github.com/jackc/puddle/v2 | MIT | https://github.com/jackc/puddle/blob/v2.2.2/LICENSE |
-| github.com/kelseyhightower/envconfig | MIT | https://github.com/kelseyhightower/envconfig/blob/v1.4.0/LICENSE |
 | github.com/oapi-codegen/runtime/types | Apache-2.0 | https://github.com/oapi-codegen/runtime/blob/v1.4.1/LICENSE |
-| github.com/oasdiff/yaml3 | MIT | https://github.com/oasdiff/yaml3/blob/v0.0.13/LICENSE |
-| github.com/oasdiff/yaml | BSD-3-Clause | https://github.com/oasdiff/yaml/blob/v0.1.0/LICENSE |
-| github.com/oasdiff/yaml | MIT | https://github.com/oasdiff/yaml/blob/v0.1.0/LICENSE |
-| github.com/santhosh-tekuri/jsonschema/v6 | Apache-2.0 | https://github.com/santhosh-tekuri/jsonschema/blob/v6.0.2/LICENSE |
 | golang.org/x/crypto | BSD-3-Clause | https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE |
 | golang.org/x/sync/semaphore | BSD-3-Clause | https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE |
 | golang.org/x/sys/cpu | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE |

@@ -42,6 +42,23 @@ func TestSPAFallbackServesShell(t *testing.T) {
 	resp, _ = rawRequest(t, "GET", base+"/assets/does-not-exist.js", nil, nil)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
+	// PWA artifacts are served same-origin with the right content-types. The SW
+	// must resolve to real JS (referenced by the CSP-clean registerSW import),
+	// the manifest needs an explicit type (Go's mime table lacks .webmanifest),
+	// and the icons are real PNGs.
+	resp, body = rawRequest(t, "GET", base+"/sw.js", nil, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, resp.Header.Get("Content-Type"), "javascript")
+	require.Contains(t, string(body), "workbox")
+
+	resp, _ = rawRequest(t, "GET", base+"/manifest.webmanifest", nil, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "application/manifest+json", resp.Header.Get("Content-Type"))
+
+	resp, _ = rawRequest(t, "GET", base+"/pwa-512.png", nil, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, resp.Header.Get("Content-Type"), "image/png")
+
 	// An unknown /v1 path is still handled by the API (JSON 404-ish), never the
 	// SPA shell.
 	resp, _ = rawRequest(t, "GET", base+"/v1/nope", nil, nil)

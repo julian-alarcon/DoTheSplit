@@ -95,6 +95,12 @@ func (srv *spaServer) handle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
+	// Go's mime table has no entry for .webmanifest, so http.ServeContent would
+	// sniff it as text. Set the correct type explicitly so the PWA manifest is
+	// recognised. (.js/.css/.png/.ico/.svg already resolve via the mime table.)
+	if strings.HasSuffix(reqPath, ".webmanifest") {
+		w.Header().Set("Content-Type", "application/manifest+json")
+	}
 	srv.securityHeaders(w)
 	http.ServeContent(w, r, stat.Name(), stat.ModTime(), seeker)
 }

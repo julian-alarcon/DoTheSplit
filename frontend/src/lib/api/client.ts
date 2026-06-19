@@ -44,8 +44,27 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight;
 }
 
+// Read-only offline: when offline, let GET/HEAD fall through to the service
+// worker's cache, but short-circuit mutations with a clear 503 so composables
+// surface a sensible message instead of an opaque network failure. Returning a
+// Response from onRequest bypasses the network (openapi-fetch contract).
+function offlineMutationResponse(request: Request): Response | undefined {
+  if (navigator.onLine) return undefined;
+  if (request.method === "GET" || request.method === "HEAD") return undefined;
+  if (isAuthPath(request.url)) return undefined;
+  return new Response(
+    JSON.stringify({
+      error: "offline",
+      message: "You're offline. This change can't be saved right now.",
+    }),
+    { status: 503, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
+    const offline = offlineMutationResponse(request);
+    if (offline) return offline;
     if (!isAuthPath(request.url)) {
       const token = getAccessToken();
       if (token) request.headers.set("Authorization", `Bearer ${token}`);

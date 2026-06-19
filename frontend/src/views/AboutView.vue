@@ -13,6 +13,13 @@ const inter = (credits as { inter?: {
   licenseUrl: string;
   modificationStatement: string;
 } }).inter;
+
+// Build identity, baked in at image-build time via Vite define (see
+// vite.config.ts). Falls back to "dev" for local dev.
+const buildCommit = (import.meta.env.VITE_BUILD_COMMIT ?? "dev").slice(0, 12);
+const buildVersion = import.meta.env.VITE_BUILD_VERSION ?? "dev";
+const isReleasedVersion =
+  buildVersion !== "dev" && !buildVersion.includes("-dev");
 </script>
 
 <template>
@@ -23,17 +30,37 @@ const inter = (credits as { inter?: {
         {{ project.name }} is a small, self-hosted expense-sharing app.
       </p>
 
-      <section class="mb-8 rounded-md border border-border bg-card p-3">
-        <h2 class="mb-2 text-lg font-semibold">{{ project.name }}</h2>
+      <section class="mb-8 rounded-md border border-border bg-card p-3 text-center">
+        <h2 class="text-lg font-semibold">{{ project.name }}</h2>
+        <p class="mb-3 text-sm text-muted-foreground">
+          <a
+            v-if="isReleasedVersion"
+            :href="`${project.url}/releases/tag/v${buildVersion}`"
+            class="underline transition-colors hover:text-primary [font-family:var(--font-mono)]"
+            rel="noopener noreferrer"
+            target="_blank"
+            >v{{ buildVersion }}</a
+          >
+          <code v-else class="[font-family:var(--font-mono)]">{{ buildVersion }}</code>
+          <template v-if="buildCommit !== 'dev'">
+            (<a
+              :href="`${project.url}/commit/${buildCommit}`"
+              class="underline transition-colors hover:text-primary [font-family:var(--font-mono)]"
+              rel="noopener noreferrer"
+              target="_blank"
+              >{{ buildCommit }}</a
+            >)
+          </template>
+        </p>
         <p class="text-sm">
           {{ project.copyright }}. Released under the
-          <a :href="`${project.url}/blob/main/LICENSE`" class="underline" rel="noopener noreferrer" target="_blank">{{ project.license }} license</a>.
+          <a :href="`${project.url}/blob/main/LICENSE`" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ project.license }} license</a>.
         </p>
         <p class="mt-2 text-sm">
           Source on
-          <a :href="project.url" class="underline" rel="noopener noreferrer" target="_blank">GitHub</a>.
+          <a :href="project.url" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">GitHub</a>.
           Support development via
-          <a :href="project.sponsorUrl" class="underline" rel="noopener noreferrer" target="_blank">GitHub Sponsors</a>.
+          <a :href="project.sponsorUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">GitHub Sponsors</a>.
         </p>
       </section>
 
@@ -44,10 +71,10 @@ const inter = (credits as { inter?: {
         <h2 class="mb-2 text-lg font-semibold">Font Awesome Free Icons</h2>
         <p class="text-sm">
           Icons by
-          <a :href="fontAwesome.creatorUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ fontAwesome.creator }}</a>,
+          <a :href="fontAwesome.creatorUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ fontAwesome.creator }}</a>,
           licensed under
-          <a :href="fontAwesome.licenseUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ fontAwesome.license }}</a>
-          (<a :href="fontAwesome.licensePageUrl" class="underline" rel="noopener noreferrer" target="_blank">license page</a>).
+          <a :href="fontAwesome.licenseUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ fontAwesome.license }}</a>
+          (<a :href="fontAwesome.licensePageUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">license page</a>).
           {{ fontAwesome.modificationStatement }}
         </p>
       </section>
@@ -56,9 +83,9 @@ const inter = (credits as { inter?: {
         <h2 class="mb-2 text-lg font-semibold">Inter Font</h2>
         <p class="text-sm">
           Body type by
-          <a :href="inter.creatorUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ inter.creator }}</a>,
+          <a :href="inter.creatorUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ inter.creator }}</a>,
           licensed under the
-          <a :href="inter.licenseUrl" class="underline" rel="noopener noreferrer" target="_blank">{{ inter.license }}</a>.
+          <a :href="inter.licenseUrl" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ inter.license }}</a>.
           {{ inter.modificationStatement }}
         </p>
       </section>
@@ -77,7 +104,7 @@ const inter = (credits as { inter?: {
             </thead>
             <tbody>
               <tr v-for="d in backend" :key="d.name">
-                <td><a :href="d.url" class="underline" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
+                <td><a :href="d.url" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
                 <td class="text-xs [font-family:var(--font-mono)]">{{ d.version }}</td>
                 <td>{{ d.license }}</td>
               </tr>
@@ -100,7 +127,7 @@ const inter = (credits as { inter?: {
             </thead>
             <tbody>
               <tr v-for="d in frontend" :key="d.name">
-                <td><a :href="d.url" class="underline" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
+                <td><a :href="d.url" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">{{ d.name }}</a></td>
                 <td class="text-xs [font-family:var(--font-mono)]">{{ d.version }}</td>
                 <td>{{ d.license }}</td>
               </tr>
@@ -112,11 +139,11 @@ const inter = (credits as { inter?: {
       <section class="mb-8 text-sm text-muted-foreground">
         <p>
           Full transitive attribution lives in
-          <a :href="`${project.url}/blob/main/THIRD_PARTY_LICENSES.md`" class="underline" rel="noopener noreferrer" target="_blank">THIRD_PARTY_LICENSES.md</a>.
+          <a :href="`${project.url}/blob/main/THIRD_PARTY_LICENSES.md`" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">THIRD_PARTY_LICENSES.md</a>.
         </p>
         <p class="mt-2">
           CycloneDX SBOMs are published as artifacts on each
-          <a :href="`${project.url}/releases`" class="underline" rel="noopener noreferrer" target="_blank">GitHub Release</a>.
+          <a :href="`${project.url}/releases`" class="underline transition-colors hover:text-primary" rel="noopener noreferrer" target="_blank">GitHub Release</a>.
         </p>
       </section>
     </div>

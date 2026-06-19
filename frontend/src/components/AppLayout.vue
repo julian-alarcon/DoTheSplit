@@ -9,6 +9,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
+import { useNetworkStatus } from "@/composables/useNetworkStatus";
+import Alert from "@/components/Alert.vue";
 import MemberAvatar from "@/components/MemberAvatar.vue";
 import Icon from "@/components/Icon.vue";
 import ThemeSwitcher from "@/components/ThemeSwitcher.vue";
@@ -22,12 +24,12 @@ withDefaults(
 );
 
 const { state, logout } = useAuth();
+const { offline } = useNetworkStatus();
 const router = useRouter();
 const user = computed(() => state.user);
 
 // Build identity, baked in at image-build time via Vite define (see
 // vite.config.ts). Falls back to "dev" for local dev.
-const buildCommit = (import.meta.env.VITE_BUILD_COMMIT ?? "dev").slice(0, 12);
 const buildVersion = import.meta.env.VITE_BUILD_VERSION ?? "dev";
 const isReleasedVersion =
   buildVersion !== "dev" && !buildVersion.includes("-dev");
@@ -148,6 +150,12 @@ onBeforeUnmount(() => {
       </RouterLink>
     </div>
 
+    <div v-if="offline" class="mx-auto w-full px-2 pt-3" :class="wide ? 'max-w-6xl' : 'max-w-3xl'">
+      <Alert tone="info">
+        You're offline. Showing saved data; changes can't be saved right now.
+      </Alert>
+    </div>
+
     <main id="main" class="mx-auto w-full flex-1 p-2" :class="wide ? 'max-w-6xl' : 'max-w-3xl'">
       <slot />
     </main>
@@ -165,18 +173,6 @@ onBeforeUnmount(() => {
             >v{{ buildVersion }}</a
           >
           <code v-else class="[font-family:var(--font-mono)]">{{ buildVersion }}</code>
-          &middot;
-          <span v-if="buildCommit === 'dev'">build <code class="[font-family:var(--font-mono)]">dev</code></span>
-          <span v-else>
-            build
-            <a
-              :href="`https://github.com/julian-alarcon/dothesplit/commit/${buildCommit}`"
-              class="[font-family:var(--font-mono)] hover:underline"
-              rel="noopener noreferrer"
-              target="_blank"
-              >{{ buildCommit }}</a
-            >
-          </span>
         </span>
         <ThemeSwitcher />
       </div>

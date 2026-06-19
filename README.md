@@ -59,9 +59,9 @@ first-run setup token from the API logs.
 Tagged releases publish multi-arch (`linux/amd64`, `linux/arm64`) OCI images to
 the GitHub Container Registry:
 
-| Image                                   | Tags                                    |
-| --------------------------------------- | --------------------------------------- |
-| `ghcr.io/julian-alarcon/dothesplit-api` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
+| Image                               | Tags                                 |
+| ----------------------------------- | ------------------------------------ |
+| `ghcr.io/julian-alarcon/dothesplit` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
 
 `:dev` always points at the latest commit on `main`. The api image embeds the
 SPA and hosts both the `/api` and `/worker` entrypoints; in compose, override
@@ -69,7 +69,7 @@ SPA and hosts both the `/api` and `/worker` entrypoints; in compose, override
 production:
 
 ```bash
-docker pull ghcr.io/julian-alarcon/dothesplit-api:0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit:0.3.0
 ```
 
 The running version is reported by `GET /healthz` (api) and the page footer,

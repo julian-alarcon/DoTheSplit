@@ -260,15 +260,8 @@ jobs:
         run: docker compose down -v
 
   build-docker:
-    name: build / docker (${{ matrix.image }})
+    name: build / docker
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: api
-            context: .
-            dockerfile: ./api/Dockerfile
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -277,13 +270,13 @@ jobs:
       - name: build (no push)
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: .
+          file: ./api/Dockerfile
           push: false
           load: true
-          tags: dothesplit-${{ matrix.image }}:ci
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          tags: dothesplit:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
           build-args: |
             BUILD_COMMIT=${{ github.sha }}
             BUILD_VERSION=0.0.0-dev+${{ github.sha }}

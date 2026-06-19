@@ -100,7 +100,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=8m
 
   api:
-    image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
+    image: ghcr.io/julian-alarcon/dothesplit:1.0.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,7 +133,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=32m
 
   worker:
-    image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
+    image: ghcr.io/julian-alarcon/dothesplit:1.0.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -319,7 +319,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          - /tmp:rw,noexec,nosuid,size=8m
 
      api:
-       image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
+       image: ghcr.io/julian-alarcon/dothesplit:1.0.0
        depends_on:
          postgres:
            condition: service_healthy
@@ -352,7 +352,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          - /tmp:rw,noexec,nosuid,size=32m
 
      worker:
-       image: ghcr.io/julian-alarcon/dothesplit-api:1.0.0
+       image: ghcr.io/julian-alarcon/dothesplit:1.0.0
        depends_on:
          postgres:
            condition: service_healthy

@@ -84,7 +84,7 @@ make up                              # rebuild + start, stamping BUILD_COMMIT + 
 
 Images:
 
-- `dothesplit-api` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage serves `/api` and the `/worker` command. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image now serves both the API and the frontend.
+- `dothesplit` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage serves `/api` and the `/worker` command. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image now serves both the API and the frontend.
 
 The `make up` target reads `frontend/package.json` (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
 
@@ -108,7 +108,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 3. **Merging the Release PR** auto-creates the git tag `vX.Y.Z` and a GitHub Release with the changelog body.
 
 4. **The tag triggers two workflows in parallel**:
-   - [`publish.yml`](../.github/workflows/publish.yml) builds the multi-arch (`linux/amd64,linux/arm64`) `api` image (which embeds the SPA), pushes to `ghcr.io/julian-alarcon/dothesplit-api` with tags `:X.Y.Z`, `:X.Y`, `:X`, `:latest`, plus a build provenance attestation.
+   - [`publish.yml`](../.github/workflows/publish.yml) builds the multi-arch (`linux/amd64,linux/arm64`) image (which embeds the SPA), pushes to `ghcr.io/julian-alarcon/dothesplit` with tags `:X.Y.Z`, `:X.Y`, `:X`, `:latest`, plus a build provenance attestation.
    - [`compliance.yml`](../.github/workflows/compliance.yml) regenerates SBOMs + `THIRD_PARTY_LICENSES.md` and attaches them to the GitHub Release.
 
 5. **Every push to `main`** (including merges that are not the Release PR) also triggers `publish.yml`, which pushes `:dev`, `:main`, and `:sha-<short>` tags. The `:dev` tag tracks the latest `main` and is appropriate for a staging environment.
@@ -119,7 +119,7 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 | ----------------------------------------- | ----------------------------------------------------- |
 | `frontend/package.json` `version`              | release-please bump on merge (single source of truth) |
 | GitHub Release page                       | release-please on PR merge                            |
-| `ghcr.io/.../dothesplit-api:X.Y.Z`        | `publish.yml` on tag                                  |
+| `ghcr.io/.../dothesplit:X.Y.Z`            | `publish.yml` on tag                                  |
 | API `GET /healthz` JSON                   | `-ldflags` baked in by `api/Dockerfile`               |
 | SPA page footer                           | `VITE_BUILD_VERSION` baked in by `api/Dockerfile`     |
 
@@ -154,8 +154,8 @@ docker compose down -v               # stop AND destroy the Postgres volume
 | ---------- | ------------------- | ------------------------------------------------- |
 | `postgres` | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
 | `migrate`  | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
-| `api`      | `dothesplit-api`    | HTTP API + embedded Vue SPA on `:8080`            |
-| `worker`   | `dothesplit-api`    | Same image, runs `/worker` - materializes recurring expenses |
+| `api`      | `dothesplit`        | HTTP API + embedded Vue SPA on `:8080`            |
+| `worker`   | `dothesplit`        | Same image, runs `/worker` - materializes recurring expenses |
 
 ## Smoke test the running stack
 

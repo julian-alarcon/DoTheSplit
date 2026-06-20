@@ -19,6 +19,7 @@ const props = defineProps<{
   groupId: string;
   viewerId: string;
   members: GroupMember[];
+  unread?: boolean;
 }>();
 
 const { memberByID, nameByID } = useGroupMembers(() => props.members);
@@ -61,7 +62,7 @@ const toMember = computed(() => (props.item.to_user_id ? memberByID.value.get(pr
 
 <template>
   <li>
-    <RouterLink :to="href" class="flex items-center justify-between gap-3 px-1 py-2.5 transition-colors hover:bg-hover-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+    <RouterLink :to="href" class="flex items-center justify-between gap-3 border-l-2 py-2.5 pr-1 pl-2 transition-colors hover:bg-hover-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" :class="unread ? 'border-primary' : 'border-transparent'">
       <div class="flex min-w-0 items-center gap-3">
         <span v-if="isSettlement" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" title="Settlement">
           <Icon name="arrow-right" :size="16" />

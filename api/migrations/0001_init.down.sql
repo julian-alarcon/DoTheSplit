@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS activity_events            CASCADE;
+DROP FUNCTION IF EXISTS notify_activity_event()  CASCADE;
 ALTER TABLE IF EXISTS expenses DROP COLUMN IF EXISTS recurring_expense_id;
 DROP TABLE IF EXISTS app_setup                 CASCADE;
 DROP TABLE IF EXISTS email_outbox               CASCADE;

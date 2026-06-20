@@ -12,6 +12,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
@@ -41,6 +42,10 @@ type Server struct {
 	Notifications    *service.NotificationService
 	Users            *repo.UserRepo
 	Audit            *repo.AuditRepo
+
+	// Hub fans out activity events to SSE clients. Optional: when nil, the
+	// stream endpoint reports 503 (used by unit tests that don't wire realtime).
+	Hub *realtime.Hub
 
 	// IP resolves the originating client IP under the configured trusted-proxy
 	// policy. Populated by server.New; used by audit logging and step-up.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
@@ -40,6 +41,29 @@ func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toAPIActivityPage(page))
+}
+
+// MarkActivityRead advances the caller's last-read marker for the group,
+// clearing the unread badge. Any group member may call it; idempotent.
+func (s *Server) MarkActivityRead(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	err := s.Activity.MarkRead(r.Context(), u.ID, groupID)
+	switch {
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
+		return
+	case err != nil:
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {

@@ -251,6 +251,15 @@ func (s *GroupService) ShareAnyGroup(ctx context.Context, a, b uuid.UUID) (bool,
 	return s.groups.ShareAnyGroup(ctx, a, b)
 }
 
+// MarkActivityRead advances the caller's last-read marker for the group,
+// zeroing their unread_count. ErrNotMember if the caller isn't a member.
+func (s *GroupService) MarkActivityRead(ctx context.Context, groupID, userID uuid.UUID) error {
+	if err := s.RequireMember(ctx, groupID, userID); err != nil {
+		return err
+	}
+	return s.groups.MarkActivityRead(ctx, groupID, userID)
+}
+
 // AddMember looks up the invitee by email_hash; 404 if unregistered.
 // Only an existing group member may add others.
 // If the group had a pinned default_split (only valid for 2 members), it is

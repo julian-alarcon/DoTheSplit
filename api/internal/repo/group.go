@@ -20,6 +20,10 @@ type Group struct {
 	// DefaultSplit pins a 2-member percentage split that prefills the create-expense
 	// form. nil = no default. Auto-cleared when the group grows past 2 members.
 	DefaultSplit []DefaultSplitEntry
+	// UnreadCount is the number of activity events newer than the member's
+	// last-read marker, excluding their own actions. Populated by ListForUser /
+	// FindByIDForUser; zero on rows fetched by member-agnostic queries.
+	UnreadCount int
 }
 
 type DefaultSplitEntry struct {
@@ -110,10 +114,17 @@ func (r *GroupRepo) FindByID(ctx context.Context, id uuid.UUID) (*Group, error) 
 	return &g, nil
 }
 
-// ListForUser returns groups the user belongs to, newest first.
+// ListForUser returns groups the user belongs to, newest first. unread_count is
+// the number of activity events newer than the member's last_read_activity_at
+// marker (all of them when the marker is NULL), excluding the user's own
+// actions, computed in a correlated subquery so the listing stays one query.
 func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split
+		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split,
+		       (SELECT count(*) FROM activity_events ae
+		         WHERE ae.group_id = g.id
+		           AND ae.created_at > COALESCE(m.last_read_activity_at, '-infinity'::timestamptz)
+		           AND ae.actor_id IS DISTINCT FROM m.user_id) AS unread_count
 		FROM groups g
 		JOIN group_members m ON m.group_id = g.id
 		WHERE m.user_id = $1
@@ -127,7 +138,7 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 	for rows.Next() {
 		var g Group
 		var rawSplit []byte
-		if err := rows.Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit, &g.UnreadCount); err != nil {
 			return nil, err
 		}
 		if g.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
@@ -136,6 +147,23 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 		out = append(out, g)
 	}
 	return out, rows.Err()
+}
+
+// MarkActivityRead advances the member's last-read marker to now(), zeroing
+// their unread_count for the group. Returns ErrNotFound if the user isn't a
+// member (no membership row to update).
+func (r *GroupRepo) MarkActivityRead(ctx context.Context, groupID, userID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE group_members SET last_read_activity_at = now()
+		WHERE group_id = $1 AND user_id = $2
+	`, groupID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateInput captures partial-update fields for a group.

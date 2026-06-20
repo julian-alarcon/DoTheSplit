@@ -1057,6 +1057,58 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/groups/{id}/activity/read:
+    post:
+      summary: Mark the group activity feed as read for the caller
+      description: |
+        Sets the caller's last-read marker to now, so `unread_count` on the
+        group drops to 0 until new activity arrives. Called when the member
+        opens the activity log. Idempotent. No request body.
+      operationId: markActivityRead
+      tags: [activity]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Marked read
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/groups/{id}/events:
+    get:
+      summary: Subscribe to the group's real-time activity stream (SSE)
+      description: |
+        A long-lived Server-Sent Events stream. The server emits one
+        `event: activity` frame whenever an expense or settlement in this group
+        is created, updated, deleted, or restored (by any member or the
+        recurring worker), plus periodic `: ping` comment heartbeats.
+
+        Each frame's `data` is a minimal JSON signal (ids + action + actor +
+        timestamp), NOT the full entity: clients react by re-fetching the
+        affected views, so they always render exactly what a manual refresh
+        would. No amounts or notes ride this channel.
+
+        The token cannot be sent via `EventSource` (which can't set the
+        Authorization header), so the SPA consumes this stream through `fetch`
+        + a `ReadableStream` reader, carrying the bearer token in the header
+        like every other request.
+      operationId: streamGroupEvents
+      tags: [activity]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/search:
     get:
       summary: Search expenses and settlements across the caller's groups
@@ -1968,7 +2020,16 @@ components:
 
     Group:
       type: object
-      required: [id, name, default_currency, created_by, created_at, members]
+      required:
+        [
+          id,
+          name,
+          default_currency,
+          created_by,
+          created_at,
+          members,
+          unread_count,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1979,6 +2040,14 @@ components:
           description: ISO-4217 code used when expenses omit currency
         created_by: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
+        unread_count:
+          type: integer
+          minimum: 0
+          description: |
+            Number of activity-feed events in this group the caller has not yet
+            seen, excluding the caller's own actions. Computed against the
+            member's last-read marker; drops to 0 after opening the activity log
+            (POST /v1/groups/{id}/activity/read).
         members:
           type: array
           items: { $ref: "#/components/schemas/GroupMember" }

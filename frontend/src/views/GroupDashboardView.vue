@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuth } from "@/composables/useAuth";
 import { getGroup, type Group } from "@/composables/useGroups";
+import {
+  useGroupStream,
+  type ActivitySignal,
+} from "@/composables/useGroupStream";
 import {
   createExpense,
   loadDashboard,
@@ -62,6 +66,25 @@ const cadenceLabels: Record<string, string> = {
   monthly: "monthly",
   yearly: "yearly",
 };
+
+// Resolve an expense's cadence for the recurring tag. The server stamps
+// `item.cadence` once an occurrence is materialized from a template (via the
+// recurring_expense_id FK), but the *original* expense created alongside a new
+// template has no FK yet, so we fall back to content-matching against the
+// group's active recurring templates - the same match the detail view uses.
+function cadenceFor(item: TransactionItem): string | undefined {
+  if (item.cadence) return item.cadence;
+  const e = item.expense;
+  if (!e) return undefined;
+  return recurring.value.find(
+    (r) =>
+      r.description === e.description &&
+      r.amount_cents === e.amount_cents &&
+      r.payer_id === e.payer_id &&
+      r.currency === e.currency &&
+      r.category_id === e.category_id,
+  )?.cadence;
+}
 
 // --- Balances (viewer perspective) ------------------------------------------
 type ViewerDebt = { otherID: string; amountCents: number; theyOweMe: boolean };
@@ -246,6 +269,36 @@ async function reload() {
   nextCursor.value = data.nextCursor;
 }
 
+// --- Real-time updates (SSE) ------------------------------------------------
+// When another member changes an expense/settlement, the server pushes a
+// minimal signal and we re-fetch the dashboard. A short debounce collapses
+// bursts (bulk import, multi-event edits) into one reload. We skip the reload
+// for the viewer's own actions, since onSubmit already reloaded.
+const { start: startStream, stop: stopStream } = useGroupStream();
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onActivitySignal(signal: ActivitySignal) {
+  if (signal.actor_id && signal.actor_id === viewerId.value) return;
+  if (reloadTimer) clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null;
+    void reload();
+    // The unread badge reads group.unread_count, which only loadDashboard's
+    // sibling group fetch refreshes - re-fetch the group so the count tracks
+    // live signals instead of only updating on a full page refresh.
+    void refreshUnreadCount();
+  }, 400);
+}
+
+// Refresh just the group's unread_count from a live signal, without disturbing
+// the rest of group.value mid-render. getGroup re-lists groups (one round-trip).
+async function refreshUnreadCount() {
+  const target = groupId.value;
+  const { group: g } = await getGroup(target);
+  if (groupId.value !== target || !g || !group.value) return;
+  group.value.unread_count = g.unread_count;
+}
+
 async function loadGroup() {
   loaded.value = false;
   const target = groupId.value;
@@ -267,6 +320,7 @@ async function loadGroup() {
   form.value.payerId = viewerId.value || members.value[0]?.user_id || "";
   form.value.categoryId = defaultCategory.value?.id ?? "";
   loaded.value = true;
+  startStream(target, onActivitySignal);
 }
 
 onMounted(loadGroup);
@@ -274,7 +328,24 @@ onMounted(loadGroup);
 // vue-router reuses this component instance when only :id changes (no remount),
 // so reload when the resolved group id changes. Watching the computed fires
 // after navigation settles, so groupId.value is already the new id.
-watch(groupId, loadGroup);
+watch(groupId, () => {
+  stopStream();
+  // Drop any pending debounced reload from the previous group; otherwise it
+  // fires after the switch and triggers a spurious reload of the new group.
+  if (reloadTimer) {
+    clearTimeout(reloadTimer);
+    reloadTimer = null;
+  }
+  void loadGroup();
+});
+
+onUnmounted(() => {
+  stopStream();
+  if (reloadTimer) {
+    clearTimeout(reloadTimer);
+    reloadTimer = null;
+  }
+});
 </script>
 
 <template>
@@ -285,6 +356,24 @@ watch(groupId, loadGroup);
       </h1>
       <div class="flex shrink-0 items-center gap-2">
         <RouterLink
+          :to="`/groups/${groupId}/activity`"
+          class="btn-secondary btn-sm h-9"
+          :aria-label="
+            group.unread_count > 0
+              ? `Activity (${group.unread_count} unread)`
+              : 'Activity'
+          "
+          title="Activity"
+        >
+          <Icon name="bell" />
+          <span class="hidden sm:inline">Activity</span>
+          <span
+            v-if="group.unread_count > 0"
+            class="inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
+            >{{ group.unread_count }}</span
+          >
+        </RouterLink>
+        <RouterLink
           :to="`/groups/${groupId}/recurring`"
           class="btn-secondary btn-sm h-9"
           :aria-label="`Recurring expenses (${recurring.length})`"
@@ -292,8 +381,10 @@ watch(groupId, loadGroup);
         >
           <Icon name="arrows-rotate" />
           <span class="hidden sm:inline">Recurring</span>
-          <span v-if="recurring.length > 0" class="tabular-nums"
-            >({{ recurring.length }})</span
+          <span
+            v-if="recurring.length > 0"
+            class="inline-flex min-w-4 items-center justify-center rounded-full border border-border bg-secondary px-1 text-[10px] font-semibold tabular-nums text-secondary-foreground"
+            >{{ recurring.length }}</span
           >
         </RouterLink>
         <RouterLink
@@ -567,13 +658,14 @@ watch(groupId, loadGroup);
                         row.item.expense.description
                       }}</span>
                       <span
-                        v-if="row.item.cadence"
-                        class="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
-                        :title="`Repeats ${cadenceLabels[row.item.cadence] ?? row.item.cadence}`"
+                        v-if="cadenceFor(row.item)"
+                        class="inline-flex items-center gap-0.5 rounded-full border border-border bg-secondary px-1.5 text-[10px] font-medium uppercase tracking-wider text-secondary-foreground"
+                        :title="`Repeats ${cadenceLabels[cadenceFor(row.item)!] ?? cadenceFor(row.item)}`"
                       >
                         <Icon name="arrows-rotate" :size="9" />
                         {{
-                          cadenceLabels[row.item.cadence] ?? row.item.cadence
+                          cadenceLabels[cadenceFor(row.item)!] ??
+                          cadenceFor(row.item)
                         }}
                       </span>
                     </div>

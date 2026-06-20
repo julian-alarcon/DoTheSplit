@@ -61,6 +61,12 @@ func (s *ActivityService) List(ctx context.Context, actorID, groupID uuid.UUID, 
 	return page, nil
 }
 
+// MarkRead advances the caller's last-read marker for the group so unread_count
+// drops to 0. Enforces membership. ErrNotMember for non-members.
+func (s *ActivityService) MarkRead(ctx context.Context, actorID, groupID uuid.UUID) error {
+	return s.groups.MarkActivityRead(ctx, groupID, actorID)
+}
+
 // Cursor format: base64url(created_at | id), created_at as RFC3339Nano.
 func encodeActivityCursor(r repo.ActivityHydrated) string {
 	raw := r.OccurredAt.UTC().Format(time.RFC3339Nano) + "|" + r.ID.String()

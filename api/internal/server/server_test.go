@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
+	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
@@ -99,7 +101,7 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	ctx := context.Background()
 
 	pgc, err := tcpg.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18-alpine",
 		tcpg.WithDatabase("dts"),
 		tcpg.WithUsername("dts"),
 		tcpg.WithPassword("dts"),
@@ -187,6 +189,13 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
+
+	// Real-time hub + LISTEN goroutine, mirroring cmd/api/main.go so the SSE
+	// stream endpoint works in integration tests. Cancelled on cleanup.
+	hub := realtime.NewHub()
+	listenerCtx, cancelListener := context.WithCancel(context.Background())
+	go realtime.RunListener(listenerCtx, pool, hub, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
 	h := server.New(&handlers.Server{
 		Cfg:              cfg,
 		Pool:             pool,
@@ -211,12 +220,14 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 		Notifications:    notificationSvc,
 		Users:            users,
 		Audit:            auditRepo,
+		Hub:              hub,
 	})
 	srv := httptest.NewServer(h)
 	setupTokens.Store(srv.URL, setupTok)
 
 	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok, recurringSvc: recurringSvc}
 	t.Cleanup(func() {
+		cancelListener()
 		srv.Close()
 		pool.Close()
 		_ = pgc.Terminate(context.Background())

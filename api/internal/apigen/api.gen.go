@@ -643,6 +643,12 @@ type Group struct {
 	Id           openapi_types.UUID   `json:"id"`
 	Members      []GroupMember        `json:"members"`
 	Name         string               `json:"name"`
+
+	// UnreadCount Number of activity-feed events in this group the caller has not yet
+	// seen, excluding the caller's own actions. Computed against the
+	// member's last-read marker; drops to 0 after opening the activity log
+	// (POST /v1/groups/{id}/activity/read).
+	UnreadCount int `json:"unread_count"`
 }
 
 // GroupMember defines model for GroupMember.

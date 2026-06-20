@@ -726,6 +726,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/groups/{id}/activity/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark the group activity feed as read for the caller
+         * @description Sets the caller's last-read marker to now, so `unread_count` on the
+         *     group drops to 0 until new activity arrives. Called when the member
+         *     opens the activity log. Idempotent. No request body.
+         */
+        post: operations["markActivityRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/groups/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subscribe to the group's real-time activity stream (SSE)
+         * @description A long-lived Server-Sent Events stream. The server emits one
+         *     `event: activity` frame whenever an expense or settlement in this group
+         *     is created, updated, deleted, or restored (by any member or the
+         *     recurring worker), plus periodic `: ping` comment heartbeats.
+         *
+         *     Each frame's `data` is a minimal JSON signal (ids + action + actor +
+         *     timestamp), NOT the full entity: clients react by re-fetching the
+         *     affected views, so they always render exactly what a manual refresh
+         *     would. No amounts or notes ride this channel.
+         *
+         *     The token cannot be sent via `EventSource` (which can't set the
+         *     Authorization header), so the SPA consumes this stream through `fetch`
+         *     + a `ReadableStream` reader, carrying the bearer token in the header
+         *     like every other request.
+         */
+        get: operations["streamGroupEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/search": {
         parameters: {
             query?: never;
@@ -1335,6 +1390,13 @@ export interface components {
             created_by: string;
             /** Format: date-time */
             created_at: string;
+            /**
+             * @description Number of activity-feed events in this group the caller has not yet
+             *     seen, excluding the caller's own actions. Computed against the
+             *     member's last-read marker; drops to 0 after opening the activity log
+             *     (POST /v1/groups/{id}/activity/read).
+             */
+            unread_count: number;
             members: components["schemas"]["GroupMember"][];
             /**
              * @description Optional 2-member percentage split that prefills the create-expense form.
@@ -3380,6 +3442,54 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    markActivityRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    streamGroupEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-Sent Events stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     search: {

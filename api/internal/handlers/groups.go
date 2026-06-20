@@ -201,6 +201,7 @@ func toAPIGroup(g *repo.Group, members []repo.GroupMember) apigen.Group {
 		CreatedBy:       g.CreatedBy,
 		CreatedAt:       g.CreatedAt,
 		Members:         ms,
+		UnreadCount:     g.UnreadCount,
 	}
 	if len(g.DefaultSplit) > 0 {
 		entries := make([]apigen.DefaultSplitEntry, len(g.DefaultSplit))

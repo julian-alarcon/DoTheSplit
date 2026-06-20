@@ -1,6 +1,11 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths } from "./schema";
-import { clearAccessToken, getAccessToken, setAccessToken } from "./token-store";
+import {
+  clearAccessToken,
+  getAccessToken,
+  hasValidAccessToken,
+  setAccessToken,
+} from "./token-store";
 
 // Same-origin in production (the Go binary serves this bundle). In dev, Vite
 // proxies /v1 to :8080, so an empty base still works. VITE_API_BASE_URL lets
@@ -85,5 +90,15 @@ const authMiddleware: Middleware = {
 
 export const api = createClient<paths>({ baseUrl, credentials: "include" });
 api.use(authMiddleware);
+
+// ensureFreshToken guarantees a usable access token before a raw fetch that
+// bypasses the openapi-fetch middleware (e.g. the SSE stream, which is read via
+// fetch + ReadableStream because EventSource can't set the Authorization
+// header). It reuses the single-flight refresh so it never races the client's
+// own 401 recovery. Returns true if a token is available afterwards.
+export async function ensureFreshToken(): Promise<boolean> {
+  if (hasValidAccessToken()) return true;
+  return refreshAccessToken();
+}
 
 export { baseUrl };

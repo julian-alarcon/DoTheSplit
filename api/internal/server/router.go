@@ -99,6 +99,8 @@ func New(s *handlers.Server) http.Handler {
 
 	add("GET /v1/groups/{id}/transactions", s.ListTransactions, requireSession)
 	add("GET /v1/groups/{id}/activity", s.ListActivity, requireSession)
+	add("POST /v1/groups/{id}/activity/read", s.MarkActivityRead, requireSession)
+	add("GET /v1/groups/{id}/events", s.StreamGroupEvents, requireSession)
 
 	add("GET /v1/search", s.Search, requireSession)
 

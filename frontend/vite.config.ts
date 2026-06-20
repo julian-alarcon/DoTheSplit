@@ -18,8 +18,8 @@ export default defineConfig({
     vue(),
     tailwindcss(),
     // Installable PWA with read-only offline. generateSW (Workbox) precaches the
-    // shell + hashed assets and serves /v1 GETs stale-while-revalidate; mutations
-    // and the auth endpoints always hit the network. We register the SW manually
+    // shell + hashed assets and serves /v1 GETs network-first (cache fallback when
+    // offline); mutations and the auth endpoints always hit the network. We register the SW manually
     // from main.ts (injectRegister: null) because the strict CSP (script-src
     // 'self') forbids the inline registration snippet the plugin injects by
     // default; the bundled registerSW import is CSP-clean. Updates apply silently
@@ -57,16 +57,26 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/v1\//, /^\/healthz/, /^\/readyz/],
         runtimeCaching: [
           {
-            // Read-only offline: cache /v1 GETs stale-while-revalidate. Workbox
-            // runtime caching only matches GET, so mutations pass straight to the
-            // network. Exclude /v1/auth/* so tokens are never cached.
+            // Read-only offline: cache /v1 GETs network-first. NetworkFirst (not
+            // StaleWhileRevalidate) so a read issued right after a mutation - e.g.
+            // the dashboard reload() after creating an expense - reflects the
+            // write instead of returning a stale cached page while revalidating in
+            // the background. We still fall back to the cache when the network
+            // fails (offline) or stalls past the timeout, preserving read-only
+            // offline. Workbox runtime caching only matches GET, so mutations pass
+            // straight to the network. Exclude /v1/auth/* so tokens are never
+            // cached, and the SSE stream (/v1/groups/{id}/events) so the SW never
+            // tees its never-ending body into the cache - doing so buffers frames
+            // and stalls real-time delivery after a few minutes.
             urlPattern: ({ url, sameOrigin }) =>
               sameOrigin &&
               url.pathname.startsWith("/v1/") &&
-              !url.pathname.startsWith("/v1/auth/"),
-            handler: "StaleWhileRevalidate",
+              !url.pathname.startsWith("/v1/auth/") &&
+              !/^\/v1\/groups\/[^/]+\/events$/.test(url.pathname),
+            handler: "NetworkFirst",
             options: {
               cacheName: "dts-v1-get",
+              networkTimeoutSeconds: 3,
               cacheableResponse: { statuses: [0, 200] },
             },
           },

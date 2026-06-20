@@ -57,9 +57,13 @@ CREATE TABLE groups (
 );
 
 CREATE TABLE group_members (
-    group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-    user_id   UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
-    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    group_id              UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    user_id               UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    joined_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- High-water mark for the unread-activity badge: the newest activity_events
+    -- timestamp this member has seen. NULL = never opened the log (all activity
+    -- counts as unread). Set to now() when the member opens the activity log.
+    last_read_activity_at TIMESTAMPTZ,
     PRIMARY KEY (group_id, user_id)
 );
 CREATE INDEX idx_group_members_user_id ON group_members(user_id);
@@ -319,3 +323,28 @@ CREATE TABLE activity_events (
 );
 CREATE INDEX idx_activity_events_group_keyset
     ON activity_events (group_id, created_at DESC, id DESC);
+
+-- Real-time fan-out: every insert into the append-only feed (from the API
+-- request path, the importers, OR the recurring worker) emits a NOTIFY on the
+-- 'activity_events' channel. The API holds one LISTEN connection and pushes a
+-- minimal signal (IDs only, well under the 8 KB payload limit) to subscribed
+-- SSE clients, which then re-fetch. pg_notify is released only on COMMIT, so
+-- subscribers never see a rolled-back row.
+CREATE OR REPLACE FUNCTION notify_activity_event() RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify('activity_events', json_build_object(
+        'id',            NEW.id,
+        'group_id',      NEW.group_id,
+        'actor_id',      NEW.actor_id,
+        'action',        NEW.action,
+        'expense_id',    NEW.expense_id,
+        'settlement_id', NEW.settlement_id,
+        'created_at',    NEW.created_at
+    )::text);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER activity_event_notify
+    AFTER INSERT ON activity_events
+    FOR EACH ROW EXECUTE FUNCTION notify_activity_event();

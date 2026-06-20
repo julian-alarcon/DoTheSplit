@@ -14,6 +14,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
+	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
@@ -55,11 +56,35 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Dedicated single-connection pool for the realtime LISTEN. RunListener
+	// parks one connection forever on WaitForNotification; drawing it from the
+	// shared request pool would permanently shrink that pool by one (the default
+	// max is max(4, NumCPU)), and a single dashboard load already fans out 4
+	// parallel queries - so the parked listener would force request queries to
+	// queue on acquire. Isolating it here keeps the request pool at full size.
+	listenerCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("listener pool config", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	listenerCfg.MaxConns = 1
+	listenerCfg.MinConns = 1
+	listenerPool, err := pgxpool.NewWithConfig(ctx, listenerCfg)
+	if err != nil {
+		logger.Error("listener pool", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	defer listenerPool.Close()
+
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	if err != nil {
 		logger.Error("email cipher", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
+
+	// Real-time fan-out: a single LISTEN connection feeds the in-memory hub that
+	// SSE clients subscribe to. Started below, after the server is built.
+	hub := realtime.NewHub()
 
 	users := repo.NewUserRepo(pool)
 	refreshTokens := repo.NewRefreshTokenRepo(pool)
@@ -147,6 +172,7 @@ func main() {
 		Notifications:    notificationSvc,
 		Users:            users,
 		Audit:            auditRepo,
+		Hub:              hub,
 		Version:          version,
 		Commit:           commit,
 	}
@@ -160,6 +186,11 @@ func main() {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+
+	// Park a LISTEN connection that fans Postgres activity notifications out to
+	// SSE subscribers. Uses its own single-connection pool (above) so it never
+	// competes with request queries. Exits when ctx is cancelled on shutdown.
+	go realtime.RunListener(ctx, listenerPool, hub, logger)
 
 	go func() {
 		logger.Info("listening", slog.String("addr", cfg.HTTPAddr))

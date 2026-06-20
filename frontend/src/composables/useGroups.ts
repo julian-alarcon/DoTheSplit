@@ -141,6 +141,15 @@ export async function listActivity(
   return { items: data.items, nextCursor: data.next_cursor ?? "" };
 }
 
+// Mark the group's activity feed as read, clearing the unread badge. Called
+// when the member opens the activity log. Idempotent.
+export async function markActivityRead(groupId: string): Promise<{ ok: boolean }> {
+  const { error } = await api.POST("/v1/groups/{id}/activity/read", {
+    params: { path: { id: groupId } },
+  });
+  return { ok: !error };
+}
+
 export async function createGroup(input: {
   name: string;
   default_currency?: string;

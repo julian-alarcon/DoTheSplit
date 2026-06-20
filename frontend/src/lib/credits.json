@@ -182,6 +182,12 @@
       "url": "https://github.com/vitejs/vite"
     },
     {
+      "name": "vite-plugin-pwa",
+      "version": "1.3.0",
+      "license": "MIT",
+      "url": "https://github.com/vite-pwa/vite-plugin-pwa"
+    },
+    {
       "name": "vitest",
       "version": "4.1.8",
       "license": "MIT",

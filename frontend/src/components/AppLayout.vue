@@ -71,7 +71,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex min-h-[100dvh] flex-col">
     <a href="#main" class="skip-link">Skip to content</a>
-    <header class="border-b border-border bg-[color-mix(in_oklch,var(--card)_70%,transparent)] backdrop-blur-[8px]">
+    <header class="relative z-50 border-b border-border bg-[color-mix(in_oklch,var(--card)_70%,transparent)] backdrop-blur-[8px]">
       <div class="mx-auto flex max-w-6xl items-center justify-between pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-3 pl-[max(1rem,env(safe-area-inset-left))]">
         <RouterLink :to="user ? '/groups' : '/'" class="flex items-center gap-2 text-lg font-semibold">
           <img src="/logo.svg" alt="" aria-hidden="true" width="40" height="40" class="-my-1.5 h-10 w-10" />
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
       <slot />
     </main>
 
-    <footer class="border-t border-border bg-[color-mix(in_oklch,var(--card)_70%,transparent)] pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-muted-foreground">
+    <footer class="border-t border-border bg-card pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-muted-foreground">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <span>
           DoTheSplit &middot;

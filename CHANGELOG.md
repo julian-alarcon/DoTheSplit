@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.0.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.11.1...v1.0.0) (2026-06-20)
+
+
+### Features
+
+* **api,frontend:** enable realtime update and unread badge ([782fe8a](https://github.com/julian-alarcon/DoTheSplit/commit/782fe8a1a777cbea2e444f03f12c78ee36a3856a))
+* **config:** add SlogLevel helper to parse LOG_LEVEL ([8fc4a70](https://github.com/julian-alarcon/DoTheSplit/commit/8fc4a705c6bc12c4fff70450c99c17ab0ac1e557))
+* **frontend, api:** remove custom timezone, use client timezone ([0fb1fac](https://github.com/julian-alarcon/DoTheSplit/commit/0fb1facb1d1b8f0bfb808ad2b6b329fe198f39e5))
+* **frontend:** added pwa to frontend ([44908b4](https://github.com/julian-alarcon/DoTheSplit/commit/44908b4e3ac6d31174f353849e0f7031f853abad))
+* **frontend:** fix field input verification being shown when not needed ([7a1b2e5](https://github.com/julian-alarcon/DoTheSplit/commit/7a1b2e52b3c3ba5631e9ffb7e544fb15636884c5))
+* **frontend:** surface unhandled Vue errors via a global error handler ([399d948](https://github.com/julian-alarcon/DoTheSplit/commit/399d9488828f3fa9cb6625091f38f767f9f12ebf))
+
+
+### Bug Fixes
+
+* **api,frontend:** avatar icon was not being updated ([0edf4e1](https://github.com/julian-alarcon/DoTheSplit/commit/0edf4e1ec070850750918f4777800c305d502943))
+* **api,worker:** honor LOG_LEVEL by wiring it into slog ([65263b9](https://github.com/julian-alarcon/DoTheSplit/commit/65263b90ab08a6c924b10ebade76a5b56fc8025f))
+* **api:** satisfy ST1005 by moving member-removal message into the handler ([2e3d055](https://github.com/julian-alarcon/DoTheSplit/commit/2e3d0551221b7ab308ffc1808d387d6dbd3e897f))
+* **frontend,api:** remove old cookie auth method and other old astro usage ([613c949](https://github.com/julian-alarcon/DoTheSplit/commit/613c9499255cf5f8e41aaf52cedbfa1ab40d3474))
+* **frontend,api:** surface member-removal errors and clarify the non-zero balance message ([ed0b76a](https://github.com/julian-alarcon/DoTheSplit/commit/ed0b76aaf22bfbbd236c7a4e7234ac54622a9d4a))
+* **frontend:** add missing preflight resets ([3daf433](https://github.com/julian-alarcon/DoTheSplit/commit/3daf4334e79b00b7a9ae5ca360508458dadef22c))
+* **frontend:** added back Inter font ([09607dc](https://github.com/julian-alarcon/DoTheSplit/commit/09607dc3ed362b554c65e8ecb2c0fa3f727bc2bd))
+* **frontend:** emit confirm before closing dialogs so action handlers see the target ([3fec905](https://github.com/julian-alarcon/DoTheSplit/commit/3fec9055e6f96db888dd9309e22f23a48dfee3b8))
+* **frontend:** expose expense notes in the split details modal ([94c301d](https://github.com/julian-alarcon/DoTheSplit/commit/94c301d57e5ace5ed268b71cfc21b18564e208e5))
+* **frontend:** fix full-group CSV import, autofill group name, surface server errors ([13e51d7](https://github.com/julian-alarcon/DoTheSplit/commit/13e51d7c707f65134bb157b5a8ce615b551c8609))
+* **frontend:** fix settlements style ([faa24be](https://github.com/julian-alarcon/DoTheSplit/commit/faa24bedc7789f7cdb5c92c650bb817e1602f4e9))
+* **frontend:** mark session ready on login to avoid a racy boot refresh ([915a3f6](https://github.com/julian-alarcon/DoTheSplit/commit/915a3f6f780706c184d4c7090f3e4a613272d083))
+* **frontend:** missing icons ([bfedb43](https://github.com/julian-alarcon/DoTheSplit/commit/bfedb430a6a188a7ad9389c81d3b4e9a97002b8b))
+* **frontend:** restore styles in multiple places ([912452c](https://github.com/julian-alarcon/DoTheSplit/commit/912452c14bb57c381ffd75b5d04c37ab3ebf2698))
+* **frontend:** See activity button is hiden when not applicable ([b09a1f4](https://github.com/julian-alarcon/DoTheSplit/commit/b09a1f4690fce305bd327d4caf53f78fcf1f92b0))
+* **frontend:** set different title page, restore svg favicon ([64728b1](https://github.com/julian-alarcon/DoTheSplit/commit/64728b1482a518133944564e81e4058fc59fffbb))
+* **frontend:** small fixes on vue a11y and hardening, fix position of adding expenses block ([7135a7d](https://github.com/julian-alarcon/DoTheSplit/commit/7135a7d42651f88862915971b269631780110d1b))
+* **frontend:** stop e2e smoke flake from a racy post-login refresh ([9a5d1b9](https://github.com/julian-alarcon/DoTheSplit/commit/9a5d1b98ce5f52b94b4d2ae1b15b3216ee0fa18a))
+* **frontend:** support autocomplete properly ([18efc1e](https://github.com/julian-alarcon/DoTheSplit/commit/18efc1eec59b2ee7d27061a9375ce77bf4aa6aed))
+* **frontend:** use outline calendar icon for date picker trigger ([0374094](https://github.com/julian-alarcon/DoTheSplit/commit/0374094f4a4d54297eab5d2fc6c0446841387f37))
+* **frontend:** use solid footer background to stop Firefox Android repaint glitch and dropdown menu not shown on top of input fields ([a4bb3b2](https://github.com/julian-alarcon/DoTheSplit/commit/a4bb3b2efc4c75493d5ad750a92a8f36852e2488))
+* **import:** commit CSV imports atomically and fail gracefully on timeout ([3977f79](https://github.com/julian-alarcon/DoTheSplit/commit/3977f7963c8a72df3be0b1ee5da032fbb3516ad3))
+* **web:** sync api with existing openapi ([dd235e8](https://github.com/julian-alarcon/DoTheSplit/commit/dd235e8d8d107b2333ceee30d3ac6b9eb8e5677a))
+
+
+### Performance Improvements
+
+* **build:** strip symbols and trim paths from Docker builds ([3a23b7b](https://github.com/julian-alarcon/DoTheSplit/commit/3a23b7b7e0ee335dc254efa10bdeda03be9572b4))
+* **build:** strip symbols and trim paths from local Go builds ([b5e2161](https://github.com/julian-alarcon/DoTheSplit/commit/b5e21617229d8c88c22400fec0f84f7053347faf))
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([4cf18a6](https://github.com/julian-alarcon/DoTheSplit/commit/4cf18a607b3f487b8106abfbf8334fcd976b2627))
+
 ## [0.11.1](https://github.com/julian-alarcon/DoTheSplit/compare/v0.11.0...v0.11.1) (2026-06-11)
 
 

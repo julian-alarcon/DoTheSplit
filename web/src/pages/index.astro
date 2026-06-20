@@ -1,6 +1,0 @@
----
-// If the middleware hasn't already redirected, we hit this only while authed
-// (because middleware sends unauth'd users to /login). In practice it's a
-// transient state; send authed users to /groups immediately.
-return Astro.redirect("/groups");
----

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -22,31 +21,31 @@ func openapiEmail(s string) openapi_types.Email { return openapi_types.Email(s) 
 // ImportSplitwise parses a Splitwise CSV export and either previews the
 // result (dry_run=true) or commits it (dry_run=false). See the OpenAPI spec
 // for the full contract; the security-sensitive bits live in the service.
-func (s *Server) ImportSplitwise(c *gin.Context) {
-	s.importCSV(c, s.Imports.Run)
+func (s *Server) ImportSplitwise(w http.ResponseWriter, r *http.Request) {
+	s.importCSV(w, r, s.Imports.Run)
 }
 
 // ImportDoTheSplit is the dothesplit-flavored counterpart to
 // ImportSplitwise. The request shape is identical; the only change is
 // the parser the service uses (which understands the richer header
 // produced by the export endpoint).
-func (s *Server) ImportDoTheSplit(c *gin.Context) {
-	s.importCSV(c, s.Imports.RunDoTheSplit)
+func (s *Server) ImportDoTheSplit(w http.ResponseWriter, r *http.Request) {
+	s.importCSV(w, r, s.Imports.RunDoTheSplit)
 }
 
 // ImportGroupExpensesCSV appends expenses to an existing group from a
 // DoTheSplit-shaped CSV. Splits are derived from the group (pinned
 // 2-member percent or equal); the Payer column resolves by member
 // display name; everything else has a sensible default.
-func (s *Server) ImportGroupExpensesCSV(c *gin.Context) {
-	u := middleware.User(c)
-	gid, err := uuid.Parse(c.Param("id"))
+func (s *Server) ImportGroupExpensesCSV(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	gid, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		writeErr(c, http.StatusBadRequest, "bad_request", "invalid group id")
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid group id")
 		return
 	}
 	var req apigen.ImportGroupExpensesRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	in := service.ImportGroupExpensesInput{CSV: req.Csv}
@@ -54,23 +53,23 @@ func (s *Server) ImportGroupExpensesCSV(c *gin.Context) {
 		in.DryRun = *req.DryRun
 	}
 
-	res, err := s.GroupExpenseImps.Run(c.Request.Context(), u.ID, gid, in)
+	res, err := s.GroupExpenseImps.Run(r.Context(), u.ID, gid, in)
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a member of this group")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a member of this group")
 		return
 	case errors.Is(err, repo.ErrNotFound):
-		writeErr(c, http.StatusNotFound, "not_found", "group not found")
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
 		return
 	case errors.Is(err, csvimport.ErrCSVTooLarge),
 		errors.Is(err, csvimport.ErrCSVBadHeader),
 		errors.Is(err, csvimport.ErrCSVNoRows),
 		errors.Is(err, csvimport.ErrCSVTooMany),
 		errors.Is(err, csvimport.ErrCSVFieldLen):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case err != nil:
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 
@@ -100,22 +99,22 @@ func (s *Server) ImportGroupExpensesCSV(c *gin.Context) {
 		})
 	}
 	if in.DryRun {
-		c.JSON(http.StatusOK, out)
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	c.JSON(http.StatusCreated, out)
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // importCSV is the shared body of both import handlers; it differs only
 // in which Importer.Run* method is called via `run`.
-func (s *Server) importCSV(c *gin.Context, run func(context.Context, uuid.UUID, service.ImportSplitwiseInput) (service.ImportSplitwiseResult, error)) {
-	u := middleware.User(c)
+func (s *Server) importCSV(w http.ResponseWriter, r *http.Request, run func(context.Context, uuid.UUID, service.ImportSplitwiseInput) (service.ImportSplitwiseResult, error)) {
+	u := middleware.User(r.Context())
 	var req apigen.ImportSplitwiseRequest
-	if !bindStrictJSON(c, &req) {
+	if !bindStrictJSON(w, r, &req) {
 		return
 	}
 	if len(req.Members) < csvimport.MinUsers || len(req.Members) > csvimport.MaxUsers {
-		writeErr(c, http.StatusBadRequest, "bad_request", "members count out of range")
+		writeErr(w, http.StatusBadRequest, "bad_request", "members count out of range")
 		return
 	}
 	members := make([]service.ImportSplitwiseMember, len(req.Members))
@@ -132,17 +131,17 @@ func (s *Server) importCSV(c *gin.Context, run func(context.Context, uuid.UUID, 
 		in.DryRun = *req.DryRun
 	}
 
-	res, err := run(c.Request.Context(), u.ID, in)
+	res, err := run(r.Context(), u.ID, in)
 	switch {
 	case errors.Is(err, csvimport.ErrCSVTooLarge),
 		errors.Is(err, csvimport.ErrCSVBadHeader),
 		errors.Is(err, csvimport.ErrCSVNoRows),
 		errors.Is(err, csvimport.ErrCSVTooMany),
 		errors.Is(err, csvimport.ErrCSVFieldLen):
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	case err != nil:
-		writeErr(c, http.StatusBadRequest, "bad_request", err.Error())
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 
@@ -198,8 +197,8 @@ func (s *Server) importCSV(c *gin.Context, run func(context.Context, uuid.UUID, 
 	}
 	if res.GroupID != nil {
 		out.GroupId = res.GroupID
-		c.JSON(http.StatusCreated, out)
+		writeJSON(w, http.StatusCreated, out)
 		return
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }

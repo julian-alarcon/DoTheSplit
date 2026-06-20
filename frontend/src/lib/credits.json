@@ -1,0 +1,203 @@
+{
+  "project": {
+    "name": "DoTheSplit",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2026 Julian Alarcon",
+    "url": "https://github.com/julian-alarcon/dothesplit",
+    "sponsorUrl": "https://github.com/sponsors/julian-alarcon"
+  },
+  "fontAwesome": {
+    "creator": "Font Awesome",
+    "creatorUrl": "https://fontawesome.com",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "licensePageUrl": "https://fontawesome.com/license/free",
+    "modificationStatement": "Icons used unmodified."
+  },
+  "interFont": {
+    "creator": "The Inter Project Authors",
+    "creatorUrl": "https://github.com/rsms/inter",
+    "license": "SIL Open Font License 1.1",
+    "licenseUrl": "https://scripts.sil.org/OFL",
+    "licensePath": "frontend/src/assets/fonts/inter/OFL.txt",
+    "modificationStatement": "Font used unmodified (Regular/SemiBold subset)."
+  },
+  "backend": [
+    {
+      "name": "github.com/golang-jwt/jwt/v5",
+      "version": "v5.3.1",
+      "license": "MIT",
+      "url": "https://github.com/golang-jwt/jwt"
+    },
+    {
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/google/uuid"
+    },
+    {
+      "name": "github.com/jackc/pgx/v5",
+      "version": "v5.10.0",
+      "license": "MIT",
+      "url": "https://github.com/jackc/pgx"
+    },
+    {
+      "name": "github.com/oapi-codegen/runtime",
+      "version": "v1.4.1",
+      "license": "Apache-2.0",
+      "url": "https://github.com/oapi-codegen/runtime"
+    },
+    {
+      "name": "github.com/stretchr/testify",
+      "version": "v1.11.1",
+      "license": "UNKNOWN",
+      "url": "https://github.com/stretchr/testify"
+    },
+    {
+      "name": "github.com/testcontainers/testcontainers-go",
+      "version": "v0.42.0",
+      "license": "UNKNOWN",
+      "url": "https://github.com/testcontainers/testcontainers-go"
+    },
+    {
+      "name": "github.com/testcontainers/testcontainers-go/modules/postgres",
+      "version": "v0.42.0",
+      "license": "UNKNOWN",
+      "url": "https://github.com/testcontainers/testcontainers-go/modules/postgres"
+    },
+    {
+      "name": "golang.org/x/crypto",
+      "version": "v0.53.0",
+      "license": "BSD-3-Clause",
+      "url": "https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE"
+    }
+  ],
+  "frontend": [
+    {
+      "name": "openapi-fetch",
+      "version": "0.17.0",
+      "license": "MIT",
+      "url": "https://github.com/openapi-ts/openapi-typescript"
+    },
+    {
+      "name": "vue",
+      "version": "3.5.38",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/core"
+    },
+    {
+      "name": "vue-router",
+      "version": "5.1.0",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/router"
+    },
+    {
+      "name": "@playwright/test",
+      "version": "1.61.0",
+      "license": "Apache-2.0",
+      "url": "https://github.com/microsoft/playwright"
+    },
+    {
+      "name": "@tailwindcss/vite",
+      "version": "4.3.1",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
+    },
+    {
+      "name": "@types/node",
+      "version": "24.13.2",
+      "license": "MIT",
+      "url": "https://github.com/DefinitelyTyped/DefinitelyTyped"
+    },
+    {
+      "name": "@vitejs/plugin-vue",
+      "version": "6.0.7",
+      "license": "MIT",
+      "url": "https://github.com/vitejs/vite-plugin-vue"
+    },
+    {
+      "name": "@vue/eslint-config-typescript",
+      "version": "14.8.0",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/eslint-config-typescript"
+    },
+    {
+      "name": "eslint",
+      "version": "10.5.0",
+      "license": "MIT",
+      "url": "https://github.com/eslint/eslint"
+    },
+    {
+      "name": "eslint-plugin-vue",
+      "version": "10.9.2",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/eslint-plugin-vue"
+    },
+    {
+      "name": "globals",
+      "version": "17.6.0",
+      "license": "MIT",
+      "url": "https://github.com/sindresorhus/globals"
+    },
+    {
+      "name": "jiti",
+      "version": "2.7.0",
+      "license": "MIT",
+      "url": "https://github.com/unjs/jiti"
+    },
+    {
+      "name": "jsdom",
+      "version": "29.1.1",
+      "license": "MIT",
+      "url": "https://github.com/jsdom/jsdom"
+    },
+    {
+      "name": "openapi-typescript",
+      "version": "7.13.0",
+      "license": "MIT",
+      "url": "https://github.com/openapi-ts/openapi-typescript"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.1",
+      "license": "MIT",
+      "url": "https://github.com/tailwindlabs/tailwindcss"
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "url": "https://github.com/microsoft/TypeScript"
+    },
+    {
+      "name": "typescript-eslint",
+      "version": "8.61.1",
+      "license": "MIT",
+      "url": "https://github.com/typescript-eslint/typescript-eslint"
+    },
+    {
+      "name": "vite",
+      "version": "8.0.16",
+      "license": "MIT",
+      "url": "https://github.com/vitejs/vite"
+    },
+    {
+      "name": "vite-plugin-pwa",
+      "version": "1.3.0",
+      "license": "MIT",
+      "url": "https://github.com/vite-pwa/vite-plugin-pwa"
+    },
+    {
+      "name": "vitest",
+      "version": "4.1.8",
+      "license": "MIT",
+      "url": "https://github.com/vitest-dev/vitest"
+    },
+    {
+      "name": "vue-tsc",
+      "version": "3.3.4",
+      "license": "MIT",
+      "url": "https://github.com/vuejs/language-tools"
+    }
+  ]
+}

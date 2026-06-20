@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: DoTheSplit API
-  version: 0.2.0
+  version: 1.0.0
   description: |
     Split expenses among group members.
 
@@ -11,9 +11,9 @@ info:
     Conventions:
       * All money values are integer cents (no floats).
       * All IDs are UUIDs.
-      * Authentication is an opaque session cookie (`dts_session` on plain HTTP,
-        `__Host-dts_session` on HTTPS) set by `/v1/auth/login`.
-      * The session cookie is `SameSite=Lax`; write endpoints rely on that for CSRF.
+      * Authentication is a JWT bearer access token obtained from `/v1/auth/token`
+        and refreshed via `/v1/auth/refresh` (rotating `dts_refresh` httpOnly cookie).
+        Sent as `Authorization: Bearer <token>`.
       * Request bodies reject unknown fields (`additionalProperties: false`).
       * Times are RFC 3339 UTC.
 
@@ -37,7 +37,7 @@ servers:
 
 tags:
   - name: auth
-    description: Registration, login, logout, current-user lookup.
+    description: Registration, token issuance/refresh, current-user lookup.
   - name: groups
     description: Groups and membership. The creator is auto-added; any member can add others.
   - name: expenses
@@ -66,7 +66,7 @@ tags:
     description: First-run install ceremony. Active only while no admin exists.
 
 security:
-  - cookieAuth: []
+  - bearerAuth: []
 
 paths:
   /healthz:
@@ -121,10 +121,7 @@ paths:
             schema: { $ref: "#/components/schemas/SetupCompleteRequest" }
       responses:
         "201":
-          description: Admin created; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Admin created. The caller then logs in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -147,11 +144,10 @@ paths:
       summary: Register a new user
       description: |
         When SMTP is configured the new account starts unverified: the response
-        body's `verification_required` is `true`, no session cookie is set, and
-        a 6-digit verification code is emailed to the address. The user must
-        POST it to `/v1/auth/verify` before they can log in. When SMTP is not
-        configured the account is auto-verified immediately and the response
-        sets a session cookie just like login.
+        body's `verification_required` is `true` and a 6-digit verification code
+        is emailed to the address. The user must POST it to `/v1/auth/verify`
+        before they can log in. When SMTP is not configured the account is
+        auto-verified immediately and the user can log in via `/v1/auth/token`.
       operationId: register
       security: []
       tags: [auth]
@@ -162,10 +158,7 @@ paths:
             schema: { $ref: "#/components/schemas/RegisterRequest" }
       responses:
         "201":
-          description: Created. Session cookie is set only when `verification_required` is false.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Created.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RegisterResponse" }
@@ -187,10 +180,7 @@ paths:
             schema: { $ref: "#/components/schemas/VerifyEmailRequest" }
       responses:
         "200":
-          description: Verified; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Verified. The user can now log in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -257,10 +247,7 @@ paths:
             schema: { $ref: "#/components/schemas/PasswordResetConfirm" }
       responses:
         "200":
-          description: Password rotated; session cookie set.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
+          description: Password rotated. The user can now log in via /v1/auth/token.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
@@ -272,10 +259,16 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
-  /v1/auth/login:
+  /v1/auth/token:
     post:
-      summary: Log in
-      operationId: login
+      summary: Exchange credentials for a bearer access token
+      description: |
+        Token-based login for SPA / native (Capacitor) clients. Returns a
+        short-lived JWT access token in the body and sets a long-lived,
+        rotating refresh token in an httpOnly cookie
+        (`dts_refresh`, scoped to `/v1/auth/refresh`). Native clients that have
+        no cookie jar receive the refresh token in the body as well.
+      operationId: issueToken
       security: []
       tags: [auth]
       requestBody:
@@ -283,15 +276,19 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/LoginRequest" }
+            example:
+              email: ada@example.com
+              password: correct-horse-battery
       responses:
         "200":
-          description: Logged in; session cookie set
+          description: Access token issued; refresh token set as httpOnly cookie
           headers:
             Set-Cookie:
               schema: { type: string }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
           description: Account exists but the email address has not been verified yet.
@@ -300,14 +297,53 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
-  /v1/auth/logout:
+  /v1/auth/refresh:
     post:
-      summary: Log out (clears session)
-      operationId: logout
+      summary: Rotate the refresh token and mint a new access token
+      description: |
+        Reads the refresh token from the `dts_refresh` httpOnly cookie (web) or
+        the request body (native), rotates it (the presented token is revoked
+        and replaced), and returns a fresh access token plus a new refresh
+        token. Presenting an already-rotated or revoked refresh token revokes
+        the entire token chain for that user and returns 401 (reuse detection).
+      operationId: refreshToken
+      security: []
       tags: [auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New access token issued; refresh cookie rotated
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/token/revoke:
+    post:
+      summary: Revoke the caller's refresh token (token-client logout)
+      description: |
+        Revokes the refresh token presented in the `dts_refresh` cookie or the
+        request body and clears the cookie. Idempotent: an absent or unknown
+        token still returns 204.
+      operationId: revokeToken
+      security: []
+      tags: [auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
       responses:
         "204":
-          description: Logged out
+          description: Refresh token revoked
 
   /v1/me:
     get:
@@ -339,7 +375,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     delete:
-      summary: Soft-delete the current user (tombstones display_name, scrubs email, clears all sessions)
+      summary: Soft-delete the current user (tombstones display_name, scrubs email, revokes refresh tokens)
       operationId: deleteMe
       tags: [auth]
       requestBody:
@@ -349,7 +385,7 @@ paths:
             schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
-          description: Account deleted; session cleared
+          description: Account deleted; refresh cookie cleared
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "423":
@@ -361,6 +397,10 @@ paths:
   /v1/me/password:
     post:
       summary: Change the current user's password (requires old password)
+      description: |
+        Changes the password and revokes every other token chain for the user.
+        Returns a fresh access token + rotated refresh cookie so the current
+        browser stays logged in.
       operationId: changePassword
       tags: [auth]
       requestBody:
@@ -369,8 +409,14 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
       responses:
-        "204":
-          description: Password changed
+        "200":
+          description: Password changed; new access token issued, refresh cookie rotated
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
@@ -406,8 +452,8 @@ paths:
     post:
       summary: Confirm a pending email change with the 6-digit code
       description: |
-        On success the user's email is updated, all sessions for the user are
-        revoked, and a fresh session cookie is issued so the current browser
+        On success the user's email is updated, the user's other token chains
+        are revoked, and the refresh cookie is rotated so the current browser
         stays logged in.
       operationId: changeEmailConfirm
       tags: [auth]
@@ -418,7 +464,7 @@ paths:
             schema: { $ref: "#/components/schemas/ConfirmEmailChangeRequest" }
       responses:
         "200":
-          description: Email updated; new session cookie set.
+          description: Email updated; refresh cookie rotated.
           headers:
             Set-Cookie:
               schema: { type: string }
@@ -506,6 +552,14 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: v
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Cache-busting version token; pass the user's `avatar_updated_at`.
+            The server ignores it, but a changed value gives the browser a
+            distinct URL so an updated avatar isn't served stale from cache.
       responses:
         "200":
           description: PNG bytes
@@ -1003,6 +1057,58 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /v1/groups/{id}/activity/read:
+    post:
+      summary: Mark the group activity feed as read for the caller
+      description: |
+        Sets the caller's last-read marker to now, so `unread_count` on the
+        group drops to 0 until new activity arrives. Called when the member
+        opens the activity log. Idempotent. No request body.
+      operationId: markActivityRead
+      tags: [activity]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Marked read
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/groups/{id}/events:
+    get:
+      summary: Subscribe to the group's real-time activity stream (SSE)
+      description: |
+        A long-lived Server-Sent Events stream. The server emits one
+        `event: activity` frame whenever an expense or settlement in this group
+        is created, updated, deleted, or restored (by any member or the
+        recurring worker), plus periodic `: ping` comment heartbeats.
+
+        Each frame's `data` is a minimal JSON signal (ids + action + actor +
+        timestamp), NOT the full entity: clients react by re-fetching the
+        affected views, so they always render exactly what a manual refresh
+        would. No amounts or notes ride this channel.
+
+        The token cannot be sent via `EventSource` (which can't set the
+        Authorization header), so the SPA consumes this stream through `fetch`
+        + a `ReadableStream` reader, carrying the bearer token in the header
+        like every other request.
+      operationId: streamGroupEvents
+      tags: [activity]
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/search:
     get:
       summary: Search expenses and settlements across the caller's groups
@@ -1203,12 +1309,14 @@ paths:
           description: "Preview (when `dry_run: true`)"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+              schema:
+                { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
         "201":
           description: "Created (when `dry_run: false`)"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
+              schema:
+                { $ref: "#/components/schemas/ImportGroupExpensesResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1239,7 +1347,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateRecurringExpenseRequest" }
+            schema:
+              { $ref: "#/components/schemas/CreateRecurringExpenseRequest" }
       responses:
         "201":
           description: Created
@@ -1356,10 +1465,10 @@ paths:
     post:
       summary: Send the user a password-reset email (admin, step-up)
       description: |
-        Scrambles the target user's password hash, revokes every active
-        session for them, and emails them a 6-digit code so they can set a
-        new password through the standard /reset flow. The admin never types
-        a temporary password.
+        Scrambles the target user's password hash, revokes every refresh token
+        for them, and emails them a 6-digit code so they can set a new password
+        through the standard /reset flow. The admin never types a temporary
+        password.
       operationId: adminResetUserPassword
       tags: [admin]
       parameters:
@@ -1374,7 +1483,7 @@ paths:
             schema: { $ref: "#/components/schemas/StepUpRequest" }
       responses:
         "204":
-          description: Password reset email queued; target's sessions revoked.
+          description: Password reset email queued; target's refresh tokens revoked.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1584,13 +1693,14 @@ paths:
 
 components:
   securitySchemes:
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: dts_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
       description: |
-        Session cookie. Name is `dts_session` on plain HTTP deployments and
-        `__Host-dts_session` when `COOKIE_SECURE=true`.
+        Short-lived JWT access token for SPA / native clients, obtained from
+        `/v1/auth/token` and refreshed via `/v1/auth/refresh`. Sent as
+        `Authorization: Bearer <token>` on every authenticated endpoint.
 
   parameters:
     GroupId:
@@ -1621,7 +1731,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
-      description: Missing or invalid session cookie.
+      description: Missing or invalid bearer access token.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1691,10 +1801,6 @@ components:
           type: integer
           enum: [0, 1]
           description: First day of the week in calendar UIs. 0 = Sunday, 1 = Monday.
-        timezone:
-          type: string
-          nullable: true
-          description: IANA timezone (e.g. "Europe/Madrid"). Null means the client should use the device-detected zone.
         is_admin:
           type: boolean
           readOnly: true
@@ -1715,10 +1821,6 @@ components:
           type: integer
           enum: [0, 1]
           description: First day of the week. 0 = Sunday, 1 = Monday.
-        timezone:
-          type: string
-          maxLength: 64
-          description: IANA timezone (e.g. "Europe/Madrid"). Send an empty string to revert to device detection.
 
     ChangePasswordRequest:
       type: object
@@ -1886,9 +1988,48 @@ components:
         email: { type: string, format: email }
         password: { type: string }
 
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: "Short-lived JWT. Send as `Authorization: Bearer <access_token>`."
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds.
+        refresh_token:
+          type: string
+          description: |
+            Rotating refresh token. Only present for native clients (no cookie
+            jar); web clients receive it as the `dts_refresh` httpOnly cookie
+            and this field is omitted.
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          description: |
+            Refresh token for native clients. Web clients omit this and rely on
+            the `dts_refresh` httpOnly cookie instead.
+
     Group:
       type: object
-      required: [id, name, default_currency, created_by, created_at, members]
+      required:
+        [
+          id,
+          name,
+          default_currency,
+          created_by,
+          created_at,
+          members,
+          unread_count,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1899,6 +2040,14 @@ components:
           description: ISO-4217 code used when expenses omit currency
         created_by: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
+        unread_count:
+          type: integer
+          minimum: 0
+          description: |
+            Number of activity-feed events in this group the caller has not yet
+            seen, excluding the caller's own actions. Computed against the
+            member's last-read marker; drops to 0 after opening the activity log
+            (POST /v1/groups/{id}/activity/read).
         members:
           type: array
           items: { $ref: "#/components/schemas/GroupMember" }
@@ -2014,14 +2163,25 @@ components:
       properties:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
-        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        currency:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 3,
+            description: "Defaults to group.default_currency if omitted",
+          }
         payer_id: { type: string, format: uuid }
         incurred_at: { type: string, format: date-time }
         category_id:
           type: string
           format: uuid
           description: "Defaults to the `other` category when omitted."
-        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
+        notes:
+          {
+            type: string,
+            maxLength: 2000,
+            description: "Optional free-form notes about the expense.",
+          }
         mode: { $ref: "#/components/schemas/SplitMode" }
         splits:
           type: array
@@ -2044,7 +2204,12 @@ components:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
         category_id: { type: string, format: uuid }
-        notes: { type: string, maxLength: 2000, description: "Optional free-form notes about the expense." }
+        notes:
+          {
+            type: string,
+            maxLength: 2000,
+            description: "Optional free-form notes about the expense.",
+          }
         payer_id:
           type: string
           format: uuid
@@ -2072,7 +2237,20 @@ components:
     Expense:
       type: object
       required:
-        [id, group_id, description, amount_cents, currency, payer_id, created_by, incurred_at, created_at, splits, category_id, notes]
+        [
+          id,
+          group_id,
+          description,
+          amount_cents,
+          currency,
+          payer_id,
+          created_by,
+          incurred_at,
+          created_at,
+          splits,
+          category_id,
+          notes,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2104,10 +2282,18 @@ components:
       type: object
       required: [id, slug, label, group_label]
       properties:
-        id:    { type: string, format: uuid }
-        slug:  { type: string, description: "Stable machine identifier (e.g. `groceries`). The frontend maps this to an icon." }
+        id: { type: string, format: uuid }
+        slug:
+          {
+            type: string,
+            description: "Stable machine identifier (e.g. `groceries`). The frontend maps this to an icon.",
+          }
         label: { type: string, description: "Human-readable name." }
-        group_label: { type: string, description: "Section header for the picker (e.g. `Entertainment`, `No category`)." }
+        group_label:
+          {
+            type: string,
+            description: "Section header for the picker (e.g. `Entertainment`, `No category`).",
+          }
 
     ImportSplitwiseRequest:
       type: object
@@ -2146,12 +2332,31 @@ components:
       additionalProperties: false
       required: [csv_name, email]
       properties:
-        csv_name: { type: string, minLength: 1, maxLength: 80, description: Name as it appears in the CSV column header. }
+        csv_name:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 80,
+            description: Name as it appears in the CSV column header.,
+          }
         email: { type: string, format: email }
 
     ImportSplitwiseResponse:
       type: object
-      required: [group_name, default_currency, members, expense_count, settlement_count, skipped_count, skipped, balances, preview, settlement_preview, csv_currencies]
+      required:
+        [
+          group_name,
+          default_currency,
+          members,
+          expense_count,
+          settlement_count,
+          skipped_count,
+          skipped,
+          balances,
+          preview,
+          settlement_preview,
+          csv_currencies,
+        ]
       properties:
         group_id:
           type: string
@@ -2191,7 +2396,8 @@ components:
         settlement_preview:
           type: array
           maxItems: 6
-          items: { $ref: "#/components/schemas/ImportSplitwiseSettlementPreview" }
+          items:
+            { $ref: "#/components/schemas/ImportSplitwiseSettlementPreview" }
         csv_currencies:
           type: array
           description: |
@@ -2206,7 +2412,11 @@ components:
       type: object
       required: [csv_name, net_cents]
       properties:
-        csv_name: { type: string, description: Member name as it appears in the CSV header. }
+        csv_name:
+          {
+            type: string,
+            description: Member name as it appears in the CSV header.,
+          }
         net_cents:
           type: integer
           format: int64
@@ -2214,7 +2424,15 @@ components:
 
     ImportSplitwisePreviewRow:
       type: object
-      required: [description, incurred_at, amount_cents, currency, category_slug, payer_csv_name]
+      required:
+        [
+          description,
+          incurred_at,
+          amount_cents,
+          currency,
+          category_slug,
+          payer_csv_name,
+        ]
       properties:
         description: { type: string }
         incurred_at: { type: string, format: date-time }
@@ -2225,14 +2443,20 @@ components:
 
     ImportSplitwiseSettlementPreview:
       type: object
-      required: [note, settled_at, amount_cents, currency, from_csv_name, to_csv_name]
+      required:
+        [note, settled_at, amount_cents, currency, from_csv_name, to_csv_name]
       properties:
         note: { type: string }
         settled_at: { type: string, format: date-time }
         amount_cents: { type: integer, format: int64 }
         currency: { type: string, minLength: 3, maxLength: 3 }
-        from_csv_name: { type: string, description: Member who paid (CSV column header). }
-        to_csv_name: { type: string, description: Member who received the payment (CSV column header). }
+        from_csv_name:
+          { type: string, description: Member who paid (CSV column header). }
+        to_csv_name:
+          {
+            type: string,
+            description: Member who received the payment (CSV column header).,
+          }
 
     ImportGroupExpensesRequest:
       type: object
@@ -2281,29 +2505,51 @@ components:
 
     ImportGroupExpensesPreviewRow:
       type: object
-      required: [description, incurred_at, amount_cents, currency, category_slug, payer_display_name]
+      required:
+        [
+          description,
+          incurred_at,
+          amount_cents,
+          currency,
+          category_slug,
+          payer_display_name,
+        ]
       properties:
         description: { type: string }
         incurred_at: { type: string, format: date-time }
         amount_cents: { type: integer, format: int64 }
         currency: { type: string, minLength: 3, maxLength: 3 }
         category_slug: { type: string }
-        payer_display_name: { type: string, description: Display name of the resolved member who paid this row. }
+        payer_display_name:
+          {
+            type: string,
+            description: Display name of the resolved member who paid this row.,
+          }
 
     ExpenseRevision:
       type: object
-      required: [id, expense_id, edited_by, edited_at, field, old_value, new_value]
+      required:
+        [id, expense_id, edited_by, edited_at, field, old_value, new_value]
       properties:
-        id:         { type: string, format: uuid }
+        id: { type: string, format: uuid }
         expense_id: { type: string, format: uuid }
-        edited_by:  { type: string, format: uuid }
-        edited_at:  { type: string, format: date-time }
+        edited_by: { type: string, format: uuid }
+        edited_at: { type: string, format: date-time }
         field:
           type: string
-          enum: [description, amount_cents, category_id, payer_id, splits, incurred_at, notes]
+          enum:
+            [
+              description,
+              amount_cents,
+              category_id,
+              payer_id,
+              splits,
+              incurred_at,
+              notes,
+            ]
           description: Which field was changed.
-        old_value:  { type: string, description: "Previous value, stringified." }
-        new_value:  { type: string, description: "New value, stringified." }
+        old_value: { type: string, description: "Previous value, stringified." }
+        new_value: { type: string, description: "New value, stringified." }
 
     Balance:
       type: object
@@ -2311,7 +2557,12 @@ components:
       properties:
         user_id: { type: string, format: uuid }
         display_name: { type: string }
-        net_cents: { type: integer, format: int64, description: "positive = owed to user; negative = user owes" }
+        net_cents:
+          {
+            type: integer,
+            format: int64,
+            description: "positive = owed to user; negative = user owes",
+          }
 
     SimplifiedDebt:
       type: object
@@ -2362,7 +2613,16 @@ components:
 
     Settlement:
       type: object
-      required: [id, group_id, from_user_id, to_user_id, amount_cents, settled_at, created_at]
+      required:
+        [
+          id,
+          group_id,
+          from_user_id,
+          to_user_id,
+          amount_cents,
+          settled_at,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2419,7 +2679,18 @@ components:
 
     ActivityItem:
       type: object
-      required: [id, action, occurred_at, target_id, target_kind, description, amount_cents, currency, recurring]
+      required:
+        [
+          id,
+          action,
+          occurred_at,
+          target_id,
+          target_kind,
+          description,
+          amount_cents,
+          currency,
+          recurring,
+        ]
       properties:
         id:
           type: string
@@ -2453,7 +2724,7 @@ components:
         from_user_id:
           type: string
           format: uuid
-          description: "Settlements only: the member who paid. Lets the client render \"X paid Y\"."
+          description: 'Settlements only: the member who paid. Lets the client render "X paid Y".'
         to_user_id:
           type: string
           format: uuid
@@ -2468,7 +2739,7 @@ components:
           description: "Category group label, used for the icon fallback. Expenses only."
         recurring:
           type: boolean
-          description: "True when the expense was generated from a recurring template; the client prefixes \"New recurring expense:\"."
+          description: 'True when the expense was generated from a recurring template; the client prefixes "New recurring expense:".'
 
     ActivityPage:
       type: object
@@ -2531,13 +2802,33 @@ components:
     CreateRecurringExpenseRequest:
       type: object
       additionalProperties: false
-      required: [description, amount_cents, payer_id, mode, splits, cadence, next_run_at]
+      required:
+        [
+          description,
+          amount_cents,
+          payer_id,
+          mode,
+          splits,
+          cadence,
+          next_run_at,
+        ]
       properties:
         description: { type: string, minLength: 1, maxLength: 200 }
         amount_cents: { type: integer, format: int64, minimum: 1 }
-        currency: { type: string, minLength: 3, maxLength: 3, description: "Defaults to group.default_currency if omitted" }
+        currency:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 3,
+            description: "Defaults to group.default_currency if omitted",
+          }
         payer_id: { type: string, format: uuid }
-        category_id: { type: string, format: uuid, description: "Defaults to the `other` category when omitted." }
+        category_id:
+          {
+            type: string,
+            format: uuid,
+            description: "Defaults to the `other` category when omitted.",
+          }
         mode: { $ref: "#/components/schemas/SplitMode" }
         splits:
           type: array
@@ -2549,7 +2840,20 @@ components:
     RecurringExpense:
       type: object
       required:
-        [id, group_id, description, amount_cents, currency, payer_id, category_id, mode, splits, cadence, next_run_at, created_at]
+        [
+          id,
+          group_id,
+          description,
+          amount_cents,
+          currency,
+          payer_id,
+          category_id,
+          mode,
+          splits,
+          cadence,
+          next_run_at,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         group_id: { type: string, format: uuid }
@@ -2578,7 +2882,8 @@ components:
 
     AdminUser:
       type: object
-      required: [id, email, display_name, role, created_at, has_avatar, week_start]
+      required:
+        [id, email, display_name, role, created_at, has_avatar, week_start]
       properties:
         id: { type: string, format: uuid }
         email:
@@ -2640,7 +2945,16 @@ components:
 
     AdminGroup:
       type: object
-      required: [id, name, default_currency, created_by, created_at, member_count, expense_count]
+      required:
+        [
+          id,
+          name,
+          default_currency,
+          created_by,
+          created_at,
+          member_count,
+          expense_count,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }

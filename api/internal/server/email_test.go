@@ -87,10 +87,9 @@ func TestEmailVerificationFlow(t *testing.T) {
 	vreq, ok := out["verification_required"].(bool)
 	require.True(t, ok, "missing verification_required: %v", out)
 	require.True(t, vreq)
-	require.Nil(t, sessionCookie(resp), "register must not set a session cookie when verification is required")
 
-	// Login is refused with 403 + email_unverified.
-	resp, errBody := request(t, "POST", base+"/v1/auth/login", map[string]any{
+	// Token login is refused with 403 + email_unverified.
+	resp, errBody := request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email":    "alice@test.dev",
 		"password": "passwordpassword",
 	}, nil)
@@ -106,11 +105,9 @@ func TestEmailVerificationFlow(t *testing.T) {
 		"code":  knownCode,
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	c := sessionCookie(resp)
-	require.NotNil(t, c, "verify must set a session cookie on success")
 
-	// Login now succeeds.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	// Token login now succeeds.
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email":    "alice@test.dev",
 		"password": "passwordpassword",
 	}, nil)
@@ -178,17 +175,17 @@ func TestNotificationPrefsRoundTrip(t *testing.T) {
 }
 
 // TestRegisterAutoVerifiesWithoutSMTP confirms the bootstrap-friendly
-// fallback: with no smtp_config row, registration sets a session cookie
-// directly and login works immediately.
+// fallback: with no smtp_config row, registration auto-verifies the account so
+// token login works immediately (no verify step).
 func TestRegisterAutoVerifiesWithoutSMTP(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
-	// First registration goes through the install ceremony (sets a cookie too).
-	_, cookie := registerUser(t, base, "first@test.dev", "passwordpassword", "First")
-	require.NotNil(t, cookie)
+	// First registration goes through the install ceremony.
+	_, cred := registerUser(t, base, "first@test.dev", "passwordpassword", "First")
+	require.NotNil(t, cred)
 
-	// Second registration still has no SMTP configured → 201 with cookie,
-	// verification_required=false, login works without a verify step.
+	// Second registration still has no SMTP configured → 201,
+	// verification_required=false, token login works without a verify step.
 	body := map[string]any{
 		"email":        "second@test.dev",
 		"password":     "passwordpassword",
@@ -199,9 +196,8 @@ func TestRegisterAutoVerifiesWithoutSMTP(t *testing.T) {
 	if v, ok := out["verification_required"].(bool); ok {
 		require.False(t, v)
 	}
-	require.NotNil(t, sessionCookie(resp))
 
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email":    "second@test.dev",
 		"password": "passwordpassword",
 	}, nil)
@@ -234,17 +230,16 @@ func TestPasswordResetHappyPath(t *testing.T) {
 		"new_password": "newpasswordnewpassword",
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NotNil(t, sessionCookie(resp), "confirm must set a session cookie on success")
 
 	// Old password no longer works.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email":    "alice@test.dev",
 		"password": "passwordpassword",
 	}, nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// New password works.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email":    "alice@test.dev",
 		"password": "newpasswordnewpassword",
 	}, nil)
@@ -333,4 +328,3 @@ func TestPasswordResetEnumerationSafe(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, n, "no password_reset token should be created for an unknown email")
 }
-

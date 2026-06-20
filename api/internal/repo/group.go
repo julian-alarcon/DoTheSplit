@@ -20,6 +20,10 @@ type Group struct {
 	// DefaultSplit pins a 2-member percentage split that prefills the create-expense
 	// form. nil = no default. Auto-cleared when the group grows past 2 members.
 	DefaultSplit []DefaultSplitEntry
+	// UnreadCount is the number of activity events newer than the member's
+	// last-read marker, excluding their own actions. Populated by ListForUser /
+	// FindByIDForUser; zero on rows fetched by member-agnostic queries.
+	UnreadCount int
 }
 
 type DefaultSplitEntry struct {
@@ -54,7 +58,9 @@ type GroupRepo struct {
 
 func NewGroupRepo(p *pgxpool.Pool) *GroupRepo { return &GroupRepo{pool: p} }
 
-// Create inserts the group and adds the creator as a member. Done in a transaction.
+// Create inserts the group and adds the creator as a member in its own
+// transaction. Callers that already hold a transaction (e.g. the importer)
+// should use CreateTx instead.
 func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -62,20 +68,29 @@ func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, cr
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
-	err = tx.QueryRow(ctx, `
-		INSERT INTO groups (name, default_currency, created_by) VALUES ($1, $2, $3)
-		RETURNING id, created_at
-	`, name, defaultCurrency, creatorID).Scan(&g.ID, &g.CreatedAt)
+	g, err := r.CreateTx(ctx, tx, name, defaultCurrency, creatorID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
-	`, g.ID, creatorID); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	return g, nil
+}
+
+// CreateTx inserts the group and adds the creator as a member on the supplied
+// querier (a *pgxpool.Pool or pgx.Tx). The caller owns any transaction.
+func (r *GroupRepo) CreateTx(ctx context.Context, q Querier, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
+	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
+	if err := q.QueryRow(ctx, `
+		INSERT INTO groups (name, default_currency, created_by) VALUES ($1, $2, $3)
+		RETURNING id, created_at
+	`, name, defaultCurrency, creatorID).Scan(&g.ID, &g.CreatedAt); err != nil {
+		return nil, err
+	}
+	if _, err := q.Exec(ctx, `
+		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
+	`, g.ID, creatorID); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -99,10 +114,17 @@ func (r *GroupRepo) FindByID(ctx context.Context, id uuid.UUID) (*Group, error) 
 	return &g, nil
 }
 
-// ListForUser returns groups the user belongs to, newest first.
+// ListForUser returns groups the user belongs to, newest first. unread_count is
+// the number of activity events newer than the member's last_read_activity_at
+// marker (all of them when the marker is NULL), excluding the user's own
+// actions, computed in a correlated subquery so the listing stays one query.
 func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split
+		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split,
+		       (SELECT count(*) FROM activity_events ae
+		         WHERE ae.group_id = g.id
+		           AND ae.created_at > COALESCE(m.last_read_activity_at, '-infinity'::timestamptz)
+		           AND ae.actor_id IS DISTINCT FROM m.user_id) AS unread_count
 		FROM groups g
 		JOIN group_members m ON m.group_id = g.id
 		WHERE m.user_id = $1
@@ -116,7 +138,7 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 	for rows.Next() {
 		var g Group
 		var rawSplit []byte
-		if err := rows.Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit, &g.UnreadCount); err != nil {
 			return nil, err
 		}
 		if g.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
@@ -125,6 +147,23 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 		out = append(out, g)
 	}
 	return out, rows.Err()
+}
+
+// MarkActivityRead advances the member's last-read marker to now(), zeroing
+// their unread_count for the group. Returns ErrNotFound if the user isn't a
+// member (no membership row to update).
+func (r *GroupRepo) MarkActivityRead(ctx context.Context, groupID, userID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE group_members SET last_read_activity_at = now()
+		WHERE group_id = $1 AND user_id = $2
+	`, groupID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateInput captures partial-update fields for a group.
@@ -327,6 +366,18 @@ func (r *GroupRepo) RemoveMember(ctx context.Context, groupID, userID uuid.UUID)
 		return ErrNotFound
 	}
 	return nil
+}
+
+// AddMemberTx inserts a membership on the supplied querier (a *pgxpool.Pool or
+// pgx.Tx), idempotently. Unlike AddMember it does not read the row back; the
+// importer ignores the returned member, so this avoids a needless round-trip
+// and keeps the insert in the caller's transaction.
+func (r *GroupRepo) AddMemberTx(ctx context.Context, q Querier, groupID, userID uuid.UUID) error {
+	_, err := q.Exec(ctx, `
+		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, groupID, userID)
+	return err
 }
 
 // AddMember inserts a membership. Returns the new member's row (with display name).

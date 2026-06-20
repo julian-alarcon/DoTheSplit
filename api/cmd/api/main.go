@@ -14,6 +14,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
+	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
@@ -33,14 +34,17 @@ func main() {
 		return
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
+	// Config decides the log level, so parse it before building the real
+	// logger; a throwaway boot logger covers a failed config load.
+	bootLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("load config", slog.String("err", err.Error()))
+		bootLogger.Error("load config", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -52,14 +56,38 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Dedicated single-connection pool for the realtime LISTEN. RunListener
+	// parks one connection forever on WaitForNotification; drawing it from the
+	// shared request pool would permanently shrink that pool by one (the default
+	// max is max(4, NumCPU)), and a single dashboard load already fans out 4
+	// parallel queries - so the parked listener would force request queries to
+	// queue on acquire. Isolating it here keeps the request pool at full size.
+	listenerCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("listener pool config", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	listenerCfg.MaxConns = 1
+	listenerCfg.MinConns = 1
+	listenerPool, err := pgxpool.NewWithConfig(ctx, listenerCfg)
+	if err != nil {
+		logger.Error("listener pool", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	defer listenerPool.Close()
+
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	if err != nil {
 		logger.Error("email cipher", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 
+	// Real-time fan-out: a single LISTEN connection feeds the in-memory hub that
+	// SSE clients subscribe to. Started below, after the server is built.
+	hub := realtime.NewHub()
+
 	users := repo.NewUserRepo(pool)
-	sessions := repo.NewSessionRepo(pool)
+	refreshTokens := repo.NewRefreshTokenRepo(pool)
 	groups := repo.NewGroupRepo(pool)
 	expenses := repo.NewExpenseRepo(pool)
 	settlements := repo.NewSettlementRepo(pool)
@@ -75,11 +103,14 @@ func main() {
 	verificationRepo := repo.NewVerificationRepo(pool)
 	outboxRepo := repo.NewEmailOutboxRepo(pool)
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, logger)
-	auth := service.NewAuthService(pool, users, sessions, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper,
-		time.Duration(cfg.SessionTTLDay)*24*time.Hour)
+	auth := service.NewAuthService(pool, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
+	auth.SetTokenAuth(refreshTokens, cfg.JWTSigningKey,
+		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
+		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 
-	meSvc := service.NewMeService(users, sessions, email, cfg.PasswordPepper)
+	meSvc := service.NewMeService(users, email, cfg.PasswordPepper)
+	meSvc.SetAuth(auth)
 	categorySvc := service.NewCategoryService(categories)
 	groupSvc := service.NewGroupService(groups, users, balances, email)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
@@ -89,10 +120,10 @@ func main() {
 	transactionSvc := service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo)
 	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, auth, email)
+	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, auth, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
-	adminSvc := service.NewAdminService(pool, users, groups, sessions, auditRepo, auth, email, cfg.PasswordPepper)
+	adminSvc := service.NewAdminService(pool, users, groups, auditRepo, auth, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
 	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
 
@@ -120,29 +151,30 @@ func main() {
 
 	srv := &handlers.Server{
 		Cfg: cfg, Pool: pool,
-		Auth:          auth,
-		MeSvc:         meSvc,
-		Groups:        groupSvc,
-		Categories:    categorySvc,
-		Expenses:      expenseSvc,
-		Balances:      balanceSvc,
-		Settlements:   settlementSvc,
-		Recurring:     recurringSvc,
-		Transactions:      transactionSvc,
-		Activity:      activitySvc,
-		SearchSvc:     searchSvc,
+		Auth:             auth,
+		MeSvc:            meSvc,
+		Groups:           groupSvc,
+		Categories:       categorySvc,
+		Expenses:         expenseSvc,
+		Balances:         balanceSvc,
+		Settlements:      settlementSvc,
+		Recurring:        recurringSvc,
+		Transactions:     transactionSvc,
+		Activity:         activitySvc,
+		SearchSvc:        searchSvc,
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,
 		Exporter:         exporterSvc,
-		Admin:         adminSvc,
-		Smtp:          smtpSvc,
-		Setup:         setupSvc,
-		Mailer:        mailerSvc,
-		Notifications: notificationSvc,
-		Users:         users,
-		Audit:         auditRepo,
-		Version:       version,
-		Commit:        commit,
+		Admin:            adminSvc,
+		Smtp:             smtpSvc,
+		Setup:            setupSvc,
+		Mailer:           mailerSvc,
+		Notifications:    notificationSvc,
+		Users:            users,
+		Audit:            auditRepo,
+		Hub:              hub,
+		Version:          version,
+		Commit:           commit,
 	}
 	h := server.New(srv)
 
@@ -154,6 +186,11 @@ func main() {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+
+	// Park a LISTEN connection that fans Postgres activity notifications out to
+	// SSE subscribers. Uses its own single-connection pool (above) so it never
+	// competes with request queries. Exits when ctx is cancelled on shutdown.
+	go realtime.RunListener(ctx, listenerPool, hub, logger)
 
 	go func() {
 		logger.Info("listening", slog.String("addr", cfg.HTTPAddr))

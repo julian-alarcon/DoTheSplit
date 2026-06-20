@@ -47,32 +47,32 @@ func hashCode(code string) []byte {
 	return sum[:]
 }
 
-// VerifyEmail completes a pending registration by matching the 6-digit code,
-// stamping email_verified_at, and issuing the session that Register withheld.
-func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) (*User, string, error) {
+// VerifyEmail completes a pending registration by matching the 6-digit code
+// and stamping email_verified_at. The caller then logs in via /v1/auth/token.
+func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) (*User, error) {
 	emailHash := s.email.HashEmail(email)
 	u, err := s.users.FindByEmailHash(ctx, emailHash)
 	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if u.EmailVerifiedAt != nil {
 		// Already verified - treat the code as expired/used so we don't leak
 		// information about prior tokens.
-		return nil, "", ErrCodeExpired
+		return nil, ErrCodeExpired
 	}
 
 	tok, err := s.verification.FindActive(ctx, u.ID, repo.PurposeRegister)
 	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrCodeExpired
+		return nil, ErrCodeExpired
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if tok.Attempts >= verifyMaxAttempts {
-		return nil, "", ErrVerifyRateLimited
+		return nil, ErrVerifyRateLimited
 	}
 	if !constantTimeEqual(tok.CodeHash, hashCode(strings.TrimSpace(code))) {
 		_ = s.verification.IncrementAttempts(ctx, tok.ID)
@@ -84,20 +84,20 @@ func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) (*Use
 			Success:      false,
 			Metadata:     meta,
 		})
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
 	if err := s.verification.Consume(ctx, tx, tok.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if err := s.users.MarkEmailVerified(ctx, tx, u.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	// Welcome email is best-effort; queue inside the same tx so it commits
 	// atomically with verification.
@@ -111,23 +111,19 @@ func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) (*Use
 		Success:      true,
 	})
 	if err := tx.Commit(ctx); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// Re-fetch so the returned User has email_verified_at populated.
 	u2, err := s.users.FindByID(ctx, u.ID)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	out, err := s.toUser(u2)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	token, err := s.issueSession(ctx, u.ID)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, token, nil
+	return out, nil
 }
 
 // ResendVerification invalidates the previous code (if any) and issues a
@@ -275,45 +271,44 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, userID uuid.UUID, 
 }
 
 // ConfirmEmailChange checks the code and, on success, swaps email_hash +
-// email_encrypted over to the values cached on the token row. All sessions
-// for the user are revoked and a fresh session token is returned so the
-// current browser stays logged in.
-func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, code string) (*User, string, error) {
+// email_encrypted over to the values cached on the token row. All of the user's
+// refresh tokens are revoked so other logged-in clients are signed out.
+func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, code string) (*User, error) {
 	tok, err := s.verification.FindActive(ctx, userID, repo.PurposeChangeEmail)
 	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrCodeExpired
+		return nil, ErrCodeExpired
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if tok.Attempts >= verifyMaxAttempts {
-		return nil, "", ErrVerifyRateLimited
+		return nil, ErrVerifyRateLimited
 	}
 	if !constantTimeEqual(tok.CodeHash, hashCode(strings.TrimSpace(code))) {
 		_ = s.verification.IncrementAttempts(ctx, tok.ID)
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if len(tok.NewEmailHash) == 0 || len(tok.NewEmailEnc) == 0 {
-		return nil, "", ErrCodeExpired
+		return nil, ErrCodeExpired
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
 	if err := s.verification.Consume(ctx, tx, tok.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if err := s.users.UpdateEmail(ctx, tx, userID, tok.NewEmailHash, tok.NewEmailEnc); err != nil {
 		// Translate the partial-unique-index violation into ErrEmailTaken
 		// so the handler maps it to 409 instead of a 500.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, "", ErrEmailTaken
+			return nil, ErrEmailTaken
 		}
-		return nil, "", err
+		return nil, err
 	}
 	_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
 		ActorUserID:  userID,
@@ -322,25 +317,21 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 		Success:      true,
 	})
 	if err := tx.Commit(ctx); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	if err := s.sessions.DeleteAllForUser(ctx, userID); err != nil {
-		return nil, "", err
+	if err := s.RevokeRefreshForUser(ctx, userID); err != nil {
+		return nil, err
 	}
 	u2, err := s.users.FindByID(ctx, userID)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	out, err := s.toUser(u2)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	token, err := s.issueSession(ctx, userID)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, token, nil
+	return out, nil
 }
 
 // EnqueuePasswordResetTx is the shared password-reset email path: invalidate
@@ -442,56 +433,55 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 }
 
 // ConfirmPasswordReset rotates the password if the supplied code matches an
-// active password_reset token, then revokes every session for the user and
-// issues a fresh one for the current browser. The new-password length check
-// matches Register/ChangePassword (>= 10 chars).
-func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, newPassword string) (*User, string, error) {
+// active password_reset token, then revokes every refresh token for the user.
+// The new-password length check matches Register/ChangePassword (>= 10 chars).
+func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, newPassword string) (*User, error) {
 	if len(newPassword) < 10 {
-		return nil, "", errors.New("password must be at least 10 characters")
+		return nil, errors.New("password must be at least 10 characters")
 	}
 	emailHash := s.email.HashEmail(email)
 	u, err := s.users.FindByEmailHash(ctx, emailHash)
 	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if u.DeletedAt != nil {
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 
 	tok, err := s.verification.FindActive(ctx, u.ID, repo.PurposePasswordReset)
 	if errors.Is(err, repo.ErrNotFound) {
-		return nil, "", ErrCodeExpired
+		return nil, ErrCodeExpired
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if tok.Attempts >= verifyMaxAttempts {
-		return nil, "", ErrVerifyRateLimited
+		return nil, ErrVerifyRateLimited
 	}
 	if !constantTimeEqual(tok.CodeHash, hashCode(strings.TrimSpace(code))) {
 		_ = s.verification.IncrementAttempts(ctx, tok.ID)
-		return nil, "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 
 	newHash, err := crypto.HashPassword(newPassword, s.pepper)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
 	if err := s.verification.Consume(ctx, tx, tok.ID); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if err := s.users.UpdatePasswordHash(ctx, u.ID, newHash); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
 		ActorUserID:  u.ID,
@@ -500,27 +490,23 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, new
 		Success:      true,
 	})
 	if err := tx.Commit(ctx); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	// Revoke every existing session - anyone holding an old cookie loses
+	// Revoke every refresh token - anyone holding an old bearer token loses
 	// access immediately.
-	if err := s.sessions.DeleteAllForUser(ctx, u.ID); err != nil {
-		return nil, "", err
+	if err := s.RevokeRefreshForUser(ctx, u.ID); err != nil {
+		return nil, err
 	}
 	u2, err := s.users.FindByID(ctx, u.ID)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	out, err := s.toUser(u2)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	token, err := s.issueSession(ctx, u.ID)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, token, nil
+	return out, nil
 }
 
 // constantTimeEqual is a simple wrapper around subtle.ConstantTimeCompare

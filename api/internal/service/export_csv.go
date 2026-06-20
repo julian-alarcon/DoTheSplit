@@ -32,7 +32,7 @@ func NewGroupCSVExporter(g *GroupService, gr *repo.GroupRepo, e *ExpenseService,
 // ExportResult carries metadata the handler needs to build the response
 // (filename, content type) along with the rendered body.
 type ExportResult struct {
-	GroupName string
+	GroupName   string
 	GeneratedAt time.Time
 }
 
@@ -268,4 +268,3 @@ func neutralizeCSVField(s string) string {
 	}
 	return s
 }
-

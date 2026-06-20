@@ -60,27 +60,28 @@ func TestMeFlows(t *testing.T) {
 	}, cookieA)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	// Right old password → 204, and the returned response sets a fresh cookie.
-	// After changing, we expect the *old* cookie to no longer work - server
-	// destroyed all sessions and issued a replacement via Set-Cookie.
-	resp2, _ := rawRequest(t, "POST", base+"/v1/me/password", map[string]any{
+	// Right old password → 200 with a fresh token pair in the body. The change
+	// revokes every refresh-token chain and mints a new one so the caller stays
+	// logged in; we capture the new access token for the rest of the test.
+	resp, pwOut := request(t, "POST", base+"/v1/me/password", map[string]any{
 		"old_password": "passwordpassword",
 		"new_password": "newpasswordlong",
 	}, cookieA)
-	require.Equal(t, http.StatusNoContent, resp2.StatusCode)
-	newCookie := sessionCookie(resp2)
-	require.NotNil(t, newCookie, "change-password must issue a fresh cookie")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	newAccess, _ := pwOut["access_token"].(string)
+	require.NotEmpty(t, newAccess, "change-password must return a fresh access token")
+	newCookie := bearerCred(newAccess)
 
-	// Old cookie is dead.
-	resp, _ = request(t, "GET", base+"/v1/me", nil, cookieA)
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	// New cookie works.
+	// The fresh access token works.
 	resp, _ = request(t, "GET", base+"/v1/me", nil, newCookie)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Can log in with the new password.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	// The old password no longer issues tokens; the new one does.
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
+		"email": "me-a@test.dev", "password": "passwordpassword",
+	}, nil)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email": "me-a@test.dev", "password": "newpasswordlong",
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -155,38 +156,6 @@ func TestMeFlows(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestSetTimezone(t *testing.T) {
-	ts := setup(t)
-	base := ts.srv.URL
-
-	_, cookie := registerUser(t, base, "tz@test.dev", "passwordpassword", "Tz")
-
-	// Default: timezone is null/absent.
-	_, me := request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Nil(t, me["timezone"], "fresh account must have null timezone")
-
-	// Valid IANA name → 200 and persisted.
-	resp, _ := request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": "Europe/Madrid"}, cookie)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Equal(t, "Europe/Madrid", me["timezone"])
-
-	// Bogus name → 400 and previous value is preserved.
-	resp, _ = request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": "Mars/Phobos"}, cookie)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Equal(t, "Europe/Madrid", me["timezone"])
-
-	// Empty string clears the override (revert to device detection).
-	resp, _ = request(t, "PATCH", base+"/v1/me",
-		map[string]any{"timezone": ""}, cookie)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	_, me = request(t, "GET", base+"/v1/me", nil, cookie)
-	require.Nil(t, me["timezone"])
-}
-
 func TestDeleteMe(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
@@ -218,12 +187,13 @@ func TestDeleteMe(t *testing.T) {
 		map[string]any{"password": "passwordpassword"}, cookieA)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
-	// Session is gone: /me now returns 401.
+	// The account is tombstoned: the bearer token resolves the user, sees
+	// deleted_at, and /me now returns 401.
 	resp, _ = request(t, "GET", base+"/v1/me", nil, cookieA)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
-	// Login with the old credentials no longer works.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	// Token login with the old credentials no longer works.
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email": "delete-me@test.dev", "password": "passwordpassword",
 	}, nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)

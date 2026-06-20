@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/png"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
@@ -39,18 +38,29 @@ var (
 	ErrWrongPassword = errors.New("old password does not match")
 	ErrBadAvatar     = errors.New("avatar must be an 8x8 PNG under 1024 bytes")
 	ErrUserDeleted   = errors.New("account is already deleted")
-	ErrBadTimezone   = errors.New("unknown timezone")
 )
 
 type MeService struct {
-	users    *repo.UserRepo
-	sessions *repo.SessionRepo
-	email    *crypto.EmailCipher
-	pepper   []byte
+	users  *repo.UserRepo
+	auth   *AuthService
+	email  *crypto.EmailCipher
+	pepper []byte
 }
 
-func NewMeService(users *repo.UserRepo, sessions *repo.SessionRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
-	return &MeService{users: users, sessions: sessions, email: email, pepper: pepper}
+func NewMeService(users *repo.UserRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
+	return &MeService{users: users, email: email, pepper: pepper}
+}
+
+// SetAuth threads the AuthService in so password change / account delete can
+// revoke the user's refresh tokens. Optional: when unset (e.g. tests that don't
+// exercise auth) refresh revocation is simply skipped.
+func (s *MeService) SetAuth(auth *AuthService) { s.auth = auth }
+
+func (s *MeService) revokeRefresh(ctx context.Context, userID uuid.UUID) error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RevokeRefreshForUser(ctx, userID)
 }
 
 // Rename updates the display name on an active account.
@@ -74,26 +84,9 @@ func (s *MeService) SetWeekStart(ctx context.Context, userID uuid.UUID, v int16)
 	return s.users.UpdateWeekStart(ctx, userID, v)
 }
 
-// SetTimezone sets (or clears) the user's IANA timezone override. An empty
-// string clears the override; any non-empty value is validated against the
-// system's tzdata via time.LoadLocation before persisting. UTC is also a
-// valid override.
-func (s *MeService) SetTimezone(ctx context.Context, userID uuid.UUID, tz string) error {
-	tz = strings.TrimSpace(tz)
-	if tz == "" {
-		return s.users.UpdateTimezone(ctx, userID, nil)
-	}
-	if len(tz) > 64 {
-		return ErrBadTimezone
-	}
-	if _, err := time.LoadLocation(tz); err != nil {
-		return ErrBadTimezone
-	}
-	return s.users.UpdateTimezone(ctx, userID, &tz)
-}
-
 // ChangePassword rotates the password after verifying the old one and revokes
-// every session the user has (the caller issues a fresh cookie).
+// every refresh token the user has (the caller mints a fresh token pair so the
+// current client stays logged in).
 func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	if len(newPassword) < 10 {
 		return errors.New("new password must be at least 10 characters")
@@ -119,8 +112,8 @@ func (s *MeService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPas
 	if err := s.users.UpdatePasswordHash(ctx, userID, newHash); err != nil {
 		return err
 	}
-	// Nuke all other sessions for this user; caller will issue a fresh one.
-	return s.sessions.DeleteAllForUser(ctx, userID)
+	// Revoke all token chains for this user; the caller mints a fresh pair.
+	return s.revokeRefresh(ctx, userID)
 }
 
 // SetAvatarFromBase64 validates the client-side 8x8 PNG, upscales it to
@@ -198,7 +191,7 @@ func (s *MeService) GetAvatar(ctx context.Context, userID uuid.UUID) ([]byte, er
 // SoftDelete tombstones the account: scrambles email_hash / email_encrypted /
 // password_hash so no one can re-discover the deleted user by re-registering
 // or by dump inspection, renames the user to a stable tombstone derived from
-// the first 8 hex chars of their UUID, and destroys every active session.
+// the first 8 hex chars of their UUID, and revokes every active refresh token.
 //
 // Existing expenses / splits / settlements keep pointing at this row, so the
 // ledger stays intact; UI renders "Deleted user #xxxxxxxx" for these entries.
@@ -223,5 +216,5 @@ func (s *MeService) SoftDelete(ctx context.Context, userID uuid.UUID) error {
 	if err := s.users.SoftDelete(ctx, userID, tombstone, scrambled, scrambled, "!deleted:"+u.ID.String()); err != nil {
 		return err
 	}
-	return s.sessions.DeleteAllForUser(ctx, userID)
+	return s.revokeRefresh(ctx, userID)
 }

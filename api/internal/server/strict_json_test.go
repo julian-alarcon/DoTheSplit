@@ -85,9 +85,9 @@ func TestStrictJSONRejectsUnknownFields(t *testing.T) {
 			extraField: "role", // mass-assignment regression
 		},
 		{
-			name:   "login",
+			name:   "issue_token",
 			method: "POST",
-			path:   "/v1/auth/login",
+			path:   "/v1/auth/token",
 			body: map[string]any{
 				"email": "alice@test.dev", "password": "passwordpassword",
 			},

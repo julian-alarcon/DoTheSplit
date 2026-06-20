@@ -158,7 +158,7 @@ func TestGroupDeleteCascades(t *testing.T) {
 func startPG(ctx context.Context, t *testing.T) (*pgxpool.Pool, testcontainers.Container) {
 	t.Helper()
 	pgc, err := tcpg.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18-alpine",
 		tcpg.WithDatabase("dts"),
 		tcpg.WithUsername("dts"),
 		tcpg.WithPassword("dts"),

@@ -92,7 +92,6 @@ type SplitwiseImporter struct {
 	pool        *pgxpool.Pool
 	users       *repo.UserRepo
 	groupRepo   *repo.GroupRepo
-	groups      *GroupService
 	expenses    *ExpenseService
 	categories  *CategoryService
 	settlements *repo.SettlementRepo
@@ -100,9 +99,9 @@ type SplitwiseImporter struct {
 	email       *crypto.EmailCipher
 }
 
-func NewSplitwiseImporter(pool *pgxpool.Pool, users *repo.UserRepo, groupRepo *repo.GroupRepo, groups *GroupService, expenses *ExpenseService, categories *CategoryService, settlements *repo.SettlementRepo, auth *AuthService, email *crypto.EmailCipher) *SplitwiseImporter {
+func NewSplitwiseImporter(pool *pgxpool.Pool, users *repo.UserRepo, groupRepo *repo.GroupRepo, expenses *ExpenseService, categories *CategoryService, settlements *repo.SettlementRepo, auth *AuthService, email *crypto.EmailCipher) *SplitwiseImporter {
 	return &SplitwiseImporter{
-		pool: pool, users: users, groupRepo: groupRepo, groups: groups,
+		pool: pool, users: users, groupRepo: groupRepo,
 		expenses: expenses, categories: categories, settlements: settlements,
 		auth: auth, email: email,
 	}
@@ -207,13 +206,44 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 		return res, nil
 	}
 
+	// Everything below is the commit phase. It runs in a SINGLE transaction so
+	// the import is all-or-nothing: a failure (including a cancelled request
+	// context when the caller times out) rolls back the whole group instead of
+	// leaving a partially-imported group behind. The membership reads in the
+	// regular ExpenseService/SettlementService.Create paths can't see the rows
+	// we insert in this uncommitted tx, so we deliberately bypass them and call
+	// the tx-aware repo writers directly - the payer and split users are
+	// members by construction (built from memberIDs created in this same tx).
+	otherID, err := s.categories.DefaultID(ctx)
+	if err != nil {
+		return ImportSplitwiseResult{}, err
+	}
+	cats, err := s.categories.List(ctx)
+	if err != nil {
+		return ImportSplitwiseResult{}, err
+	}
+	byLowerLabel := func(lbl string) (string, bool) {
+		for _, c := range cats {
+			if strings.EqualFold(c.Label, lbl) {
+				return c.ID.String(), true
+			}
+		}
+		return "", false
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return ImportSplitwiseResult{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	// Resolve every member email to a user_id, creating non-loginable stubs
 	// for any unknown address. The same return shape is used for "already
 	// existed" and "just created" so the response can't be used to
 	// enumerate the user table.
 	memberIDs := make([]uuid.UUID, len(resolvedMembers))
 	for i, m := range resolvedMembers {
-		uid, err := s.resolveOrStub(ctx, nil, m)
+		uid, err := s.resolveOrStub(ctx, tx, m)
 		if err != nil {
 			return ImportSplitwiseResult{}, err
 		}
@@ -232,7 +262,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 	}
 
 	// Create the group with the actor as creator (auto-added as member).
-	g, _, err := s.groups.Create(ctx, groupName, cur, actorID)
+	g, err := s.groupRepo.CreateTx(ctx, tx, groupName, cur, actorID)
 	if err != nil {
 		return ImportSplitwiseResult{}, err
 	}
@@ -244,29 +274,12 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 		if uid == actorID {
 			continue
 		}
-		if _, err := s.groupRepo.AddMember(ctx, g.ID, uid); err != nil {
+		if err := s.groupRepo.AddMemberTx(ctx, tx, g.ID, uid); err != nil {
 			return ImportSplitwiseResult{}, err
 		}
 	}
 
 	// Loop expenses, mapping categories and translating signs to exact splits.
-	otherID, err := s.categories.DefaultID(ctx)
-	if err != nil {
-		return ImportSplitwiseResult{}, err
-	}
-	cats, err := s.categories.List(ctx)
-	if err != nil {
-		return ImportSplitwiseResult{}, err
-	}
-	byLowerLabel := func(lbl string) (string, bool) {
-		for _, c := range cats {
-			if strings.EqualFold(c.Label, lbl) {
-				return c.ID.String(), true
-			}
-		}
-		return "", false
-	}
-
 	for _, row := range parsed.Rows {
 		// Prefer the second-precision IncurredAt the dothesplit
 		// parser populates; fall back to the date-only Date for
@@ -286,7 +299,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 			// the regular UI but wrong for an import where the actor is just
 			// the operator and any member could be the historical payer.
 			settlement := &repo.Settlement{
-				GroupID: g.ID,
+				GroupID:  g.ID,
 				FromUser: memberIDs[st.FromIdx],
 				ToUser:   memberIDs[st.ToIdx],
 				// Settlements have no currency column - they ride the
@@ -295,7 +308,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 				Note:        st.Note,
 				SettledAt:   when,
 			}
-			if err := s.settlements.Create(ctx, settlement, actorID); err != nil {
+			if err := s.settlements.CreateTx(ctx, tx, settlement, actorID); err != nil {
 				return ImportSplitwiseResult{}, err
 			}
 			continue
@@ -316,6 +329,14 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 		// load-bearing source of truth for the original group state.
 		explicitPayer := csvimport.PayerIdx(parsed.UserNames, row.PayerName)
 		for _, e := range derived {
+			// Data-quality guards that ExpenseService.Create would normally
+			// enforce. We bypass that path (see above), so re-check the bits
+			// resolveSplits doesn't cover and skip the row rather than abort
+			// the whole import - same forgiving behaviour as Decompose's !ok.
+			if e.AmountCents <= 0 || strings.TrimSpace(e.Description) == "" {
+				res.SkippedCount++
+				continue
+			}
 			payerIdx := e.PayerIdx
 			if explicitPayer != -1 && len(derived) == 1 {
 				payerIdx = explicitPayer
@@ -327,28 +348,43 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 				}
 				splits = append(splits, SplitInput{UserID: memberIDs[i], Value: share})
 			}
-			input := CreateExpenseInput{
-				GroupID: g.ID,
-				PayerID: memberIDs[payerIdx],
-				CategoryID:  &catUUID,
-				AmountCents: e.AmountCents,
-				Notes:       row.Notes,
+			shares, err := resolveSplits(SplitExact, e.AmountCents, splits)
+			if err != nil {
+				// A row whose shares don't sum to its amount is bad data, not
+				// an infrastructure failure: skip it, keep the import going.
+				res.SkippedCount++
+				continue
+			}
+			incurred := when
+			if incurred.IsZero() {
+				incurred = defaultOccurredAt()
+			}
+			exp := &repo.Expense{
+				GroupID:    g.ID,
+				PayerID:    memberIDs[payerIdx],
+				CreatedBy:  actorID,
+				CategoryID: catUUID,
 				// Always the group's currency. dothesplit groups are
 				// single-currency; for mixed-currency Splitwise CSVs we
 				// surface a warning in the response (CSVCurrencies) but the
 				// stored values still ride the chosen group currency. The
 				// raw figures travel unchanged so a fully-settled group's
 				// balances still project to zero.
+				AmountCents: e.AmountCents,
 				Currency:    cur,
 				Description: e.Description,
-				IncurredAt:  when,
-				Mode:        SplitExact,
-				Splits:      splits,
+				Notes:       row.Notes,
+				IncurredAt:  incurred,
+				Splits:      shares,
 			}
-			if _, err := s.expenses.Create(ctx, actorID, input); err != nil {
+			if err := s.expenses.CreateWithSplitsTx(ctx, tx, exp); err != nil {
 				return ImportSplitwiseResult{}, err
 			}
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ImportSplitwiseResult{}, err
 	}
 
 	res.GroupID = &g.ID

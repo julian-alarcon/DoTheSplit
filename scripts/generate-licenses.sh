@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates THIRD_PARTY_LICENSES.md and web/src/lib/credits.json from the
+# Regenerates THIRD_PARTY_LICENSES.md and frontend/src/lib/credits.json from the
 # current dependency manifests. Idempotent; safe to run any time.
 #
 # Usage: ./scripts/generate-licenses.sh
@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 OUT_MD="$ROOT/THIRD_PARTY_LICENSES.md"
-OUT_JSON="$ROOT/web/src/lib/credits.json"
+OUT_JSON="$ROOT/frontend/src/lib/credits.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -27,12 +27,12 @@ echo "→ Collecting Go module licenses (api + worker)"
     | sort -u >"$TMP/go.csv"
 )
 
-echo "→ Collecting npm package licenses (web)"
+echo "→ Collecting npm package licenses (frontend)"
 (
-  cd "$ROOT/web"
+  cd "$ROOT/frontend"
   npx --yes license-checker-rseidelsohn@4.4.2 \
     --json --start . \
-    --excludePackages "dothesplit-web@$(jq -r .version package.json)" \
+    --excludePackages "dothesplit-frontend@$(jq -r .version package.json)" \
     >"$TMP/npm.json" 2>"$TMP/npm.err"
 )
 
@@ -102,7 +102,7 @@ FRONTEND_PKGS="$(jq -r '
   ((.dependencies // {}) + (.devDependencies // {}))
   | to_entries[]
   | "\(.key)\t\(.value)"
-' "$ROOT/web/package.json")"
+' "$ROOT/frontend/package.json")"
 
 # Resolve installed version + license from npm.json.
 npm_meta_for() {
@@ -155,13 +155,13 @@ jq -n \
       licensePageUrl: "https://fontawesome.com/license/free",
       modificationStatement: "Icons used unmodified."
     },
-    inter: {
-      creator: "Rasmus Andersson",
-      creatorUrl: "https://rsms.me/inter/",
+    interFont: {
+      creator: "The Inter Project Authors",
+      creatorUrl: "https://github.com/rsms/inter",
       license: "SIL Open Font License 1.1",
-      licenseUrl: "https://openfontlicense.org/",
-      licensePath: "web/src/assets/fonts/inter/OFL.txt",
-      modificationStatement: "Files used unmodified."
+      licenseUrl: "https://scripts.sil.org/OFL",
+      licensePath: "frontend/src/assets/fonts/inter/OFL.txt",
+      modificationStatement: "Font used unmodified (Regular/SemiBold subset)."
     },
     backend: $backend,
     frontend: $frontend
@@ -201,10 +201,10 @@ EOF
 
   echo "## Inter Font (SIL Open Font License 1.1)"
   echo
-  echo "DoTheSplit ships [Inter](https://rsms.me/inter/) by Rasmus Andersson,"
-  echo "self-hosted under the [SIL Open Font License 1.1](https://openfontlicense.org/)."
-  echo "License text: [web/src/assets/fonts/inter/OFL.txt](web/src/assets/fonts/inter/OFL.txt)."
-  echo "Files used unmodified."
+  echo "DoTheSplit self-hosts the [Inter](https://github.com/rsms/inter) typeface by"
+  echo "The Inter Project Authors, distributed under the [SIL Open Font License 1.1](https://scripts.sil.org/OFL)."
+  echo "License text: [frontend/src/assets/fonts/inter/OFL.txt](frontend/src/assets/fonts/inter/OFL.txt)."
+  echo "Font is used unmodified (Regular/SemiBold subset)."
   echo
 
   echo "## Backend (Go modules)"
@@ -218,7 +218,7 @@ EOF
 
   echo "## Frontend (npm packages)"
   echo
-  echo "Generated from \`license-checker-rseidelsohn --json\` against [web/package.json](web/package.json)."
+  echo "Generated from \`license-checker-rseidelsohn --json\` against [frontend/package.json](frontend/package.json)."
   echo
   echo "| Package | License | Source |"
   echo "|---|---|---|"

@@ -6,41 +6,64 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 )
 
-func (s *Server) ListActivity(c *gin.Context) {
-	u := middleware.User(c)
-	groupID, ok := parseUUID(c, "id")
+func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	limit := 0
-	if raw := c.Query("limit"); raw != "" {
+	if raw := r.URL.Query().Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil {
-			writeErr(c, http.StatusBadRequest, "bad_request", "limit must be an integer")
+			writeErr(w, http.StatusBadRequest, "bad_request", "limit must be an integer")
 			return
 		}
 		limit = n
 	}
-	cursor := c.Query("cursor")
-	page, err := s.Activity.List(c.Request.Context(), u.ID, groupID, limit, cursor)
+	cursor := r.URL.Query().Get("cursor")
+	page, err := s.Activity.List(r.Context(), u.ID, groupID, limit, cursor)
 	switch {
 	case errors.Is(err, service.ErrNotMember):
-		writeErr(c, http.StatusForbidden, "forbidden", "not a group member")
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
 		return
 	case errors.Is(err, service.ErrBadCursor):
-		writeErr(c, http.StatusBadRequest, "bad_request", "invalid cursor")
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid cursor")
 		return
 	case err != nil:
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, toAPIActivityPage(page))
+	writeJSON(w, http.StatusOK, toAPIActivityPage(page))
+}
+
+// MarkActivityRead advances the caller's last-read marker for the group,
+// clearing the unread badge. Any group member may call it; idempotent.
+func (s *Server) MarkActivityRead(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r.Context())
+	groupID, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	err := s.Activity.MarkRead(r.Context(), u.ID, groupID)
+	switch {
+	case errors.Is(err, service.ErrNotMember):
+		writeErr(w, http.StatusForbidden, "forbidden", "not a group member")
+		return
+	case errors.Is(err, repo.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "not_found", "group not found")
+		return
+	case err != nil:
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func toAPIActivityPage(p *service.ActivityPage) apigen.ActivityPage {

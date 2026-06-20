@@ -19,7 +19,7 @@ var (
 	ErrCurrencyLocked      = errors.New("default_currency is locked once the group has expenses or settlements")
 	ErrBadDefaultSplit     = errors.New("invalid default_split")
 	ErrCannotRemoveCreator = errors.New("the group creator cannot leave or be removed; transfer ownership or delete the group")
-	ErrBalanceNotZero      = errors.New("settle up first: removing a member with a non-zero balance would silently drop their share of the ledger")
+	ErrBalanceNotZero      = errors.New("member has a non-zero balance")
 	ErrNewOwnerNotMember   = errors.New("new owner must be an existing group member")
 )
 
@@ -249,6 +249,15 @@ func (s *GroupService) RequireMember(ctx context.Context, groupID, userID uuid.U
 // ShareAnyGroup reports whether two users are in at least one group together.
 func (s *GroupService) ShareAnyGroup(ctx context.Context, a, b uuid.UUID) (bool, error) {
 	return s.groups.ShareAnyGroup(ctx, a, b)
+}
+
+// MarkActivityRead advances the caller's last-read marker for the group,
+// zeroing their unread_count. ErrNotMember if the caller isn't a member.
+func (s *GroupService) MarkActivityRead(ctx context.Context, groupID, userID uuid.UUID) error {
+	if err := s.RequireMember(ctx, groupID, userID); err != nil {
+		return err
+	}
+	return s.groups.MarkActivityRead(ctx, groupID, userID)
 }
 
 // AddMember looks up the invitee by email_hash; 404 if unregistered.

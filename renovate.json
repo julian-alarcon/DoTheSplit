@@ -27,14 +27,14 @@
     },
     {
       "matchPackageNames": [
-        "astro",
-        "@astrojs/node",
-        "@astrojs/check",
-        "@tailwindcss/vite",
-        "tailwindcss",
-        "vite"
+        "vue",
+        "vue-router",
+        "vue-tsc",
+        "@vitejs/plugin-vue",
+        "vite",
+        "vitest"
       ],
-      "groupName": "astro + tailwind + vite"
+      "groupName": "vue + vite"
     }
   ],
   "customManagers": [
@@ -58,8 +58,8 @@
     },
     {
       "customType": "regex",
-      "description": "Track Node version declared in web/Dockerfile ARG",
-      "managerFilePatterns": ["/web/Dockerfile$/"],
+      "description": "Track Node version declared in api/Dockerfile ARG",
+      "managerFilePatterns": ["/api/Dockerfile$/"],
       "matchStrings": [
         "ARG NODE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],

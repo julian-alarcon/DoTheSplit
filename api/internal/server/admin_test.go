@@ -140,17 +140,25 @@ func TestAdminCreateUserRequiresSmtp(t *testing.T) {
 }
 
 // TestAdminResetSendsEmail verifies the new admin-reset flow: the target's
-// existing sessions are gone, the old password no longer works, but the
-// admin's reset enqueues a password_reset token + outbox row so the user
-// can pick a new password through /reset.
+// refresh-token chains are revoked, the old password no longer works, and the
+// admin's reset enqueues a password_reset token + outbox row so the user can
+// pick a new password through /reset.
 func TestAdminResetSendsEmail(t *testing.T) {
 	ts := setup(t)
 	base := ts.srv.URL
 
 	_, adminCookie := registerUser(t, base, "admin@test.dev", "passwordpassword", "Admin")
-	target, targetCookie := registerUser(t, base, "tgt@test.dev", "passwordpassword", "Target")
+	target, _ := registerUser(t, base, "tgt@test.dev", "passwordpassword", "Target")
 	targetID := target["id"].(string)
 	configureSMTP(t, ts)
+
+	// Capture the target's refresh cookie so we can prove the reset kills it.
+	tokResp, _ := request(t, "POST", base+"/v1/auth/token", map[string]any{
+		"email": "tgt@test.dev", "password": "passwordpassword",
+	}, nil)
+	require.Equal(t, http.StatusOK, tokResp.StatusCode)
+	targetRefresh := refreshCookie(tokResp)
+	require.NotNil(t, targetRefresh)
 
 	// Admin triggers reset (step-up only).
 	resp, _ := request(t, "POST", base+"/v1/admin/users/"+targetID+"/password", map[string]any{
@@ -158,12 +166,12 @@ func TestAdminResetSendsEmail(t *testing.T) {
 	}, adminCookie)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
-	// Target's old session is dead.
-	resp, _ = request(t, "GET", base+"/v1/me", nil, targetCookie)
+	// Target's refresh-token chain is revoked: refresh now fails.
+	resp, _ = request(t, "POST", base+"/v1/auth/refresh", nil, targetRefresh)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// The old password no longer logs the target in.
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email": "tgt@test.dev", "password": "passwordpassword",
 	}, nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -186,7 +194,7 @@ func TestAdminResetSendsEmail(t *testing.T) {
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email": "tgt@test.dev", "password": "freshfreshfresh",
 	}, nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

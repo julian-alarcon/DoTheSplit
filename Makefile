@@ -1,19 +1,25 @@
-.PHONY: help gen gen-go gen-ts migrate-up migrate-down test test-go test-web dev dev-api dev-web lint lint-go lint-web build tidy up licenses sbom compliance
+.PHONY: help gen gen-go gen-ts-frontend migrate-up migrate-down test test-go test-frontend test-e2e dev dev-api dev-frontend lint lint-go lint-frontend build build-frontend embed-frontend tidy up licenses sbom compliance
+
+# Where the built Vue SPA is copied so the Go binary can //go:embed it.
+WEBUI_DIST := api/internal/webui/dist
 
 SHELL := /bin/bash
 
 DATABASE_URL ?= postgres://dts:dts@localhost:5432/dts?sslmode=disable
 
+# Extra flags for `go test` (e.g. CI passes -coverprofile=coverage.out).
+GOTEST_FLAGS ?=
+
 help:
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-gen: gen-go gen-ts ## Regenerate server + client bindings from docs/openapi.yaml
+gen: gen-go gen-ts-frontend ## Regenerate server + client bindings from docs/openapi.yaml
 
-gen-go: ## Generate Go types + chi server interface
+gen-go: ## Generate Go models + embedded spec from docs/openapi.yaml
 	cd api && go generate ./...
 
-gen-ts: ## Generate TypeScript types for the web client
-	cd web && npx openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts
+gen-ts-frontend: ## Generate TypeScript types for the Vue SPA client
+	cd frontend && npm run gen:api
 
 migrate-up: ## Apply all migrations
 	cd api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate \
@@ -23,43 +29,54 @@ migrate-down: ## Roll back the most recent migration
 	cd api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate \
 		-path ./migrations -database "$(DATABASE_URL)" down 1
 
-test: test-go test-web ## Run all tests
+test: test-go test-frontend ## Run all tests
 
 test-go: ## Run Go unit + integration tests
-	cd api && go test ./... -race
+	cd api && go test ./... -race $(GOTEST_FLAGS)
 
-test-web: ## Run web tests
-	cd web && npm test --silent || true
+test-frontend: ## Run Vue SPA unit tests
+	cd frontend && npm test --silent
+
+test-e2e: ## Run Playwright e2e (needs the stack up + SETUP_TOKEN set)
+	cd frontend && npm run test:e2e
 
 dev-api: ## Run the API locally
 	cd api && go run ./cmd/api
 
-dev-web: ## Run the web frontend locally
-	cd web && npm run dev
+dev-frontend: ## Run the Vue SPA dev server (proxies /v1 to the local API)
+	cd frontend && npm run dev
 
-dev: ## Run api + web concurrently (requires tmux or two terminals)
-	@echo "Run 'make dev-api' and 'make dev-web' in separate terminals."
+dev: ## Run api + frontend concurrently (requires two terminals)
+	@echo "Run 'make dev-api' and 'make dev-frontend' in separate terminals."
 
 tidy: ## go mod tidy
 	cd api && go mod tidy
 
-lint: lint-go lint-web ## Lint everything
+lint: lint-go lint-frontend ## Lint everything
 
 lint-go: ## Lint Go
-	cd api && golangci-lint run ./...
+	cd api && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
 
-lint-web: ## Lint web
-	cd web && npm run lint --silent || true
+lint-frontend: ## Lint the Vue SPA (ESLint)
+	cd frontend && npm run lint
 
-build: ## Build Go binaries
-	cd api && go build -o bin/api ./cmd/api && go build -o bin/worker ./cmd/worker
+build-frontend: ## Build the Vue SPA static bundle (frontend/dist)
+	cd frontend && npm ci && npm run build
 
-up: ## Rebuild + start the full stack, baking git SHA + web/package.json version into images
+embed-frontend: build-frontend ## Copy the built SPA into the Go embed dir
+	mkdir -p $(WEBUI_DIST)
+	find $(WEBUI_DIST) -mindepth 1 ! -name .gitkeep ! -name .gitignore -delete
+	cp -r frontend/dist/. $(WEBUI_DIST)/
+
+build: embed-frontend ## Build Go binaries with the SPA embedded
+	cd api && go build -trimpath -ldflags="-s -w" -o bin/api ./cmd/api && go build -trimpath -ldflags="-s -w" -o bin/worker ./cmd/worker
+
+up: ## Rebuild + start the full stack, baking git SHA + frontend/package.json version into images
 	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) \
-	BUILD_VERSION=$$(node -p "require('./web/package.json').version" 2>/dev/null || echo dev) \
+	BUILD_VERSION=$$(node -p "require('./frontend/package.json').version" 2>/dev/null || echo dev) \
 		docker compose up -d --build
 
-licenses: ## Generate THIRD_PARTY_LICENSES.md and web/src/lib/credits.json
+licenses: ## Generate THIRD_PARTY_LICENSES.md and frontend/src/lib/credits.json
 	./scripts/generate-licenses.sh
 
 sbom: ## Generate CycloneDX SBOMs into ./sbom/

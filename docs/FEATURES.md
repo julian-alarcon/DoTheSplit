@@ -6,8 +6,7 @@ Detailed reference for what currently ships in DoTheSplit. The
 ## Accounts
 
 Register, log in, log out, change display name, change password (old password
-required). Set a personal **timezone** override (otherwise resolved from a
-device-detected `dts_tz` cookie, falls back to UTC). Upload an **8×8 pixel
+required). Dates render in the viewer's device timezone. Upload an **8×8 pixel
 avatar** generated in-browser from any image: pixelated PNG ≤ 1024 bytes,
 re-encoded server-side; falls back to deterministic initials when absent.
 Soft-delete your account with a stable `Deleted user #<short-uuid>` tombstone so
@@ -153,8 +152,8 @@ move ledgers in and out of the app without lock-in.
 
 ## Settings & about
 
-The personal area is at `/settings` (display name, password, timezone,
-avatar, account deletion). The third-party attribution and license summary
+The personal area is at `/settings` (display name, password, week-start
+preference, avatar, account deletion). The third-party attribution and license summary
 lives at `/about`, linked from the header user menu. The header itself
 exposes a collapsible user menu so navigation, theme switcher, and search
 share one row on small screens.
@@ -169,10 +168,11 @@ share one row on small screens.
 - CSP headers with SHA-256 hashes on inline scripts; no inline event handlers
   (e.g. `onchange`): auto-submit forms use a `data-auto-submit` attribute and
   a shared module.
-- HSTS only when `COOKIE_SECURE=true`. Session cookie is `__Host-dts_session`
-  on HTTPS, plain `dts_session` on the HTTP LAN profile.
+- HSTS only when `COOKIE_SECURE=true`, which also adds the `Secure` flag to the
+  `dts_refresh` refresh cookie. Access tokens are stateless JWTs sent as
+  `Authorization: Bearer`, never cookies.
 - Step-up password prompt for destructive admin actions, and password
-  confirmation before self-delete (with all sessions revoked on success).
+  confirmation before self-delete (with all refresh tokens revoked on success).
 
 ## API contract
 

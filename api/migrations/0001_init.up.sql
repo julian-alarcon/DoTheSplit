@@ -15,7 +15,6 @@ CREATE TABLE users (
     avatar                BYTEA,
     avatar_updated_at     TIMESTAMPTZ,
     week_start            SMALLINT NOT NULL DEFAULT 1,
-    timezone              TEXT,
     role                  TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
     email_verified_at     TIMESTAMPTZ,
     notification_prefs    JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -28,15 +27,25 @@ CREATE INDEX idx_users_role_admin_active
     ON users (role)
     WHERE role = 'admin' AND deleted_at IS NULL;
 
-CREATE TABLE sessions (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash BYTEA NOT NULL UNIQUE,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+-- Rotating refresh tokens for bearer-token (SPA / Capacitor) auth. Access
+-- tokens are stateless JWTs verified by signature; only refresh tokens are
+-- persisted so they can be rotated and revoked. We store the SHA-256 hash of
+-- the token, never the plaintext.
+--
+-- replaced_by points at the successor minted when this token was rotated.
+-- A presented token whose revoked_at is set (or that has a replaced_by) is a
+-- reuse attempt: the caller revokes the whole user's chain and rejects.
+CREATE TABLE refresh_tokens (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  BYTEA NOT NULL UNIQUE,
+    issued_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    revoked_at  TIMESTAMPTZ,
+    replaced_by UUID REFERENCES refresh_tokens(id) ON DELETE SET NULL
 );
-CREATE INDEX idx_sessions_user_id    ON sessions(user_id);
-CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_refresh_tokens_user_id    ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 CREATE TABLE groups (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,9 +57,13 @@ CREATE TABLE groups (
 );
 
 CREATE TABLE group_members (
-    group_id  UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-    user_id   UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
-    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    group_id              UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    user_id               UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    joined_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- High-water mark for the unread-activity badge: the newest activity_events
+    -- timestamp this member has seen. NULL = never opened the log (all activity
+    -- counts as unread). Set to now() when the member opens the activity log.
+    last_read_activity_at TIMESTAMPTZ,
     PRIMARY KEY (group_id, user_id)
 );
 CREATE INDEX idx_group_members_user_id ON group_members(user_id);
@@ -301,8 +314,8 @@ CREATE TABLE activity_events (
     group_id      UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     actor_id      UUID REFERENCES users(id),
     action        TEXT NOT NULL CHECK (action IN (
-                      'expense.created','expense.updated','expense.deleted',
-                      'settlement.created','settlement.updated','settlement.deleted')),
+                      'expense.created','expense.updated','expense.deleted','expense.restored',
+                      'settlement.created','settlement.updated','settlement.deleted','settlement.restored')),
     expense_id    UUID REFERENCES expenses(id),
     settlement_id UUID REFERENCES settlements(id),
     metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -310,3 +323,28 @@ CREATE TABLE activity_events (
 );
 CREATE INDEX idx_activity_events_group_keyset
     ON activity_events (group_id, created_at DESC, id DESC);
+
+-- Real-time fan-out: every insert into the append-only feed (from the API
+-- request path, the importers, OR the recurring worker) emits a NOTIFY on the
+-- 'activity_events' channel. The API holds one LISTEN connection and pushes a
+-- minimal signal (IDs only, well under the 8 KB payload limit) to subscribed
+-- SSE clients, which then re-fetch. pg_notify is released only on COMMIT, so
+-- subscribers never see a rolled-back row.
+CREATE OR REPLACE FUNCTION notify_activity_event() RETURNS trigger AS $$
+BEGIN
+    PERFORM pg_notify('activity_events', json_build_object(
+        'id',            NEW.id,
+        'group_id',      NEW.group_id,
+        'actor_id',      NEW.actor_id,
+        'action',        NEW.action,
+        'expense_id',    NEW.expense_id,
+        'settlement_id', NEW.settlement_id,
+        'created_at',    NEW.created_at
+    )::text);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER activity_event_notify
+    AFTER INSERT ON activity_events
+    FOR EACH ROW EXECUTE FUNCTION notify_activity_event();

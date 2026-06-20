@@ -33,13 +33,24 @@ const (
 	settlementColsWithDeleted = settlementCols + `, deleted_at`
 )
 
+// Create inserts a settlement and its activity event in its own transaction.
+// Callers that already hold a transaction (e.g. the importer) should use
+// CreateTx instead.
 func (r *SettlementRepo) Create(ctx context.Context, s *Settlement, actorID uuid.UUID) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := r.CreateTx(ctx, tx, s, actorID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
+// CreateTx inserts a settlement and its activity event on the supplied
+// transaction. The caller owns the tx lifecycle.
+func (r *SettlementRepo) CreateTx(ctx context.Context, tx pgx.Tx, s *Settlement, actorID uuid.UUID) error {
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO settlements (group_id, from_user, to_user, amount_cents, note, settled_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -51,7 +62,7 @@ func (r *SettlementRepo) Create(ctx context.Context, s *Settlement, actorID uuid
 	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, ActionSettlementCreated); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // insertSettlementEvent writes a settlement activity event inside an existing

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
+	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
@@ -84,12 +86,22 @@ type testStack struct {
 // registration without changing the helper's signature (used by ~34 sites).
 var setupTokens sync.Map
 
-func setup(t *testing.T) *testStack {
+// setupOpt mutates the test config before the server is built.
+type setupOpt func(*config.Config)
+
+// withAuthRateLimit pins the auth limiter to the given per-minute value (the
+// harness default is generous; the hardening test uses this to assert the
+// production limit trips).
+func withAuthRateLimit(perMin int) setupOpt {
+	return func(c *config.Config) { c.AuthRateLimitPerMin = perMin }
+}
+
+func setup(t *testing.T, opts ...setupOpt) *testStack {
 	t.Helper()
 	ctx := context.Background()
 
 	pgc, err := tcpg.Run(ctx,
-		"postgres:16-alpine",
+		"postgres:18-alpine",
 		tcpg.WithDatabase("dts"),
 		tcpg.WithUsername("dts"),
 		tcpg.WithPassword("dts"),
@@ -120,11 +132,20 @@ func setup(t *testing.T) *testStack {
 		key[i] = byte(i + 1)
 	}
 	cfg := &config.Config{
-		DatabaseURL:    dsn,
-		SessionTTLDay:  30,
-		EmailEncKey:    key,
-		EmailHMACKey:   key,
-		PasswordPepper: key,
+		DatabaseURL:        dsn,
+		AccessTokenTTLMin:  15,
+		RefreshTokenTTLDay: 30,
+		// Generous so the suite (each registerUser now does register + token
+		// login, two auth-limited calls) doesn't trip the limiter. The
+		// hardening test pins the production value explicitly.
+		AuthRateLimitPerMin: 1000,
+		EmailEncKey:         key,
+		EmailHMACKey:        key,
+		PasswordPepper:      key,
+		JWTSigningKey:       key,
+	}
+	for _, opt := range opts {
+		opt(cfg)
 	}
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	require.NoError(t, err)
@@ -144,11 +165,12 @@ func setup(t *testing.T) *testStack {
 	verificationRepo := repo.NewVerificationRepo(pool)
 	outboxRepo := repo.NewEmailOutboxRepo(pool)
 
-	sessionRepo := repo.NewSessionRepo(pool)
-	ttl := time.Duration(cfg.SessionTTLDay) * 24 * time.Hour
 	groupSvc := service.NewGroupService(groups, users, balances, email)
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, nil)
-	authSvc := service.NewAuthService(pool, users, sessionRepo, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper, ttl)
+	authSvc := service.NewAuthService(pool, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
+	authSvc.SetTokenAuth(repo.NewRefreshTokenRepo(pool), cfg.JWTSigningKey,
+		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
+		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
 	setupSvc := service.NewSetupService(pool, setupRepo, authSvc, auditRepo)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 	// Mirror the production startup hook so the test instance starts in
@@ -164,39 +186,48 @@ func setup(t *testing.T) *testStack {
 	settlementSvc.SetNotifications(users, notificationSvc)
 	recurringSvc.SetNotifications(users, notificationSvc)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, groupSvc, expenseSvc, categorySvc, settlements, authSvc, email)
+	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
+
+	// Real-time hub + LISTEN goroutine, mirroring cmd/api/main.go so the SSE
+	// stream endpoint works in integration tests. Cancelled on cleanup.
+	hub := realtime.NewHub()
+	listenerCtx, cancelListener := context.WithCancel(context.Background())
+	go realtime.RunListener(listenerCtx, pool, hub, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
 	h := server.New(&handlers.Server{
-		Cfg:           cfg,
-		Pool:          pool,
-		Auth:          authSvc,
-		MeSvc:         service.NewMeService(users, sessionRepo, email, cfg.PasswordPepper),
-		Groups:        groupSvc,
-		Categories:    categorySvc,
-		Expenses:      expenseSvc,
-		Balances:      service.NewBalanceService(balances, groups),
-		Settlements:   settlementSvc,
-		Recurring:     recurringSvc,
-		Transactions:      service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
-		Activity:      service.NewActivityService(groupSvc, repo.NewActivityRepo(pool)),
-		SearchSvc:     service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
+		Cfg:              cfg,
+		Pool:             pool,
+		Auth:             authSvc,
+		MeSvc:            newMeSvcWithAuth(users, email, cfg.PasswordPepper, authSvc),
+		Groups:           groupSvc,
+		Categories:       categorySvc,
+		Expenses:         expenseSvc,
+		Balances:         service.NewBalanceService(balances, groups),
+		Settlements:      settlementSvc,
+		Recurring:        recurringSvc,
+		Transactions:     service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
+		Activity:         service.NewActivityService(groupSvc, repo.NewActivityRepo(pool)),
+		SearchSvc:        service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,
 		Exporter:         exporterSvc,
-		Admin:         service.NewAdminService(pool, users, groups, sessionRepo, auditRepo, authSvc, email, cfg.PasswordPepper),
-		Smtp:          service.NewSmtpService(smtpRepo, email),
-		Setup:         setupSvc,
-		Mailer:        mailerSvc,
-		Notifications: notificationSvc,
-		Users:         users,
-		Audit:         auditRepo,
+		Admin:            service.NewAdminService(pool, users, groups, auditRepo, authSvc, email, cfg.PasswordPepper),
+		Smtp:             service.NewSmtpService(smtpRepo, email),
+		Setup:            setupSvc,
+		Mailer:           mailerSvc,
+		Notifications:    notificationSvc,
+		Users:            users,
+		Audit:            auditRepo,
+		Hub:              hub,
 	})
 	srv := httptest.NewServer(h)
 	setupTokens.Store(srv.URL, setupTok)
 
 	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok, recurringSvc: recurringSvc}
 	t.Cleanup(func() {
+		cancelListener()
 		srv.Close()
 		pool.Close()
 		_ = pgc.Terminate(context.Background())
@@ -204,8 +235,37 @@ func setup(t *testing.T) *testStack {
 	return ts
 }
 
+func newMeSvcWithAuth(users *repo.UserRepo, email *crypto.EmailCipher, pepper []byte, auth *service.AuthService) *service.MeService {
+	m := service.NewMeService(users, email, pepper)
+	m.SetAuth(auth)
+	return m
+}
+
+// applyAuth attaches the test credential to a request. The cross-test helpers
+// thread a *http.Cookie as the credential carrier: the real dts_refresh cookie
+// (used by the refresh/revoke flow tests) is sent as a cookie, while any other
+// non-nil value carries a bearer access token in its Value and is sent as an
+// Authorization header. This lets the whole suite stay on the bearer flow while
+// keeping the existing cookieA/cookieB call-site shape.
+func applyAuth(req *http.Request, cred *http.Cookie) {
+	if cred == nil {
+		return
+	}
+	if cred.Name == refreshCookieNameTest {
+		req.AddCookie(cred)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+cred.Value)
+}
+
+// bearerCred wraps an access token in the *http.Cookie carrier the test helpers
+// thread around. Name is a sentinel so applyAuth sends it as a header.
+func bearerCred(accessToken string) *http.Cookie {
+	return &http.Cookie{Name: "bearer", Value: accessToken}
+}
+
 // request is a tiny helper used throughout the test.
-func request(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, map[string]any) {
+func request(t *testing.T, method, url string, body any, cred *http.Cookie) (*http.Response, map[string]any) {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -214,9 +274,7 @@ func request(t *testing.T, method, url string, body any, cookie *http.Cookie) (*
 	req, err := http.NewRequest(method, url, &buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	if cookie != nil {
-		req.AddCookie(cookie)
-	}
+	applyAuth(req, cred)
 	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var out map[string]any
@@ -230,7 +288,7 @@ func request(t *testing.T, method, url string, body any, cookie *http.Cookie) (*
 // rawRequest issues the same kind of authenticated call as request(), but
 // returns the live response so callers can read headers / non-JSON bodies.
 // Useful for the avatar download (image/png) and Set-Cookie inspection.
-func rawRequest(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, []byte) {
+func rawRequest(t *testing.T, method, url string, body any, cred *http.Cookie) (*http.Response, []byte) {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -239,9 +297,7 @@ func rawRequest(t *testing.T, method, url string, body any, cookie *http.Cookie)
 	req, err := http.NewRequest(method, url, &buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	if cookie != nil {
-		req.AddCookie(cookie)
-	}
+	applyAuth(req, cred)
 	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var data []byte
@@ -253,7 +309,7 @@ func rawRequest(t *testing.T, method, url string, body any, cookie *http.Cookie)
 }
 
 // requestList is like request but decodes the body as a JSON array.
-func requestList(t *testing.T, method, url string, body any, cookie *http.Cookie) (*http.Response, []map[string]any) {
+func requestList(t *testing.T, method, url string, body any, cred *http.Cookie) (*http.Response, []map[string]any) {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -262,9 +318,7 @@ func requestList(t *testing.T, method, url string, body any, cookie *http.Cookie
 	req, err := http.NewRequest(method, url, &buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	if cookie != nil {
-		req.AddCookie(cookie)
-	}
+	applyAuth(req, cred)
 	resp, err := testHTTPClient.Do(req)
 	require.NoError(t, err)
 	var out []map[string]any
@@ -275,13 +329,21 @@ func requestList(t *testing.T, method, url string, body any, cookie *http.Cookie
 	return resp, out
 }
 
-func sessionCookie(resp *http.Response) *http.Cookie {
-	for _, c := range resp.Cookies() {
-		if (c.Name == "__Host-dts_session" || c.Name == "dts_session") && c.Value != "" {
-			return c
-		}
-	}
-	return nil
+// refreshCookieNameTest is the httpOnly refresh cookie the bearer flow sets.
+// Kept in sync with handlers.refreshCookieName.
+const refreshCookieNameTest = "dts_refresh"
+
+// tokenLogin exchanges credentials for a bearer access token via /v1/auth/token
+// and returns the credential carrier the test helpers thread around.
+func tokenLogin(t *testing.T, base, email, pw string) *http.Cookie {
+	t.Helper()
+	resp, out := request(t, "POST", base+"/v1/auth/token", map[string]any{
+		"email": email, "password": pw,
+	}, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode, out)
+	access, _ := out["access_token"].(string)
+	require.NotEmpty(t, access, "token login returned no access_token")
+	return bearerCred(access)
 }
 
 func registerUser(t *testing.T, base, email, pw, name string) (map[string]any, *http.Cookie) {
@@ -301,20 +363,15 @@ func registerUser(t *testing.T, base, email, pw, name string) (map[string]any, *
 		resp, out = request(t, "POST", base+"/v1/setup/admin", body, nil)
 		// Setup endpoint returns the bare User, not a RegisterResponse.
 		require.Equal(t, http.StatusCreated, resp.StatusCode, out)
-		c := sessionCookie(resp)
-		require.NotNil(t, c)
-		return out, c
+		return out, tokenLogin(t, base, email, pw)
 	}
 	require.Equal(t, http.StatusCreated, resp.StatusCode, out)
 	// /v1/auth/register returns RegisterResponse{user, verification_required}.
-	// SMTP is unconfigured in tests so verification_required is always false
-	// and a session cookie is set; unwrap the inner user here so callers can
-	// keep treating the result as a flat User.
+	// SMTP is unconfigured in tests so verification_required is always false;
+	// unwrap the inner user, then log in via the token flow for a bearer cred.
 	user, _ := out["user"].(map[string]any)
 	require.NotNil(t, user, "register response missing user field")
-	c := sessionCookie(resp)
-	require.NotNil(t, c)
-	return user, c
+	return user, tokenLogin(t, base, email, pw)
 }
 
 // TestGoldenPath exercises the full MVP flow end-to-end against a real Postgres:
@@ -363,7 +420,7 @@ func TestGoldenPath(t *testing.T) {
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 
 	// Bad password → 401
-	resp, _ = request(t, "POST", base+"/v1/auth/login", map[string]any{
+	resp, _ = request(t, "POST", base+"/v1/auth/token", map[string]any{
 		"email": "a@test.dev", "password": "wrongwrongwrong",
 	}, nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -853,10 +910,10 @@ func TestGoldenPath(t *testing.T) {
 	resp, _ = request(t, "DELETE", base+"/v1/groups/"+rgID+"/members/"+userB["id"].(string), nil, cookieA)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
-	// Logout, then cookie is unauthenticated
-	resp, _ = request(t, "POST", base+"/v1/auth/logout", nil, cookieA)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
-	resp, _ = request(t, "GET", base+"/v1/me", nil, cookieA)
+	// Logout is client-side for stateless bearer tokens: dropping the token
+	// (no credential) leaves /me unauthenticated. (Refresh-token revocation is
+	// covered in token_auth_test.go.)
+	resp, _ = request(t, "GET", base+"/v1/me", nil, nil)
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// /healthz always open

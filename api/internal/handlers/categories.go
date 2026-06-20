@@ -3,15 +3,14 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 )
 
 // ListCategories returns the seeded category set (authenticated users only).
-func (s *Server) ListCategories(c *gin.Context) {
-	list, err := s.Categories.List(c.Request.Context())
+func (s *Server) ListCategories(w http.ResponseWriter, r *http.Request) {
+	list, err := s.Categories.List(r.Context())
 	if err != nil {
-		writeErr(c, http.StatusInternalServerError, "internal", err.Error())
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
 	out := make([]apigen.Category, 0, len(list))
@@ -23,5 +22,5 @@ func (s *Server) ListCategories(c *gin.Context) {
 			GroupLabel: cat.GroupLabel,
 		})
 	}
-	c.JSON(http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }

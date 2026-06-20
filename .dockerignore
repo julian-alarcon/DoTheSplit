@@ -1,7 +1,5 @@
 **/node_modules
 **/dist
-**/.astro
-**/.next
 **/bin
 **/coverage.out
 **/*.test
@@ -12,11 +10,9 @@
 .env.*
 !.env.example
 
-# The web build only needs `web/` and `docs/openapi.yaml`. Excluding the rest
-# keeps the build context small (faster `docker build`, smaller daemon RAM
-# spike) and prevents secrets/source from sneaking into image layers.
-api/
-worker/
+# The api image builds from the repo root: it needs api/ + frontend/ + docs/ (it
+# embeds the Vue SPA built from frontend/ and typed against docs/openapi.yaml). So
+# we can't exclude api/ or frontend/ here. Exclude only things the build never needs.
 dummydata/
 sbom/
 scripts/

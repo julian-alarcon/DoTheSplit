@@ -18,10 +18,10 @@ func TestImportSplitwise_DryRunAndCommit(t *testing.T) {
 	_, cookieA := registerUser(t, base, "alice@example.com", "passwordpassword", "Alice")
 
 	csv := splitwiseHeader +
-		"2024-01-01,Coffee,Dining out,4.00,EUR,-2.00,2.00\n" +     // Bob paid (Bob creditor: positive)
-		"2024-01-02,Hotel,Hotel,200.00,EUR,100.00,-100.00\n" +     // Alice paid
-		"2024-01-03,Cat litter,Pets,10.00,EUR,-5.00,5.00\n" +      // Bob paid
-		"2024-01-04,Bad row,General,10.00,EUR,5.00,5.00\n" +       // same sign — skipped downstream
+		"2024-01-01,Coffee,Dining out,4.00,EUR,-2.00,2.00\n" + // Bob paid (Bob creditor: positive)
+		"2024-01-02,Hotel,Hotel,200.00,EUR,100.00,-100.00\n" + // Alice paid
+		"2024-01-03,Cat litter,Pets,10.00,EUR,-5.00,5.00\n" + // Bob paid
+		"2024-01-04,Bad row,General,10.00,EUR,5.00,5.00\n" + // same sign — skipped downstream
 		",Total balance, , ,EUR,93.00,-93.00\n"
 
 	body := map[string]any{
@@ -74,8 +74,8 @@ func TestImportSplitwise_ThreeMembers(t *testing.T) {
 	// 3. Multi-creditor (Bob and Carol both paid): 2 expenses with [k/K] suffix.
 	csv := "Date,Description,Category,Cost,Currency,Alice,Bob,Carol\n" +
 		"2024-01-01,Brunch,Dining out,90.00,EUR,67.50,-45.00,-22.50\n" + // alice paid 90 (creditor: positive)
-		"2024-01-02,Otro,General,3.00,EUR,-3.00,1.50,1.50\n" +           // bob+carol paid (multi-creditor)
-		"2024-01-03,FinalP,Childcare,90.00,EUR,22.50,45.00,-67.50\n"     // alice+bob paid (multi-creditor)
+		"2024-01-02,Otro,General,3.00,EUR,-3.00,1.50,1.50\n" + // bob+carol paid (multi-creditor)
+		"2024-01-03,FinalP,Childcare,90.00,EUR,22.50,45.00,-67.50\n" // alice+bob paid (multi-creditor)
 
 	body := map[string]any{
 		"csv":              csv,
@@ -191,7 +191,7 @@ func TestImportSplitwise_Settlements(t *testing.T) {
 	// closes part of the resulting debt. The Payment row must produce a
 	// settlement, not an expense.
 	csv := splitwiseHeader +
-		"2024-01-01,Coffee,Dining out,4.00,EUR,-2.00,2.00\n" +    // Bob paid; Alice owes 2
+		"2024-01-01,Coffee,Dining out,4.00,EUR,-2.00,2.00\n" + // Bob paid; Alice owes 2
 		"2024-01-02,Alice paid Bob,Payment,2.00,EUR,2.00,-2.00\n" // Alice settles 2 with Bob
 	body := map[string]any{
 		"csv":              csv,

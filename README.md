@@ -23,6 +23,7 @@ cp .env.example .env
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
   echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
   echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
+  echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
   echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)"
 } >> .env
 
@@ -31,12 +32,12 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Open http://localhost:3000.
+Open http://localhost:8080.
 
 ## Layout
 
-- `/api`: Go 1.26 backend (Gin, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses
-- `/web`: Astro 6 + Tailwind v4 frontend, server-rendered via `@astrojs/node`
+- `/api`: Go 1.26 backend (standard-library `net/http`, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses. The api binary also serves the embedded SPA.
+- `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
@@ -58,22 +59,21 @@ first-run setup token from the API logs.
 Tagged releases publish multi-arch (`linux/amd64`, `linux/arm64`) OCI images to
 the GitHub Container Registry:
 
-| Image                                   | Tags                                    |
-| --------------------------------------- | --------------------------------------- |
-| `ghcr.io/julian-alarcon/dothesplit-api` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
-| `ghcr.io/julian-alarcon/dothesplit-web` | `vX.Y.Z`, `vX.Y`, `vX`, `latest`, `dev` |
+| Image                               | Tags                                 |
+| ----------------------------------- | ------------------------------------ |
+| `ghcr.io/julian-alarcon/dothesplit` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
 
-`:dev` always points at the latest commit on `main`. The api image hosts both
-the `/api` and `/worker` entrypoints; in compose, override `entrypoint:
-["/worker"]` to run the worker. Pull a pinned release for production:
+`:dev` always points at the latest commit on `main`. The api image embeds the
+SPA and hosts both the `/api` and `/worker` entrypoints; in compose, override
+`entrypoint: ["/worker"]` to run the worker. Pull a pinned release for
+production:
 
 ```bash
-docker pull ghcr.io/julian-alarcon/dothesplit-api:v0.3.0
-docker pull ghcr.io/julian-alarcon/dothesplit-web:v0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit:0.3.0
 ```
 
-The running version is reported by `GET /healthz` (api) and the page footer
-(web), so you can confirm what's deployed at a glance.
+The running version is reported by `GET /healthz` (api) and the page footer,
+so you can confirm what's deployed at a glance.
 
 ## Secrets you must back up
 
@@ -84,8 +84,9 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 | `EMAIL_ENC_KEY`   | AES-GCM key that encrypts every email at rest | Existing emails are unrecoverable               | Attacker can decrypt every email                   |
 | `EMAIL_HMAC_KEY`  | HMAC key for email lookup hashes              | Login by email stops working for existing users | Attacker can enumerate which emails are registered |
 | `PASSWORD_PEPPER` | Server-side pepper added before Argon2id      | Existing passwords are unrecoverable            | Attacker can crack stolen password hashes offline  |
+| `JWT_SIGNING_KEY` | HS256 key signing SPA / native access tokens  | All token clients are logged out (recoverable)  | Attacker can mint valid access tokens for any user |
 
-`POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database.
+`POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database. `JWT_SIGNING_KEY` is the least catastrophic to lose: rotating it only forces every token client to log in again.
 
 **What this means for you:**
 
@@ -99,7 +100,8 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 ```bash
 make gen            # regenerate Go + TS API bindings from openapi.yaml
 make migrate-up     # apply DB migrations
-make dev            # run api + web against a local postgres
+make dev            # run api + frontend against a local postgres
+make lint           # golangci-lint (Go) + eslint (SPA)
 make test           # unit + integration tests
 ```
 
@@ -107,7 +109,7 @@ make test           # unit + integration tests
 
 See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short:
 
-- **Accounts**: register / login, display name + password change, personal timezone, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
+- **Accounts**: register / login, display name + password change, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
@@ -127,13 +129,13 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 - Extend search filters with date range and member.
 - Add **Filter** to expenses transaction list by category, member, date range.
-- **Native mobile** via the PWA path (the Astro side is already SSR-first and mobile-first styled). (Mind the strict CSP: self-host the service worker at `/sw.js` and register it via an imported module so Astro hashes it, rather than an inline `<script>` block that would need a hand-maintained hash in `astro.config.mjs`; add `manifest-src`/`worker-src` only if a `default-src` is ever introduced.)
+- **Native mobile** via the PWA path (the Vue SPA is client-rendered and mobile-first styled). The service worker is served same-origin by the Go binary so it's covered by `script-src 'self'`; add `manifest-src`/`worker-src` to the CSP only if a `default-src` is ever introduced. Capacitor wraps the same bundle for app-store builds.
 
 ### Medium term
 
 - **Backup**
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
-- **Optimistic UI + refresh-on-focus** via `@tanstack/react-query` (the perf budget is ≤100ms perceived: we're close on SSR but mutations still block).
+- **Optimistic UI + refresh-on-focus** (the perf budget is ≤100ms perceived: reads are close but mutations still block). The hand-rolled composables would gain a caching/invalidation layer if this becomes painful.
 - **Import** from Tricount
 
 ### Longer term / ideas
@@ -149,9 +151,11 @@ Explicitly not planned: file hosting of full-resolution avatars (the 8×8 format
 ## Deployment note: HTTPS deviation
 
 [BLUEPRINT.md](BLUEPRINT.md) states **"HTTPS only"**. The v1 LAN profile ships
-**HTTP-only** for TrueNAS LAN use: session cookies use `Secure=false`. For
+**HTTP-only** for TrueNAS LAN use: the `dts_refresh` cookie uses `Secure=false`. For
 internet-exposed deployments, terminate TLS at an upstream reverse proxy (Caddy,
-Traefik, Cloudflare Tunnel) and flip `COOKIE_SECURE=true`.
+Traefik, Cloudflare Tunnel), flip `COOKIE_SECURE=true`, and set `TRUSTED_PROXIES`
+to the proxy's IP/CIDR so rate limiting and audit logs see the real client IP.
+See [INSTALL.md](INSTALL.md#https--internet-exposure) for the full checklist.
 
 ## License & compliance
 
@@ -162,7 +166,7 @@ Third-party attribution lives in two places:
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md): generated list of every direct and transitive Go module and npm package with SPDX license + source link. Includes the Font Awesome CC BY 4.0 attribution.
 - `/about` route in the running app: human-readable summary linked from the user menu in the header.
 
-CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/web.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
+CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/frontend.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
 
 Regenerate locally:
 

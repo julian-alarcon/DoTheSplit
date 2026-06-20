@@ -76,7 +76,7 @@ func TestSearchEndpoint(t *testing.T) {
 	}
 
 	// GroupAlpha: 2 hits for "pizza" (one via description, one via notes).
-	pizzaDesc := mkExpense(groupA, "A", userA["id"].(string), "Pizza night",  "", 1000, 1)
+	pizzaDesc := mkExpense(groupA, "A", userA["id"].(string), "Pizza night", "", 1000, 1)
 	pizzaNote := mkExpense(groupA, "A", userA["id"].(string), "Friday dinner", "Pizza for everyone", 2000, 2)
 	// A non-matching expense to make sure we filter on the substring.
 	_ = mkExpense(groupA, "A", userA["id"].(string), "Train tickets", "", 500, 3)

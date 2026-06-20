@@ -1,0 +1,1087 @@
+/* Global stylesheet for the Vue SPA. Tailwind v4 supplies its color palette
+   (neutral, red, emerald, amber, ...) and utility classes; the bespoke
+   semantic tokens (--primary, --background, the --cat- tints) and the field
+   and button component classes are authored here as plain CSS on top.
+
+   Full Tailwind import. Preflight lands in @layer base; our hand-written reset
+   is in @layer reset, ordered AFTER base below so it wins any overlap. Using
+   the full import (not a split theme plus utilities import) because the split
+   drops @theme palette vars under the Vite plugin, leaving utilities like
+   text-emerald-700 pointing at an undefined --color-emerald-700.
+
+   Layered so component-scoped SFC styles (which Vue injects unlayered, i.e.
+   at the highest precedence) can always override these shared base rules. The
+   utilities layer sits last so a Tailwind utility wins over a component class. */
+@layer theme, base, reset, tokens, components, utilities;
+@import "tailwindcss";
+
+/* dark: variant fires for both dark themes, matching the original Astro file. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="high-contrast"], [data-theme="high-contrast"] *));
+
+/* Map the bespoke semantic tokens into the Tailwind --color-* namespace so
+   utilities like bg-card / text-foreground / border-border resolve to the
+   active theme. The token values live in @layer tokens below; these are thin
+   aliases (the source vars have different names, so no circular reference). */
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* Interaction-surface tokens, registered so they resolve as first-class
+     utilities (bg-hover-surface, text-subtle-foreground, bg-backdrop,
+     text-hover-foreground) instead of text-[var(--token)] arbitrary values. */
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-hover-surface: var(--hover-surface);
+  --color-hover-foreground: var(--hover-foreground);
+  --color-backdrop: var(--backdrop);
+}
+
+/* Self-hosted Inter (SIL OFL, see assets/fonts/inter/OFL.txt) - keeps font
+   bytes on our origin so the app never reaches fonts.gstatic.com, and stays
+   within the strict font-src self CSP. Only 400/600 are shipped; 500
+   (font-medium) is synthesised by the browser from 400. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@/assets/fonts/inter/Inter-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@/assets/fonts/inter/Inter-SemiBold.woff2") format("woff2");
+}
+
+/* ---------------------------------------------------------------- reset -- */
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  * {
+    margin: 0;
+  }
+  ol,
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+  }
+  body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    max-width: 100%;
+  }
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    background: none;
+    border: 0;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  legend {
+    padding: 0;
+  }
+  table {
+    border-collapse: collapse;
+    border-color: inherit;
+    text-indent: 0;
+  }
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-size: 1em;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+}
+
+/* --------------------------------------------------------------- tokens -- */
+@layer tokens {
+  :root {
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+
+    /* Neutral/red ramp pinned here, not inherited from the Tailwind @theme.
+       Tailwind v4 tree-shakes @theme palette vars: it only emits --color-*
+       that a generated utility uses, NOT ones referenced via var() in our own
+       CSS (token defs, the asterisk red, the high-contrast theme). So these
+       must be defined explicitly. Values match the Tailwind v4 true-grey ramp.
+       The dark theme remaps the neutrals to a blue-tinted scale below;
+       high-contrast inherits these defaults. */
+    --color-neutral-50: oklch(98.5% 0 0);
+    --color-neutral-100: oklch(97% 0 0);
+    --color-neutral-200: oklch(92.2% 0 0);
+    --color-neutral-300: oklch(87% 0 0);
+    --color-neutral-400: oklch(70.8% 0 0);
+    --color-neutral-500: oklch(55.6% 0 0);
+    --color-neutral-600: oklch(43.9% 0 0);
+    --color-neutral-700: oklch(37.1% 0 0);
+    --color-neutral-800: oklch(26.9% 0 0);
+    --color-neutral-900: oklch(20.5% 0 0);
+    --color-neutral-950: oklch(14.5% 0 0);
+
+    --color-red-600: oklch(57.7% 0.245 27.325);
+
+    color-scheme: light;
+    --background: oklch(0.9751 0.0127 244.2507);
+    --foreground: oklch(0.3729 0.0306 259.7328);
+    --card: oklch(1 0 0);
+    --card-foreground: var(--foreground);
+    --popover: oklch(1 0 0);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.7227 0.192 149.5793);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.9514 0.025 236.8242);
+    --secondary-foreground: oklch(0.4461 0.0263 256.8018);
+    --muted: oklch(0.967 0.0029 264.5419);
+    --muted-foreground: oklch(0.551 0.0234 264.3637);
+    --accent: oklch(0.9505 0.0507 163.0508);
+    --accent-foreground: var(--foreground);
+    --destructive: oklch(0.6368 0.2078 25.3313);
+    --border: oklch(0.9276 0.0058 264.5313);
+    --input: var(--border);
+    --ring: var(--primary);
+    --radius: 0.5rem;
+
+    /* Modal scrim behind native <dialog>::backdrop. Per-theme so the overlay
+       keeps enough contrast on dark/AMOLED surfaces. */
+    --backdrop: rgb(20 20 20 / 0.4);
+
+    /* Form-field tones. neutral-500 stays >= 4.5:1 against white and
+       near-black bodies, clearing WCAG 1.4.11 (3:1 for non-text UI). */
+    --field-color: var(--color-neutral-500);
+    --field-focus: var(--foreground);
+
+    /* Interaction-surface tokens. These collapse what used to be duplicated
+       :root[data-theme="dark/high-contrast"] .foo overrides into one token per
+       theme. In light mode the hover surface is --muted and the foreground is
+       left unset (so each component falls back to its own resting color); the
+       dark themes redefine both below. --track-* drive the toggle/segmented
+       control; --select-chevron is the inlined <select> arrow per theme. */
+    --hover-surface: var(--muted);
+    /* In light mode the hovered foreground stays the component's resting card
+       color; the dark themes lift it to --accent-foreground below. */
+    --hover-foreground: var(--card-foreground);
+    /* Secondary prose (subhead/muted/hint). Darker than --muted-foreground in
+       light, lighter in dark, matching the original neutral-600/neutral-400
+       descriptive text. Kept separate so --muted-foreground (field labels,
+       placeholders) is not dragged along. */
+    --subtle-foreground: var(--color-neutral-600);
+    --track-bg: var(--muted);
+    --track-thumb: var(--card);
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23404040' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
+
+    /* Per-category-group icon tints. OKLCH gives perceptually-uniform
+       brightness across hues so no group looks louder than another. */
+    --cat-entertainment: oklch(60% 0.18 295);
+    --cat-food-drink: oklch(62% 0.15 30);
+    --cat-home: oklch(55% 0.12 145);
+    --cat-life: oklch(60% 0.14 220);
+    --cat-transport: oklch(60% 0.14 60);
+    --cat-utilities: oklch(60% 0.1 250);
+    --cat-no-category: oklch(65% 0 0);
+  }
+
+  /* OKLCH-driven dark theme: deep blue-grey background, green primary. The
+     neutral remap below tints the whole grey ramp blue so every component
+     inherits a cohesive palette. high-contrast keeps the AMOLED defaults. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-neutral-50: oklch(0.985 0.004 260);
+    --color-neutral-100: oklch(0.95 0.006 260);
+    --color-neutral-200: oklch(0.872 0.009 258);
+    --color-neutral-300: oklch(0.78 0.012 260);
+    --color-neutral-400: oklch(0.712 0.013 286);
+    --color-neutral-500: oklch(0.551 0.023 264);
+    --color-neutral-600: oklch(0.446 0.026 257);
+    --color-neutral-700: oklch(0.373 0.031 260);
+    --color-neutral-800: oklch(0.335 0.033 261);
+    --color-neutral-900: oklch(0.28 0.037 260);
+    --color-neutral-950: oklch(0.165 0.04 266);
+
+    --background: var(--color-neutral-950);
+    --foreground: var(--color-neutral-200);
+    --card: var(--color-neutral-900);
+    --card-foreground: var(--foreground);
+    --popover: var(--color-neutral-900);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.7729 0.1535 163.2231);
+    --primary-foreground: var(--color-neutral-950);
+    --secondary: var(--color-neutral-800);
+    --secondary-foreground: var(--color-neutral-400);
+    --muted: var(--color-neutral-900);
+    --muted-foreground: var(--color-neutral-500);
+    --accent: var(--color-neutral-700);
+    --accent-foreground: var(--color-neutral-400);
+    --destructive: oklch(0.6368 0.2078 25.3313);
+    --border: var(--color-neutral-600);
+    --input: var(--border);
+    --ring: var(--primary);
+
+    --field-color: var(--border);
+    --field-focus: var(--foreground);
+    --backdrop: rgb(0 0 0 / 0.6);
+  }
+
+  /* Shared dark-surface category tints, lifted ~15% over light-mode values
+     for legibility on the dark panels. Applies to both dark variants. */
+  :root[data-theme="dark"],
+  :root[data-theme="high-contrast"] {
+    /* In dark themes --muted == --card, so hover surfaces lift to --accent and
+       gain --accent-foreground (light mode keeps each element resting fg via
+       var() fallback). The toggle track uses --secondary with a muted thumb,
+       and the <select> chevron flips to a light-grey glyph. */
+    --hover-surface: var(--accent);
+    --hover-foreground: var(--accent-foreground);
+    --subtle-foreground: var(--color-neutral-400);
+    --track-bg: var(--secondary);
+    --track-thumb: var(--muted-foreground);
+    --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 640'><path fill='%23d4d4d4' d='M297.4 470.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 402.7L150.6 233.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z'/></svg>");
+
+    --cat-entertainment: oklch(75% 0.16 295);
+    --cat-food-drink: oklch(75% 0.13 30);
+    --cat-home: oklch(72% 0.12 145);
+    --cat-life: oklch(75% 0.13 220);
+    --cat-transport: oklch(75% 0.13 60);
+    --cat-utilities: oklch(72% 0.1 250);
+    --cat-no-category: oklch(80% 0 0);
+  }
+
+  /* high-contrast = the AMOLED look that was the only dark mode before this
+     preference existed. Inherits the :root true-grey neutral ramp. */
+  :root[data-theme="high-contrast"] {
+    color-scheme: dark;
+    --background: var(--color-neutral-950);
+    --foreground: var(--color-neutral-100);
+    --card: var(--color-neutral-900);
+    --card-foreground: var(--foreground);
+    --popover: var(--color-neutral-900);
+    --popover-foreground: var(--foreground);
+    --primary: var(--color-neutral-100);
+    --primary-foreground: var(--color-neutral-900);
+    --secondary: var(--color-neutral-800);
+    --secondary-foreground: var(--color-neutral-200);
+    --muted: var(--color-neutral-900);
+    --muted-foreground: var(--color-neutral-400);
+    --accent: var(--color-neutral-800);
+    --accent-foreground: var(--color-neutral-100);
+    --destructive: var(--color-red-600);
+    --border: var(--color-neutral-800);
+    --input: var(--color-neutral-700);
+    --ring: var(--color-neutral-500);
+
+    --field-color: var(--color-neutral-500);
+    --field-focus: var(--color-neutral-100);
+    --backdrop: rgb(0 0 0 / 0.8);
+  }
+}
+
+/* ----------------------------------------------------------------- base -- */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  code,
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* Visually-hidden but accessible label/input (was the Tailwind sr-only). */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Keyboard skip-to-content: offscreen until focused, then pinned top-left.
+     First focusable element in the layout so Tab from page load reveals it. */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 100;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    transition: top 150ms ease;
+  }
+  .skip-link:focus-visible {
+    top: 0.5rem;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Background-scroll lock is handled in JS. overscroll-behavior: contain
+     belt-and-braces against rubber-band chaining inside scrollable dialogs. */
+  dialog[open],
+  dialog[open] .overflow-auto {
+    overscroll-behavior: contain;
+  }
+
+  /* WCAG 2.3.3: honour the OS "reduce motion" preference. !important beats the
+     unlayered scoped <style> transitions in SFCs too, so this is the single
+     place motion is neutralised; individual components need no edits. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------ components -- */
+@layer components {
+  /* Per-slug rotation override for the category icon SVG. The `other` slug
+     reuses the FA meteor glyph rotated 270 deg so it points down-left. */
+  svg[data-icon-slug="other"] {
+    transform: rotate(270deg);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  /* Category-group color classes; the icon inherits via currentColor. */
+  .cat-group-entertainment {
+    color: var(--cat-entertainment);
+  }
+  .cat-group-food-drink {
+    color: var(--cat-food-drink);
+  }
+  .cat-group-home {
+    color: var(--cat-home);
+  }
+  .cat-group-life {
+    color: var(--cat-life);
+  }
+  .cat-group-transport {
+    color: var(--cat-transport);
+  }
+  .cat-group-utilities {
+    color: var(--cat-utilities);
+  }
+  .cat-group-no-category {
+    color: var(--cat-no-category);
+  }
+
+  /* Bottom-line field. Rendered as a <label> so clicking the floating
+     caption focuses the input. Layout-stable focus indicator: the bottom
+     edge stays 2px in both states; only the colour shifts. The padding-top
+     reserves space for the floating label so the field never reflows. */
+  .field {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    padding-top: 0.875rem;
+    background: var(--card);
+    color: var(--card-foreground);
+    border-radius: 0.375rem;
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--field-color);
+    transition: box-shadow 120ms ease;
+  }
+  .field:focus-within {
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--field-focus);
+  }
+
+  .field-input {
+    width: 100%;
+    background: transparent;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border: 0;
+    outline: none;
+    color: inherit;
+  }
+
+  /* Floating label: sits in the input row at rest; shrinks and lifts into
+     the reserved top padding when focused or filled. */
+  .field-label {
+    position: absolute;
+    left: 0.75rem;
+    top: 1.4rem;
+    font-size: 0.875rem;
+    line-height: 1;
+    color: var(--muted-foreground);
+    pointer-events: none;
+    transform-origin: 0 0;
+    transition:
+      transform 150ms ease,
+      color 150ms ease;
+  }
+  .field:focus-within .field-label,
+  .field .field-input:not(:placeholder-shown) ~ .field-label,
+  .field[data-has-stored] .field-label {
+    transform: translateY(-1.15rem) scale(0.8);
+    color: var(--field-focus);
+  }
+
+  /* Required asterisk, opt-in via data-required. */
+  .field-label[data-required]::after {
+    content: " *";
+    color: var(--color-red-600);
+  }
+
+  /* Submit-gated validation feedback. The cues stay hidden until the user
+     attempts an action: src/lib/form-validation.ts sets `data-validated` on a
+     form only when a submit is tried while fields are invalid (and clears it on
+     a successful submit), so first paint and plain blur never go red, and an
+     in-place reset after a successful add does not re-light cleared fields.
+     Live `:invalid` then drives the cue. This is also the only visible cue on
+     Firefox for Android, which does not render the native validation tooltip. */
+  form[data-validated] .field:has(.field-input:invalid) {
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--color-red-600);
+  }
+  .field-error {
+    display: none;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-red-600);
+  }
+  form[data-validated] .field:has(.field-input:invalid) + .field-error {
+    display: block;
+  }
+
+  /* Hide the placeholder visually - we use placeholder=" " purely as a
+     :placeholder-shown signal. [data-has-stored] fields render a meaningful
+     placeholder (e.g. SMTP password dots) at the normal muted color. */
+  .field:not([data-has-stored]) .field-input::placeholder {
+    color: transparent;
+  }
+  .field[data-has-stored] .field-input::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* Strip browser-native number spinners on numeric field-inputs. */
+  .field-input[type="number"] {
+    appearance: textfield;
+  }
+  .field-input[type="number"]::-webkit-inner-spin-button,
+  .field-input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Compact inline numeric input - small quantity entry next to an external
+     sibling label (split rows, percentages). Same bottom-line treatment. */
+  .field-input-num {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 0;
+    border-radius: 0.375rem;
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--field-color);
+    padding: 0.25rem 0.5rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.875rem;
+    outline: none;
+    transition: box-shadow 120ms ease;
+    appearance: textfield;
+  }
+  .field-input-num:focus {
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--field-focus);
+  }
+  form[data-validated] .field-input-num:invalid {
+    box-shadow:
+      inset 0 1px 0 0 var(--border),
+      inset 1px 0 0 0 var(--border),
+      inset -1px 0 0 0 var(--border),
+      inset 0 -2px 0 0 var(--color-red-600);
+  }
+  .field-input-num:disabled {
+    opacity: 0.5;
+  }
+  .field-input-num::-webkit-inner-spin-button,
+  .field-input-num::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* File input whose native Browse button mirrors .btn-secondary. The button
+     is a pseudo-element, so it cannot be styled with utilities - this is the
+     shared home for the avatar/CSV upload controls. */
+  .field-file {
+    display: block;
+    width: 100%;
+    font-size: 0.875rem;
+  }
+  .field-file::file-selector-button {
+    margin-right: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--card);
+    color: var(--card-foreground);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+  .field-file::file-selector-button:hover {
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--card-foreground));
+  }
+
+  /* Bordered <select>: full rounded border, panel-matching background, no
+     floating label. Pair with a sibling label via .field-select-row. */
+  .field-select-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+  }
+  .field-select {
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    /* Strip the OS chevron on the closed control; the open popup stays
+       native (no spec-compliant way to style it on Android). */
+    appearance: none;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 0.875rem 0.875rem;
+    padding-right: 2rem;
+  }
+  form[data-validated] .field-select:invalid {
+    border-color: var(--color-red-600);
+  }
+
+  /* Currency-aware text input: typed value flush right, larger so the most
+     scanned values read clearly on mobile without zooming. */
+  .field-input-currency {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.125rem;
+  }
+
+  /* Square category trigger button next to the description field. Fixed
+     50x50 (not aspect-square) because Chrome flex resolves auto width before
+     stretched height, collapsing an aspect-ratio width to the emoji size. */
+  .field-category-trigger {
+    display: flex;
+    height: 50px;
+    width: 50px;
+    flex-shrink: 0;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    line-height: 1;
+    transition: background-color 120ms ease;
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+  }
+  .field-category-trigger:hover {
+    background: var(--hover-surface);
+  }
+  .field-category-trigger:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Single row inside the category dialog list. */
+  .field-category-option {
+    display: flex;
+    width: 100%;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.875rem;
+    transition: background-color 120ms ease;
+  }
+  .field-category-option:hover,
+  .field-category-option:focus-visible {
+    background: var(--hover-surface);
+    outline: none;
+  }
+
+  /* Sticky section header inside the category list. */
+  .field-category-group {
+    position: sticky;
+    top: 0;
+    background: var(--popover);
+    color: var(--muted-foreground);
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .field-category-group:not(:first-child) {
+    margin-top: 0.25rem;
+  }
+
+  /* Buttons: five visual variants + one size modifier. */
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-danger-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    white-space: nowrap;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease,
+      filter 120ms ease;
+  }
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible,
+  .btn-danger:focus-visible,
+  .btn-danger-outline:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-danger:disabled,
+  .btn-danger-outline:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border: 1px solid var(--primary);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+
+  .btn-secondary {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--card-foreground));
+  }
+
+  .btn-danger {
+    background: var(--destructive);
+    color: oklch(1 0 0);
+    border: 1px solid var(--destructive);
+  }
+  .btn-danger:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+
+  .btn-danger-outline {
+    background: var(--card);
+    color: var(--destructive);
+    border: 1px solid var(--destructive);
+  }
+  .btn-danger-outline:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--destructive) 12%, var(--card));
+  }
+
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .btn-xs {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  /* Square icon-only button (36x36). */
+  .btn-icon {
+    display: inline-flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+    background: var(--card);
+    color: var(--muted-foreground);
+    border: 1px solid var(--border);
+  }
+  .btn-icon:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .btn-icon:hover:not(:disabled) {
+    background: var(--hover-surface);
+    color: var(--hover-foreground, var(--muted-foreground));
+  }
+
+  /* Switch: a styled native checkbox rendered as a horizontal toggle. The
+     real <input type="checkbox"> stays in the DOM (visually hidden, focusable)
+     so form, label-for, keyboard, and SR announcement work without JS. */
+  .toggle {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+  .toggle-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .toggle-track {
+    position: relative;
+    display: inline-block;
+    height: 1.25rem;
+    width: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    transition: background-color 120ms ease;
+    background: var(--track-bg);
+    border: 1px solid var(--border);
+  }
+  .toggle-track::after {
+    content: "";
+    position: absolute;
+    left: 0.125rem;
+    top: 0.125rem;
+    display: block;
+    height: 1rem;
+    width: 1rem;
+    border-radius: 9999px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 120ms ease;
+    background: var(--track-thumb);
+  }
+  .toggle-input:checked + .toggle-track {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  .toggle-input:checked + .toggle-track::after {
+    transform: translateX(1rem);
+    background: var(--primary-foreground);
+  }
+  .toggle-input:focus-visible + .toggle-track {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .toggle-input:disabled + .toggle-track {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Segmented switch: a native radio group rendered as a 3-state pill. */
+  .theme-seg {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem;
+    background: var(--track-bg);
+    border: 1px solid var(--border);
+  }
+  .theme-seg-opt {
+    cursor: pointer;
+    user-select: none;
+  }
+  .theme-seg-opt input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .theme-seg-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0.25rem 0.5rem;
+    line-height: 1;
+    transition: background-color 120ms ease;
+    color: var(--muted-foreground);
+  }
+  .theme-seg-opt:hover .theme-seg-icon {
+    color: var(--foreground);
+  }
+  .theme-seg-opt input:checked + .theme-seg-icon {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .theme-seg-opt input:focus-visible + .theme-seg-icon {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Header user menu. Click-to-toggle, native theme tokens. */
+  .user-menu {
+    position: relative;
+  }
+  .user-menu-trigger {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    transition: background-color 120ms ease;
+    background: transparent;
+    color: var(--foreground);
+    border: 1px solid transparent;
+  }
+  .user-menu-trigger:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .user-menu-trigger:hover,
+  .user-menu-trigger[aria-expanded="true"] {
+    background: var(--muted);
+    border-color: var(--border);
+  }
+  .user-menu-chevron {
+    color: var(--muted-foreground);
+    transition: transform 150ms ease;
+  }
+  .user-menu-trigger[aria-expanded="true"] .user-menu-chevron {
+    transform: rotate(180deg);
+  }
+  .user-menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.375rem);
+    min-width: 12rem;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.25rem;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .user-menu-panel[hidden] {
+    display: none;
+  }
+  .user-menu-item {
+    display: flex;
+    width: 100%;
+    cursor: pointer;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.875rem;
+    transition: background-color 120ms ease;
+    background: transparent;
+    color: inherit;
+    border: 0;
+  }
+  .user-menu-item:focus-visible {
+    outline: none;
+  }
+  .user-menu-item:hover,
+  .user-menu-item:focus-visible {
+    background: var(--hover-surface);
+    color: var(--hover-foreground, inherit);
+  }
+
+  /* Icon-only header button (32px) - lines up with the user-menu trigger. */
+  .user-menu-icon-btn {
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    transition: background-color 120ms ease;
+    background: transparent;
+    color: var(--muted-foreground);
+    border: 1px solid transparent;
+  }
+  .user-menu-icon-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .user-menu-icon-btn:hover:not(:disabled) {
+    background: var(--muted);
+    border-color: var(--border);
+    color: var(--foreground);
+  }
+  .user-menu-icon-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  /* Avatar sizing lives in CSS (not inline style) because the strict CSP
+     would drop inline style attributes. Keep this list in sync with the
+     size values passed at Avatar callsites. */
+  .avatar {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  .avatar-12 {
+    width: 12px;
+    height: 12px;
+    font-size: 6px;
+  }
+  .avatar-16 {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+  }
+  .avatar-18 {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+  .avatar-20 {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+  .avatar-24 {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+  .avatar-32 {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  .avatar-48 {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+  .avatar-56 {
+    width: 56px;
+    height: 56px;
+    font-size: 25px;
+  }
+  .avatar-64 {
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+  }
+}

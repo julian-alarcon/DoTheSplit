@@ -30,7 +30,7 @@ echo "→ Collecting Go module licenses (api + worker)"
 echo "→ Collecting npm package licenses (frontend)"
 (
   cd "$ROOT/frontend"
-  npx --yes license-checker-rseidelsohn@4.4.2 \
+  npx --yes license-checker-rseidelsohn@5.0.1 \
     --json --start . \
     --excludePackages "dothesplit-frontend@$(jq -r .version package.json)" \
     >"$TMP/npm.json" 2>"$TMP/npm.err"

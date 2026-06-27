@@ -196,6 +196,7 @@ const form = ref({
   notes: "",
 });
 const split = ref<SplitPayload | null>(null);
+const splitEditor = ref<InstanceType<typeof SplitEditor> | null>(null);
 const submitting = ref(false);
 const categoryDialog = ref<HTMLDialogElement | null>(null);
 
@@ -251,6 +252,10 @@ function resetForm() {
   form.value.cadence = "";
   form.value.notes = "";
   form.value.incurredAt = new Date().toISOString().slice(0, 10);
+  // The editor isn't remounted between expenses, so re-init its mode/state back
+  // to the group default - otherwise a one-off percent split sticks as the new
+  // baseline for the next expense.
+  splitEditor.value?.reset();
 }
 
 const weekStart = computed<0 | 1>(() => (state.user?.week_start === 0 ? 0 : 1));
@@ -558,6 +563,7 @@ onUnmounted(() => {
           </label>
 
           <SplitEditor
+            ref="splitEditor"
             v-model="split"
             v-model:notes="form.notes"
             :members="members"

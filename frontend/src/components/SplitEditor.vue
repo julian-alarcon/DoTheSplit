@@ -9,7 +9,7 @@
 // preview tracks the amount/payer live. For edit flows, pass `initialSplits`;
 // an untouched editor leaves the payload null so the parent can omit splits
 // (the backend then keeps/rescales the existing split).
-import { computed, reactive, ref, watch } from "vue";
+import { computed, reactive, ref } from "vue";
 import { formatMoney } from "@/lib/currencies";
 import Icon from "@/components/Icon.vue";
 
@@ -299,26 +299,28 @@ function onValueInput(s: RowState, raw: string) {
   s.value = !Number.isFinite(n) || n < 0 ? 0 : Math.round(n * 100);
 }
 
-// Keep equal/percent previews in sync with a changing parent amount; exact
-// preserves the user's typed cents.
-watch(
-  () => props.amountCents,
-  () => {
-    if (mode.value !== "exact") prefillForMode();
-  },
-);
+// Per-row previews are a computed over props.amountCents (see `shares`), so they
+// already track a changing parent amount. We must NOT re-run prefillForMode on
+// amount change: percent values (incl. a pinned group default) and exact cents
+// don't depend on the amount, and prefilling percent would clobber them back to
+// an equal split. Equal mode ignores row values entirely.
 
 // Initialize. For create flows, auto-commit so the parent always has a valid
 // payload; for edit flows, leave payload null until the user touches it.
-initState();
-if (!hasInitial.value && !hasUsableDefault()) prefillForMode();
-if (!hasInitial.value) {
-  commitPayload();
-  dirty.value = false;
+function reset() {
+  splitTouched.value = false;
+  initState();
+  if (!hasInitial.value && !hasUsableDefault()) prefillForMode();
+  if (!hasInitial.value) {
+    commitPayload();
+    dirty.value = false;
+  }
 }
+reset();
 
-// Expose so the parent's submit handler can decide whether to send splits.
-defineExpose({ dirty, hasInitial });
+// Expose so the parent can re-init after a submit (the editor isn't remounted
+// between expenses) and decide whether to send splits.
+defineExpose({ dirty, hasInitial, reset });
 </script>
 
 <template>

@@ -109,17 +109,47 @@ make test           # unit + integration tests
 
 See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short:
 
-- **Accounts**: register / login, display name + password change, 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
+- **Accounts**: register / login, display name + password change, verified email change (6-digit code), 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
 - **First-run setup**: boot-time token gate so the first user is provably the operator.
 - **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
 - **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
 - **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs, reversible soft-delete (any member can restore from the expense's detail page).
 - **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated transaction feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date, or soft-delete and restore.
 - **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
+- **Real-time updates**: the group dashboard subscribes to a per-group Server-Sent Events stream (`/v1/groups/{id}/events`) and re-fetches affected views the moment any member (or the worker) creates, edits, deletes, or restores an expense or settlement. Only minimal id/action signals ride the channel, never amounts or notes.
+- **Activity log & notifications**: an append-only per-group activity log with unread tracking, plus opt-in email notifications (recurring run, settlement recorded, added to a group), all off by default and gated on SMTP being configured.
+- **Themes & PWA**: light / dark / high-contrast themes (per-device, applied pre-paint), and an installable PWA with read-only offline (network-first `/v1` GET cache, offline banner, mutations short-circuited offline).
 - **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
 - **Import & export**: CSV in / out via `/import` (Splitwise or DoTheSplit) and group settings → Export. The DoTheSplit format keeps the Splitwise prefix and adds `Time`, `Payer`, `Notes`, `Created`, `CreatedBy`, so a round-trip preserves second-precision timestamps, explicit payers, and per-expense notes.
 - **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP, password confirmation for self-delete.
 - **API**: OpenAPI 3.0.3 contract at [docs/openapi.yaml](docs/openapi.yaml); every business endpoint is under `/v1/...`.
+
+## Related / similar projects
+
+Other open-source apps in this space, all worth a look:
+
+- **[spliit-app/spliit](https://github.com/spliit-app/spliit)**: Next.js, Prisma, PostgreSQL. Splitwise alternative; receipt scanning and image storage lean on AWS S3 and OpenAI. Compared to DoTheSplit: no required third-party clouds (single self-contained Go binary), encryption at rest by default, and built-in Splitwise import. Status: active.
+- **[oss-apps/split-pro](https://github.com/oss-apps/split-pro)**: Next.js, tRPC, Prisma, PostgreSQL. Polished, but auth is provider-only (NextAuth) with no built-in username/password login. Compared to DoTheSplit: built-in username/password auth (no external identity provider or SMTP to get started), and one container instead of a Node runtime plus `pg_cron` for recurring expenses. Status: actively maintained.
+- **[spiral-project/ihatemoney](https://github.com/spiral-project/ihatemoney)**: Python, Flask, SQLite/PostgreSQL/MariaDB. Shared budget tool with one shared password per project, no per-person accounts. Compared to DoTheSplit: real per-user accounts and authentication, plus encryption at rest by default. Status: maintenance mode.
+- **[eneiluj/moneybuster](https://gitlab.com/eneiluj/moneybuster)**: Android (Java/Kotlin). A client, not a server: needs a Nextcloud Cospend or IHateMoney backend. Compared to DoTheSplit: self-contained server and web UI, so there's no separate backend to stand up. Status: actively maintained.
+- **[DennisBauer/RecurringExpenseTracker](https://github.com/DennisBauer/RecurringExpenseTracker)**: Kotlin Multiplatform (Android, iOS, desktop), Room. Single-user, local-only recurring-bill tracker; no sharing or settle-up. Compared to DoTheSplit: multi-member groups, shared ledgers, and settle-up (this overlaps only with DoTheSplit's recurring expenses). Status: actively maintained.
+- **[fer0n/SplitBill](https://github.com/fer0n/SplitBill)**: native iOS (Swift). Photographs a receipt and allocates line items; local-only, no server or accounts. Compared to DoTheSplit: a shared multi-member ledger with accounts and sync, not a single-device companion. Status: actively maintained.
+- **[lyskouski/app-finance](https://github.com/lyskouski/app-finance)** (Fingrom): Flutter/Dart (Android, iOS, desktop, web). Personal finance app, not a shared splitter; alpha-stage, Creative Commons license. Compared to DoTheSplit: a group/member model with settle-up between people, and an MIT license without commercial-use restrictions. Status: active.
+
+**Where DoTheSplit is deliberately different:**
+
+- **Self-contained, one container.** A single Go binary serves both the API and
+  the embedded SPA - no Node runtime, no separate web service, no required
+  third-party cloud (no S3, no OpenAI, no external auth provider). Bring a
+  Postgres and you're done.
+- **Encryption at rest by default.** Emails are AES-GCM encrypted (HMAC for
+  lookup), passwords are Argon2id with a server-side pepper, and the load-bearing
+  keys live in `.env`, never the database. See [Secrets you must back up](#secrets-you-must-back-up).
+- **Privacy-minimizing by construction.** Avatars are 8×8 pixel images (64 color
+  samples) so they can't identify a person; accounts soft-delete to stable,
+  non-identifying tombstones so co-members' ledgers survive.
+- **Built-in username/password auth** with a provable first-run setup token - no
+  external identity provider needed to get started.
 
 ## Roadmap
 
@@ -129,7 +159,7 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 - Extend search filters with date range and member.
 - Add **Filter** to expenses transaction list by category, member, date range.
-- **Native mobile** via the PWA path (the Vue SPA is client-rendered and mobile-first styled). The service worker is served same-origin by the Go binary so it's covered by `script-src 'self'`; add `manifest-src`/`worker-src` to the CSP only if a `default-src` is ever introduced. Capacitor wraps the same bundle for app-store builds.
+- **Native mobile app-store builds**: the installable PWA (read-only offline) already ships, and the Vue SPA is client-rendered + mobile-first styled. The remaining step is wrapping the same bundle with Capacitor for the app stores. The service worker is served same-origin by the Go binary so it's covered by `script-src 'self'`; add `manifest-src`/`worker-src` to the CSP only if a `default-src` is ever introduced.
 
 ### Medium term
 
@@ -141,7 +171,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 ### Longer term / ideas
 
 - **OAuth / passkeys** alongside passwords.
-- **Real-time sync** (push updates via SSE or WebSockets instead of the current polling / refresh-on-focus model).
 - **TLS terminated by Caddy in-compose** as a first-class option, replacing the current "terminate outside the stack" note below.
 - **Multi-currency FX**: today each group picks one default currency; cross-currency groups would need conversion rates and a locked-at-time-of-entry policy.
 - **Expense attachments / receipts** (photo or PDF).

@@ -6,9 +6,13 @@ Detailed reference for what currently ships in DoTheSplit. The
 ## Accounts
 
 Register, log in, log out, change display name, change password (old password
-required). Dates render in the viewer's device timezone. Upload an **8×8 pixel
-avatar** generated in-browser from any image: pixelated PNG ≤ 1024 bytes,
-re-encoded server-side; falls back to deterministic initials when absent.
+required). **Change your email** through a verified two-step flow
+(`/v1/me/email/change-request` then `/v1/me/email/change-confirm`): a 6-digit
+code is sent to the new address and the current password confirms the request,
+after which a fresh token pair is minted so the browser stays logged in. Dates
+render in the viewer's device timezone. Upload an **8×8 pixel avatar** generated
+in-browser from any image: pixelated PNG ≤ 1024 bytes, re-encoded server-side;
+falls back to deterministic initials when absent.
 Soft-delete your account with a stable `Deleted user #<short-uuid>` tombstone so
 shared history stays traceable; the email index is partial-unique on
 `deleted_at IS NULL`, so the address is reusable after deletion. Self-delete
@@ -101,6 +105,52 @@ Paginated, time-ordered feed of expenses + settlements per group. Months are
 labelled, ordering matches the underlying timestamps regardless of insertion
 order, and pagination state is URL-encoded so deep links work.
 
+## Real-time updates
+
+The group dashboard subscribes to a per-group **Server-Sent Events** stream
+(`GET /v1/groups/{id}/events`). The server emits an `event: activity` frame
+whenever an expense or settlement in the group is created, updated, deleted, or
+restored (by any member or the recurring worker), plus periodic `: ping`
+heartbeats. Each frame carries a minimal JSON signal (ids + action + actor +
+timestamp), never the full entity, so clients react by re-fetching the affected
+views and always render exactly what a manual refresh would. No amounts or notes
+ride the channel. Because `EventSource` can't set an `Authorization` header, the
+SPA consumes the stream via `fetch` + a `ReadableStream` reader
+([useGroupStream.ts](../frontend/src/composables/useGroupStream.ts)), carrying
+the bearer token like every other request, with automatic reconnect/backoff and
+pause-while-offline.
+
+## Activity log
+
+Each group keeps an append-only activity log (`GET /v1/groups/{id}/activity`,
+paginated) of every expense/settlement create, update, delete, and restore, with
+actor and timestamp. The UI tracks **unread** events per member and exposes
+`POST /v1/groups/{id}/activity/read` to clear the unread marker; the group list
+surfaces an unread count.
+
+## Email notifications
+
+Per-user, per-event email opt-in flags at `/settings/notifications`
+(`GET`/`PATCH /v1/me/notifications`). All default to **off**; the server only
+emails when the matching flag is true **and** SMTP is configured. Three events:
+
+- `notify_recurring_run`: a recurring expense was materialized in one of my groups.
+- `notify_settlement`: a settlement was recorded in one of my groups.
+- `notify_group_added`: I was added to a new group.
+
+## Themes & PWA
+
+Three themes - **light**, **dark**, and **high-contrast** - selectable from the
+header user menu ([ThemeSwitcher.vue](../frontend/src/components/ThemeSwitcher.vue)),
+defaulting to dark. The choice is per-device (localStorage key `dts_theme`) and
+applied pre-paint by a same-origin boot script so there's no flash. The SPA is
+also an **installable PWA with read-only offline**: the app shell and hashed
+assets are precached, `/v1` GETs are runtime-cached network-first (with a
+cache fallback when offline), and mutations are short-circuited with a clear
+message while the device is offline. An offline banner driven by
+[useNetworkStatus.ts](../frontend/src/composables/useNetworkStatus.ts) makes the
+state visible.
+
 ## Search
 
 Cross-group search at `/search` over a case-insensitive substring of `q`
@@ -152,11 +202,12 @@ move ledgers in and out of the app without lock-in.
 
 ## Settings & about
 
-The personal area is at `/settings` (display name, password, week-start
-preference, avatar, account deletion). The third-party attribution and license summary
-lives at `/about`, linked from the header user menu. The header itself
-exposes a collapsible user menu so navigation, theme switcher, and search
-share one row on small screens.
+The personal area is at `/settings` (display name, email change, password,
+week-start preference, avatar, account deletion), with email notification
+preferences at `/settings/notifications`. The third-party attribution and
+license summary lives at `/about`, linked from the header user menu. The header
+itself exposes a collapsible user menu so navigation, the theme switcher
+(light / dark / high-contrast), and search share one row on small screens.
 
 ## Security
 

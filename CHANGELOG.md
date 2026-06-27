@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/julian-alarcon/DoTheSplit/compare/v1.0.0...v1.0.1) (2026-06-27)
+
+
+### Bug Fixes
+
+* **frontend:** default split is respected for new expenses ([cb560d4](https://github.com/julian-alarcon/DoTheSplit/commit/cb560d4b5affea85ffa4d11c95c6203aa7a17cc2))
+
 ## [1.0.0](https://github.com/julian-alarcon/DoTheSplit/compare/v0.11.1...v1.0.0) (2026-06-20)
 
 

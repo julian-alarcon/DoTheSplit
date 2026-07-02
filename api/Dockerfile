@@ -2,7 +2,7 @@
 # binary now embeds the Vue SPA built from frontend/ and typed against docs/.
 
 # --- Stage 1: build the Vue SPA static bundle -------------------------------
-ARG NODE_VERSION=24.16.0
+ARG NODE_VERSION=24.18.0
 ARG ALPINE_VERSION=3.22
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS web
 WORKDIR /app

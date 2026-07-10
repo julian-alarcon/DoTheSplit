@@ -10,24 +10,36 @@
 
 ---
 
-## Quick start
+DoTheSplit runs on **SQLite** (default, zero-dependency single container) or
+**PostgreSQL** (for multi-instance / scale-out), chosen by `DATABASE_DRIVER`.
+
+### SQLite (default, simplest)
 
 ```bash
 cp .env.example .env
 
-# Generate the three encryption keys + a Postgres password and append to .env.
-# These end up in the database protecting every email and password - generate
-# them ONCE and keep a copy somewhere safe. See "Secrets you must back up"
-# below.
+# Generate the four encryption keys and append to .env. These protect every
+# email and password - generate them ONCE and keep a copy somewhere safe.
+# See "Secrets you must back up" below.
 {
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
   echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
   echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
   echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
-  echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)"
 } >> .env
 
+# One api container, one DB file on a volume. No Postgres, no migrate step,
+# no separate worker (all run in-process).
+docker compose -f docker-compose.sqlite.yml up -d --build
+```
+
+### PostgreSQL (scale-out)
+
+```bash
+# Same four keys as above, plus a Postgres password:
+echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
 # Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
+# The compose file sets DATABASE_DRIVER=postgres on the api + worker services.
 
 docker compose up -d
 ```
@@ -36,12 +48,12 @@ Open http://localhost:8080.
 
 ## Layout
 
-- `/api`: Go 1.26 backend (standard-library `net/http`, pgx/v5, oapi-codegen) plus a separate `worker` binary for recurring expenses. The api binary also serves the embedded SPA.
+- `/api`: Go 1.26 backend (standard-library `net/http`, oapi-codegen) plus a `worker` binary for recurring expenses. Persistence is behind a `repo.Store` abstraction with two engines - `api/internal/repo/postgres` (pgx/v5) and `api/internal/repo/sqlite` (modernc.org/sqlite, pure Go) - selected by `DATABASE_DRIVER`. The api binary also serves the embedded SPA.
 - `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
-- `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`)
+- `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/api/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
 - `/docker-compose.yml`: local + LAN deployment stack
 - `/scripts`: SBOM and third-party-license generators
 
@@ -51,8 +63,8 @@ guide and [INSTALL.md](INSTALL.md) for production install paths.
 ## Install on TrueNAS
 
 Running on TrueNAS SCALE? See [INSTALL.md](INSTALL.md) for the Custom App
-walkthrough: dataset layout, the host-path Postgres mount, and consuming the
-first-run setup token from the API logs.
+walkthrough: dataset layout for either engine, and consuming the first-run
+setup token from the API logs.
 
 ## Container images
 
@@ -86,23 +98,26 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 | `PASSWORD_PEPPER` | Server-side pepper added before Argon2id      | Existing passwords are unrecoverable            | Attacker can crack stolen password hashes offline  |
 | `JWT_SIGNING_KEY` | HS256 key signing SPA / native access tokens  | All token clients are logged out (recoverable)  | Attacker can mint valid access tokens for any user |
 
-`POSTGRES_PASSWORD` is also sensitive but resettable later as long as you can reach the database. `JWT_SIGNING_KEY` is the least catastrophic to lose: rotating it only forces every token client to log in again.
+`POSTGRES_PASSWORD` (Postgres deployments only) is also sensitive but resettable later as long as you can reach the database. `JWT_SIGNING_KEY` is the least catastrophic to lose: rotating it only forces every token client to log in again.
+
+These keys are required and identical for both engines: the encryption is application-level (emails AES-GCM, passwords Argon2id + pepper), done above the storage layer, so switching between SQLite and Postgres does not change what's protected. Neither engine encrypts the whole database file/volume.
 
 **What this means for you:**
 
 - Generate these once on first install. Don't regenerate on a rebuild - the database won't decrypt anymore.
 - Store a copy in your password manager or secrets vault. Treat them like the master password to a vault: this app is the vault.
-- When you back up the Postgres data volume (`dts_pg_data`), back up the `.env` alongside it. A backup without the keys is useless.
+- When you back up the data volume (`dts_pg_data` for Postgres, or the `/data` volume holding `dts.db` for SQLite), back up the `.env` alongside it. A backup without the keys is useless.
 - Never commit `.env`. It's gitignored for a reason.
 
 ## Development
 
 ```bash
 make gen            # regenerate Go + TS API bindings from openapi.yaml
-make migrate-up     # apply DB migrations
+make migrate-up     # apply Postgres migrations (SQLite migrates in-process on boot)
 make dev            # run api + frontend against a local postgres
 make lint           # golangci-lint (Go) + eslint (SPA)
 make test           # unit + integration tests
+make test-go-both   # run the Go integration suite against both SQLite and Postgres
 ```
 
 ## Features
@@ -140,8 +155,9 @@ Other open-source apps in this space, all worth a look:
 
 - **Self-contained, one container.** A single Go binary serves both the API and
   the embedded SPA - no Node runtime, no separate web service, no required
-  third-party cloud (no S3, no OpenAI, no external auth provider). Bring a
-  Postgres and you're done.
+  third-party cloud (no S3, no OpenAI, no external auth provider). Runs on an
+  embedded SQLite file out of the box - no external database to stand up - or
+  point it at Postgres for scale-out.
 - **Encryption at rest by default.** Emails are AES-GCM encrypted (HMAC for
   lookup), passwords are Argon2id with a server-side pepper, and the load-bearing
   keys live in `.env`, never the database. See [Secrets you must back up](#secrets-you-must-back-up).

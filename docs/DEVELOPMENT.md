@@ -23,13 +23,24 @@ docker compose up -d --build
 
 The app and API are both served by the api binary at <http://localhost:8080> (the Vue SPA is embedded in the Go binary). Health probes: `/healthz`, `/readyz`.
 
+## Database engines (dual)
+
+DoTheSplit speaks to **either SQLite or PostgreSQL** behind one `repo.Store` interface, with two implementations:
+
+- `api/internal/repo/postgres` - pgx/v5.
+- `api/internal/repo/sqlite` - `database/sql` + the pure-Go `modernc.org/sqlite` driver (no CGO). Connection pragmas: WAL, `busy_timeout`, `foreign_keys=ON`, `synchronous=NORMAL`.
+
+The `DATABASE_DRIVER` env var selects the engine (`sqlite`, the default when unset, or `postgres`); `api/internal/storefactory` constructs the right `Store` and wires migrations. Because both implementations satisfy the same interface, the service/handler layers are engine-agnostic.
+
+Encryption at rest is application-level (above the DB) and identical on both engines - the engine choice never touches the crypto (see [What the keys do](#what-the-three-keys-do)).
+
 ## The contract-first workflow
 
 Any change that touches the HTTP surface goes through the same loop:
 
 1. Edit [docs/openapi.yaml](openapi.yaml) first.
 2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`frontend/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
-3. If the DB schema changes, add a migration under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`. Migrations are append-only.
+3. If the DB schema changes, add a migration for **both** engines. Postgres migrations live under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`, applied by golang-migrate (`make migrate-up` or the `migrate` one-shot container). SQLite migrations live under [api/internal/repo/sqlite/migrations](../api/internal/repo/sqlite/migrations/), embedded in the binary and applied in-process at boot (no make target, no migrate container). Migrations are append-only.
 4. Backend order: **repo → service → handlers → router**.
 5. Frontend: add a typed call in a composable under `frontend/src/composables/` and the view/route that uses it. Never hand-write fetch/URLs - go through the `openapi-fetch` client.
 6. Tests, rebuild containers, smoke.
@@ -49,13 +60,21 @@ cd frontend && npm run build    # vite build (static bundle the api embeds)
 
 ## Test
 
-**Go**: unit + integration. The integration tests use [testcontainers-go](https://golang.testcontainers.org/), so a running Docker daemon is required. Each test run spins up its own short-lived Postgres container, applies all migrations, and tears it down.
+**Go**: unit + integration. The integration suite runs against **both engines**, selected by `TEST_DB_DRIVER`:
+
+- `postgres` uses [testcontainers-go](https://golang.testcontainers.org/), so a running Docker daemon is required. Each run spins up its own short-lived Postgres container, applies all migrations, and tears it down.
+- `sqlite` runs fully in-process (embedded migrations, no Docker needed).
 
 ```bash
-make test-go                         # all Go tests
-cd api && go test ./... -race        # same thing, one level down
+make test-go                         # Go tests, Postgres engine (default)
+make test-go-sqlite                  # Go tests, SQLite engine (in-process, no Docker)
+make test-go-postgres                # Go tests, Postgres engine (testcontainers)
+make test-go-both                    # run against both engines
+cd api && go test ./... -race        # same as make test-go, one level down
 cd api && go test ./internal/server/ -run TestGoldenPath -v    # one test
 ```
+
+CI runs the integration suite against both engines on every PR.
 
 The E2E suite in [api/internal/server/server_test.go](../api/internal/server/server_test.go) covers the full golden path (register, login, group, members, expense split modes, balances, settlements, soft-delete, category + revision log, payer swap, logout).
 
@@ -150,12 +169,23 @@ docker compose down -v               # stop AND destroy the Postgres volume
 
 ### Services
 
+The table below is the **Postgres** stack (`docker-compose.yml`, which sets `DATABASE_DRIVER: postgres` on `api`/`worker`):
+
 | Service    | Image               | Purpose                                           |
 | ---------- | ------------------- | ------------------------------------------------- |
 | `postgres` | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
 | `migrate`  | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
 | `api`      | `dothesplit`        | HTTP API + embedded Vue SPA on `:8080`            |
 | `worker`   | `dothesplit`        | Same image, runs `/worker` - materializes recurring expenses |
+
+The **SQLite** stack (`docker-compose.sqlite.yml`, `DATABASE_DRIVER=sqlite`) is a single `api` container plus one DB-file volume at `/data` - no `postgres`, `migrate`, or `worker` service. Migrations apply in-process at boot and the worker runs embedded (see below).
+
+### Worker topology
+
+`WORKER_MODE` picks how the recurring-expense worker runs:
+
+- `external` (default) - a separate `worker` container, used by the Postgres stack.
+- `embedded` - a goroutine inside the api process. **SQLite forces `embedded`** (there is no separate worker container). Postgres may opt into embedded for a single-node deploy via `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` (worker container disabled). The embedded worker still takes a Postgres advisory lock, so it stays safe alongside an external worker during a transition.
 
 ## Smoke test the running stack
 
@@ -264,6 +294,8 @@ Two paths:
 
 The compose file mounts the volume at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) because PG 18's official image expects the parent directory so `pg_upgrade --link` can work in place across majors. Don't change this.
 
+SQLite has no cross-version on-disk incompatibility to manage - the `dts.db` file is portable and embedded migrations apply in-process on the next boot, so a SQLite deployment just bumps the image tag.
+
 ## Troubleshooting
 
 ### Login does nothing / bounces back to /login
@@ -290,8 +322,11 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | ----------------- | ------------------------------------------------------------------ |
 | `make gen`        | Regenerate Go + TS API bindings from `docs/openapi.yaml`           |
 | `make lint`       | Lint everything: golangci-lint (Go) + eslint (SPA)                 |
-| `make migrate-up` | Apply all pending migrations                                       |
-| `make test-go`    | Full Go test suite (unit + integration via testcontainers)         |
+| `make migrate-up` | Apply all pending Postgres migrations (SQLite migrations are embedded, applied at boot) |
+| `make test-go`    | Full Go test suite, Postgres engine (unit + integration via testcontainers) |
+| `make test-go-sqlite` | Go test suite against SQLite (in-process, no Docker)           |
+| `make test-go-postgres` | Go test suite against Postgres (testcontainers)             |
+| `make test-go-both` | Go test suite against both engines                               |
 | `make test-e2e`   | Playwright e2e (needs the stack up + `SETUP_TOKEN`)                |
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
 | `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |

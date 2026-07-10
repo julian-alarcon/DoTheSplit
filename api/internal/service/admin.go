@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
@@ -24,18 +23,18 @@ var (
 // repos so destructive ops happen in a single transaction with the audit
 // row, and centralises the last-admin guard.
 type AdminService struct {
-	pool   *pgxpool.Pool
-	users  *repo.UserRepo
-	groups *repo.GroupRepo
-	audit  *repo.AuditRepo
+	store  repo.Store
+	users  repo.UserRepo
+	groups repo.GroupRepo
+	audit  repo.AuditRepo
 	auth   *AuthService
 	email  *crypto.EmailCipher
 	pepper []byte
 }
 
-func NewAdminService(pool *pgxpool.Pool, users *repo.UserRepo, groups *repo.GroupRepo, audit *repo.AuditRepo, auth *AuthService, email *crypto.EmailCipher, pepper []byte) *AdminService {
+func NewAdminService(store repo.Store, users repo.UserRepo, groups repo.GroupRepo, audit repo.AuditRepo, auth *AuthService, email *crypto.EmailCipher, pepper []byte) *AdminService {
 	return &AdminService{
-		pool:   pool,
+		store:  store,
 		users:  users,
 		groups: groups,
 		audit:  audit,
@@ -218,7 +217,7 @@ func (s *AdminService) CreateUser(ctx context.Context, actorID uuid.UUID, email,
 		PasswordHash:   pwdHash,
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +324,7 @@ func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID 
 		return err
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -334,9 +333,7 @@ func (s *AdminService) ResetUserPassword(ctx context.Context, actorID, targetID 
 	// Wipe the old hash atomically with the email enqueue so an attacker
 	// who phoned in the reset can't keep using the prior cookie or
 	// password while the email's in flight.
-	if _, err := tx.Exec(ctx,
-		`UPDATE users SET password_hash = $2 WHERE id = $1 AND deleted_at IS NULL`,
-		targetID, scrambled); err != nil {
+	if err := s.users.UpdatePasswordHashTx(ctx, tx, targetID, scrambled); err != nil {
 		return err
 	}
 	if err := s.auth.EnqueuePasswordResetTx(ctx, tx, target, plaintextEmail); err != nil {

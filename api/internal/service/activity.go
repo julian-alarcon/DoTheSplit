@@ -19,10 +19,10 @@ const (
 
 type ActivityService struct {
 	groups   *GroupService
-	activity *repo.ActivityRepo
+	activity repo.ActivityRepo
 }
 
-func NewActivityService(g *GroupService, a *repo.ActivityRepo) *ActivityService {
+func NewActivityService(g *GroupService, a repo.ActivityRepo) *ActivityService {
 	return &ActivityService{groups: g, activity: a}
 }
 

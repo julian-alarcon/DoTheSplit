@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS activity_events;
+DROP TABLE IF EXISTS app_setup;
+DROP TABLE IF EXISTS email_outbox;
+DROP TABLE IF EXISTS email_verification_tokens;
+DROP TABLE IF EXISTS admin_audit;
+DROP TABLE IF EXISTS smtp_config;
+DROP TABLE IF EXISTS expense_revisions;
+DROP TABLE IF EXISTS settlements;
+DROP TABLE IF EXISTS splits;
+DROP TABLE IF EXISTS expenses;
+DROP TABLE IF EXISTS recurring_expenses;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS group_members;
+DROP TABLE IF EXISTS groups;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS users;

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/apigen"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/middleware"
@@ -20,7 +19,7 @@ import (
 // Server bundles dependencies for all handlers.
 type Server struct {
 	Cfg              *config.Config
-	Pool             *pgxpool.Pool
+	Store            repo.Store
 	Auth             *service.AuthService
 	MeSvc            *service.MeService
 	Groups           *service.GroupService
@@ -40,8 +39,8 @@ type Server struct {
 	Setup            *service.SetupService
 	Mailer           *service.MailerService
 	Notifications    *service.NotificationService
-	Users            *repo.UserRepo
-	Audit            *repo.AuditRepo
+	Users            repo.UserRepo
+	Audit            repo.AuditRepo
 
 	// Hub fans out activity events to SSE clients. Optional: when nil, the
 	// stream endpoint reports 503 (used by unit tests that don't wire realtime).

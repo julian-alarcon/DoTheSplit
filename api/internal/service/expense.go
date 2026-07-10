@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
@@ -45,12 +44,12 @@ var (
 )
 
 type ExpenseService struct {
-	exps       *repo.ExpenseRepo
-	groups     *repo.GroupRepo
+	exps       repo.ExpenseRepo
+	groups     repo.GroupRepo
 	categories *CategoryService
 }
 
-func NewExpenseService(e *repo.ExpenseRepo, g *repo.GroupRepo, c *CategoryService) *ExpenseService {
+func NewExpenseService(e repo.ExpenseRepo, g repo.GroupRepo, c *CategoryService) *ExpenseService {
 	return &ExpenseService{exps: e, groups: g, categories: c}
 }
 
@@ -140,7 +139,7 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 // payer and split users are members and the share sum is valid, because the
 // membership reads in Create cannot see rows inserted in the same uncommitted
 // tx. Use Create for the normal request path.
-func (s *ExpenseService) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *repo.Expense) error {
+func (s *ExpenseService) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *repo.Expense) error {
 	return s.exps.CreateWithSplitsTx(ctx, tx, e)
 }
 

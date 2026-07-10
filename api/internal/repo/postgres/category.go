@@ -1,4 +1,4 @@
-package repo
+package postgres
 
 import (
 	"context"
@@ -7,24 +7,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type Category struct {
-	ID         uuid.UUID
-	Slug       string
-	Label      string
-	Sort       int
-	GroupLabel string
-}
-
-type CategoryRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewCategoryRepo(p *pgxpool.Pool) *CategoryRepo { return &CategoryRepo{pool: p} }
+type CategoryRepo struct{ pool *pgxpool.Pool }
 
 // List returns every category in presentation order.
-func (r *CategoryRepo) List(ctx context.Context) ([]Category, error) {
+func (r *CategoryRepo) List(ctx context.Context) ([]repo.Category, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, slug, label, sort, group_label FROM categories ORDER BY sort, label
 	`)
@@ -32,9 +22,9 @@ func (r *CategoryRepo) List(ctx context.Context) ([]Category, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Category
+	var out []repo.Category
 	for rows.Next() {
-		var c Category
+		var c repo.Category
 		if err := rows.Scan(&c.ID, &c.Slug, &c.Label, &c.Sort, &c.GroupLabel); err != nil {
 			return nil, err
 		}
@@ -43,13 +33,13 @@ func (r *CategoryRepo) List(ctx context.Context) ([]Category, error) {
 	return out, rows.Err()
 }
 
-func (r *CategoryRepo) FindByID(ctx context.Context, id uuid.UUID) (*Category, error) {
-	var c Category
+func (r *CategoryRepo) FindByID(ctx context.Context, id uuid.UUID) (*repo.Category, error) {
+	var c repo.Category
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, slug, label, sort, group_label FROM categories WHERE id = $1
 	`, id).Scan(&c.ID, &c.Slug, &c.Label, &c.Sort, &c.GroupLabel)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -57,13 +47,13 @@ func (r *CategoryRepo) FindByID(ctx context.Context, id uuid.UUID) (*Category, e
 	return &c, nil
 }
 
-func (r *CategoryRepo) FindBySlug(ctx context.Context, slug string) (*Category, error) {
-	var c Category
+func (r *CategoryRepo) FindBySlug(ctx context.Context, slug string) (*repo.Category, error) {
+	var c repo.Category
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, slug, label, sort, group_label FROM categories WHERE slug = $1
 	`, slug).Scan(&c.ID, &c.Slug, &c.Label, &c.Sort, &c.GroupLabel)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err

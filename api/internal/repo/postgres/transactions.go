@@ -1,44 +1,23 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type TransactionKind string
-
-const (
-	TransactionExpense    TransactionKind = "expense"
-	TransactionSettlement TransactionKind = "settlement"
-)
-
-// TransactionRow is a single (kind, occurred_at, created_at, id) tuple - just
-// enough to drive keyset pagination. The service hydrates the full payloads
-// in batch. created_at is the tiebreaker when two rows share occurred_at
-// (e.g. multiple expenses dated the same day with no time component).
-type TransactionRow struct {
-	Kind       TransactionKind
-	OccurredAt time.Time
-	CreatedAt  time.Time
-	ID         uuid.UUID
-}
-
-type TransactionRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewTransactionRepo(p *pgxpool.Pool) *TransactionRepo { return &TransactionRepo{pool: p} }
+type TransactionRepo struct{ pool *pgxpool.Pool }
 
 // ListByGroup returns up to `limit` (occurred_at DESC, created_at DESC, id DESC)
 // rows from the merged expenses + settlements feed for the group, optionally
 // continuing strictly after the given cursor row. Soft-deleted rows are
 // excluded. Caller passes `limit + 1` if it wants to detect a next page.
-func (r *TransactionRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit int, after *TransactionRow) ([]TransactionRow, error) {
+func (r *TransactionRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit int, after *repo.TransactionRow) ([]repo.TransactionRow, error) {
 	args := []any{groupID}
 	cursorPredicate := ""
 	if after != nil {
@@ -69,14 +48,14 @@ func (r *TransactionRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, li
 		return nil, err
 	}
 	defer rows.Close()
-	var out []TransactionRow
+	var out []repo.TransactionRow
 	for rows.Next() {
-		var row TransactionRow
+		var row repo.TransactionRow
 		var kind string
 		if err := rows.Scan(&kind, &row.OccurredAt, &row.CreatedAt, &row.ID); err != nil {
 			return nil, err
 		}
-		row.Kind = TransactionKind(kind)
+		row.Kind = repo.TransactionKind(kind)
 		out = append(out, row)
 	}
 	return out, rows.Err()

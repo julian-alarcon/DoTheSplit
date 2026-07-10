@@ -79,9 +79,7 @@ func TestRecurringTickMaterializesAndAdvances(t *testing.T) {
 	require.Equal(t, "Rent", items[0]["description"])
 
 	// next_run_at must have advanced by exactly one cadence step (24h).
-	var nextRun time.Time
-	err = ts.pool.QueryRow(context.Background(),
-		`SELECT next_run_at FROM recurring_expenses WHERE id = $1`, templateID).Scan(&nextRun)
+	nextRun, err := ts.raw().RecurringNextRun(context.Background(), templateID)
 	require.NoError(t, err)
 	advance := nextRun.Sub(dueAt)
 	require.InDelta(t, 24*time.Hour, advance, float64(time.Second), "daily cadence must advance by 24h")
@@ -152,9 +150,7 @@ func TestRecurringTickCadenceVariants(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, created, 1)
 
-			var nextRun time.Time
-			err = ts.pool.QueryRow(context.Background(),
-				`SELECT next_run_at FROM recurring_expenses WHERE id = $1`, templateID).Scan(&nextRun)
+			nextRun, err := ts.raw().RecurringNextRun(context.Background(), templateID)
 			require.NoError(t, err)
 			require.True(t, nextRun.UTC().Equal(tc.delta(due)),
 				"%s: expected %s, got %s", tc.cadence, tc.delta(due), nextRun.UTC())

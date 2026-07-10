@@ -11,20 +11,20 @@ import (
 )
 
 type SettlementService struct {
-	settlements   *repo.SettlementRepo
-	groups        *repo.GroupRepo
-	users         *repo.UserRepo
+	settlements   repo.SettlementRepo
+	groups        repo.GroupRepo
+	users         repo.UserRepo
 	notifications *NotificationService
 }
 
-func NewSettlementService(s *repo.SettlementRepo, g *repo.GroupRepo) *SettlementService {
+func NewSettlementService(s repo.SettlementRepo, g repo.GroupRepo) *SettlementService {
 	return &SettlementService{settlements: s, groups: g}
 }
 
 // SetNotifications wires in user lookup + notification dispatch. Optional;
 // when unset the service silently skips notifications (used by tests that
 // don't need to exercise the mailer).
-func (s *SettlementService) SetNotifications(users *repo.UserRepo, n *NotificationService) {
+func (s *SettlementService) SetNotifications(users repo.UserRepo, n *NotificationService) {
 	s.users = users
 	s.notifications = n
 }

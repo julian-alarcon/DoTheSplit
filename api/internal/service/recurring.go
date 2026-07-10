@@ -11,21 +11,21 @@ import (
 )
 
 type RecurringService struct {
-	recurring     *repo.RecurringRepo
-	expenses      *repo.ExpenseRepo
-	groups        *repo.GroupRepo
+	recurring     repo.RecurringRepo
+	expenses      repo.ExpenseRepo
+	groups        repo.GroupRepo
 	categories    *CategoryService
-	users         *repo.UserRepo
+	users         repo.UserRepo
 	notifications *NotificationService
 }
 
-func NewRecurringService(r *repo.RecurringRepo, e *repo.ExpenseRepo, g *repo.GroupRepo, c *CategoryService) *RecurringService {
+func NewRecurringService(r repo.RecurringRepo, e repo.ExpenseRepo, g repo.GroupRepo, c *CategoryService) *RecurringService {
 	return &RecurringService{recurring: r, expenses: e, groups: g, categories: c}
 }
 
 // SetNotifications enables per-member email notifications for materialized
 // recurring runs. Optional - left nil in tests that don't exercise the mailer.
-func (s *RecurringService) SetNotifications(users *repo.UserRepo, n *NotificationService) {
+func (s *RecurringService) SetNotifications(users repo.UserRepo, n *NotificationService) {
 	s.users = users
 	s.notifications = n
 }
@@ -114,8 +114,26 @@ func (s *RecurringService) Delete(ctx context.Context, actorID, id uuid.UUID) er
 	return s.recurring.SoftDelete(ctx, id)
 }
 
+// notifyPlan carries the data needed to email members about one materialized
+// recurring run. Collected inside the claim tx and dispatched after commit so
+// the notification reads never contend with the open write transaction - which
+// matters on SQLite, where a single-writer connection held by the tx would
+// otherwise deadlock a concurrent pool read.
+type notifyPlan struct {
+	groupID     uuid.UUID
+	description string
+	amount      string
+}
+
 // Tick materializes every due recurring expense into a regular expense row and
 // advances next_run_at by the cadence. Returns the number of expenses created.
+//
+// All writes for the batch (materialized expenses, their activity events, and
+// the next_run_at advances) happen on the single transaction returned by
+// ClaimDue, so a partial failure rolls the whole tick back instead of
+// materializing expenses whose template still points at the old run time (which
+// would double-materialize on the next tick). Member notifications are
+// dispatched only after the commit succeeds.
 func (s *RecurringService) Tick(ctx context.Context) (int, error) {
 	tx, due, err := s.recurring.ClaimDue(ctx, 100)
 	if err != nil {
@@ -124,6 +142,7 @@ func (s *RecurringService) Tick(ctx context.Context) (int, error) {
 	defer tx.Rollback(ctx) //nolint:errcheck // commit below replaces this
 
 	created := 0
+	var plans []notifyPlan
 	for _, r := range due {
 		splits := make([]SplitInput, len(r.SplitTemplate))
 		for i, t := range r.SplitTemplate {
@@ -149,38 +168,46 @@ func (s *RecurringService) Tick(ctx context.Context) (int, error) {
 			RecurringExpenseID: &rID,
 			Splits:             shares,
 		}
-		// Inserts use their own short-lived transaction; the outer tx only holds
-		// the FOR UPDATE lock on the recurring rows while we schedule them.
-		if err := s.expenses.CreateWithSplits(ctx, e); err != nil {
+		// Materialize on the claim tx. On Postgres the tx already holds
+		// FOR NO KEY UPDATE on the recurring row; taking the FK's FOR KEY SHARE
+		// on that same row within the same tx never blocks. On SQLite the single
+		// writer runs everything on this one connection.
+		if err := s.expenses.CreateWithSplitsTx(ctx, tx, e); err != nil {
 			return 0, err
 		}
 		next := advanceCadence(r.NextRunAt, r.Cadence)
 		if err := s.recurring.UpdateNextRunTx(ctx, tx, r.ID, next); err != nil {
 			return 0, err
 		}
-
-		// Notify opted-in members. Best-effort: failures don't roll back.
 		if s.notifications != nil && s.users != nil {
-			groupName := ""
-			if g, gerr := s.groups.FindByID(ctx, r.GroupID); gerr == nil {
-				groupName = g.Name
-			}
-			amount := formatMoney(r.AmountCents, r.Currency)
-			members, _ := s.groups.ListMembers(ctx, r.GroupID)
-			for _, m := range members {
-				_ = s.notifications.NotifyIfEnabled(ctx, nil, m.UserID,
-					PrefKeyRecurringRun, "recurring_run", TemplateVars{
-						GroupName:   groupName,
-						Description: r.Description,
-						Amount:      amount,
-					})
-			}
+			plans = append(plans, notifyPlan{
+				groupID:     r.GroupID,
+				description: r.Description,
+				amount:      formatMoney(r.AmountCents, r.Currency),
+			})
 		}
-
 		created++
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
+	}
+
+	// Notify opted-in members after commit. Best-effort: failures don't affect
+	// the already-committed materialization.
+	for _, p := range plans {
+		groupName := ""
+		if g, gerr := s.groups.FindByID(ctx, p.groupID); gerr == nil {
+			groupName = g.Name
+		}
+		members, _ := s.groups.ListMembers(ctx, p.groupID)
+		for _, m := range members {
+			_ = s.notifications.NotifyIfEnabled(ctx, nil, m.UserID,
+				PrefKeyRecurringRun, "recurring_run", TemplateVars{
+					GroupName:   groupName,
+					Description: p.description,
+					Amount:      p.amount,
+				})
+		}
 	}
 	return created, nil
 }

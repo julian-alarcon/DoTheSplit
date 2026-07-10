@@ -1,40 +1,21 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"encoding/json"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type AuditEntry struct {
-	ID            uuid.UUID
-	ActorUserID   uuid.UUID
-	TargetUserID  *uuid.UUID
-	TargetGroupID *uuid.UUID
-	Action        string
-	IP            *string
-	UserAgent     *string
-	Success       bool
-	Metadata      json.RawMessage
-	CreatedAt     time.Time
-}
+type AuditRepo struct{ pool *pgxpool.Pool }
 
-type AuditRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewAuditRepo(p *pgxpool.Pool) *AuditRepo { return &AuditRepo{pool: p} }
-
-// Insert records an audit row. q may be nil to use the pool, or a pgx.Tx to
+// Insert records an audit row. tx may be nil to use the pool, or a repo.Tx to
 // participate in an existing transaction (so the audit row is committed
 // atomically with the action it describes).
-func (r *AuditRepo) Insert(ctx context.Context, q Querier, e *AuditEntry) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+func (r *AuditRepo) Insert(ctx context.Context, tx repo.Tx, e *repo.AuditEntry) error {
+	q := resolve(r.pool, tx)
 	var meta any
 	if len(e.Metadata) > 0 {
 		meta = []byte(e.Metadata)
@@ -48,13 +29,8 @@ func (r *AuditRepo) Insert(ctx context.Context, q Querier, e *AuditEntry) error 
 		Scan(&e.ID, &e.CreatedAt)
 }
 
-// AuditFilter narrows a List query.
-type AuditFilter struct {
-	Action string
-}
-
 // List returns paginated audit entries newest first.
-func (r *AuditRepo) List(ctx context.Context, f AuditFilter, limit, offset int) ([]AuditEntry, int, error) {
+func (r *AuditRepo) List(ctx context.Context, f repo.AuditFilter, limit, offset int) ([]repo.AuditEntry, int, error) {
 	args := []any{}
 	where := ""
 	if f.Action != "" {
@@ -77,9 +53,9 @@ func (r *AuditRepo) List(ctx context.Context, f AuditFilter, limit, offset int) 
 		return nil, 0, err
 	}
 	defer rows.Close()
-	var out []AuditEntry
+	var out []repo.AuditEntry
 	for rows.Next() {
-		var e AuditEntry
+		var e repo.AuditEntry
 		var meta []byte
 		if err := rows.Scan(&e.ID, &e.ActorUserID, &e.TargetUserID, &e.TargetGroupID, &e.Action,
 			&e.IP, &e.UserAgent, &e.Success, &meta, &e.CreatedAt); err != nil {

@@ -21,13 +21,13 @@ const (
 
 type TransactionService struct {
 	groups      *GroupService
-	transaction *repo.TransactionRepo
-	expenses    *repo.ExpenseRepo
-	settlements *repo.SettlementRepo
-	recurring   *repo.RecurringRepo
+	transaction repo.TransactionRepo
+	expenses    repo.ExpenseRepo
+	settlements repo.SettlementRepo
+	recurring   repo.RecurringRepo
 }
 
-func NewTransactionService(g *GroupService, a *repo.TransactionRepo, e *repo.ExpenseRepo, s *repo.SettlementRepo, r *repo.RecurringRepo) *TransactionService {
+func NewTransactionService(g *GroupService, a repo.TransactionRepo, e repo.ExpenseRepo, s repo.SettlementRepo, r repo.RecurringRepo) *TransactionService {
 	return &TransactionService{groups: g, transaction: a, expenses: e, settlements: s, recurring: r}
 }
 

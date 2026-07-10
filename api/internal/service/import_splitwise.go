@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/csvimport"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
@@ -89,19 +88,19 @@ type ImportSplitwiseResult struct {
 // regular UI, and the new behavior is concentrated in the email-resolution
 // step (FindOrCreateStub) so the security boundary is easy to audit.
 type SplitwiseImporter struct {
-	pool        *pgxpool.Pool
-	users       *repo.UserRepo
-	groupRepo   *repo.GroupRepo
+	store       repo.Store
+	users       repo.UserRepo
+	groupRepo   repo.GroupRepo
 	expenses    *ExpenseService
 	categories  *CategoryService
-	settlements *repo.SettlementRepo
+	settlements repo.SettlementRepo
 	auth        *AuthService
 	email       *crypto.EmailCipher
 }
 
-func NewSplitwiseImporter(pool *pgxpool.Pool, users *repo.UserRepo, groupRepo *repo.GroupRepo, expenses *ExpenseService, categories *CategoryService, settlements *repo.SettlementRepo, auth *AuthService, email *crypto.EmailCipher) *SplitwiseImporter {
+func NewSplitwiseImporter(store repo.Store, users repo.UserRepo, groupRepo repo.GroupRepo, expenses *ExpenseService, categories *CategoryService, settlements repo.SettlementRepo, auth *AuthService, email *crypto.EmailCipher) *SplitwiseImporter {
 	return &SplitwiseImporter{
-		pool: pool, users: users, groupRepo: groupRepo,
+		store: store, users: users, groupRepo: groupRepo,
 		expenses: expenses, categories: categories, settlements: settlements,
 		auth: auth, email: email,
 	}
@@ -231,7 +230,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 		return "", false
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return ImportSplitwiseResult{}, err
 	}
@@ -395,7 +394,7 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 // placeholder when no active row exists. The display name for new stubs is
 // the CSV name with a clear "(imported)" suffix so it's distinguishable from a
 // self-chosen name.
-func (s *SplitwiseImporter) resolveOrStub(ctx context.Context, q repo.Querier, m ImportSplitwiseMember) (uuid.UUID, error) {
+func (s *SplitwiseImporter) resolveOrStub(ctx context.Context, tx repo.Tx, m ImportSplitwiseMember) (uuid.UUID, error) {
 	email := strings.TrimSpace(m.Email)
 	hash := s.email.HashEmail(email)
 	enc, err := s.email.Encrypt(email)
@@ -407,7 +406,7 @@ func (s *SplitwiseImporter) resolveOrStub(ctx context.Context, q repo.Querier, m
 		return uuid.Nil, err
 	}
 	display := strings.TrimSpace(m.CSVName) + " (imported)"
-	u, err := s.users.FindOrCreateStub(ctx, q, hash, enc, display, pwd)
+	u, err := s.users.FindOrCreateStub(ctx, tx, hash, enc, display, pwd)
 	if err != nil {
 		return uuid.Nil, err
 	}

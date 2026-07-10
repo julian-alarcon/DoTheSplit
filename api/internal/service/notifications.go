@@ -30,12 +30,12 @@ const (
 )
 
 type NotificationService struct {
-	users  *repo.UserRepo
+	users  repo.UserRepo
 	mailer *MailerService
 	email  *crypto.EmailCipher
 }
 
-func NewNotificationService(users *repo.UserRepo, mailer *MailerService, email *crypto.EmailCipher) *NotificationService {
+func NewNotificationService(users repo.UserRepo, mailer *MailerService, email *crypto.EmailCipher) *NotificationService {
 	return &NotificationService{users: users, mailer: mailer, email: email}
 }
 
@@ -67,7 +67,7 @@ func (n *NotificationService) UpdatePrefs(ctx context.Context, userID uuid.UUID,
 // renders the template and enqueues an outbox row. Silently no-ops when the
 // pref is off, the user is soft-deleted, or the email can't be decrypted -
 // notifications are best-effort and must never fail the underlying action.
-func (n *NotificationService) NotifyIfEnabled(ctx context.Context, q repo.Querier, userID uuid.UUID, prefKey, template string, vars TemplateVars) error {
+func (n *NotificationService) NotifyIfEnabled(ctx context.Context, tx repo.Tx, userID uuid.UUID, prefKey, template string, vars TemplateVars) error {
 	u, err := n.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil // user disappeared between action and notify; drop silently
@@ -89,7 +89,7 @@ func (n *NotificationService) NotifyIfEnabled(ctx context.Context, q repo.Querie
 	if vars.DisplayName == "" {
 		vars.DisplayName = u.DisplayName
 	}
-	return n.mailer.Enqueue(ctx, q, to, template, vars)
+	return n.mailer.Enqueue(ctx, tx, to, template, vars)
 }
 
 func parsePrefs(blob []byte) *NotificationPrefs {

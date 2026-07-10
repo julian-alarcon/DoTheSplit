@@ -21,14 +21,14 @@ import (
 )
 
 type MailerService struct {
-	smtp      *repo.SmtpRepo
-	outbox    *repo.EmailOutboxRepo
+	smtp      repo.SmtpRepo
+	outbox    repo.EmailOutboxRepo
 	email     *crypto.EmailCipher
 	webOrigin string
 	logger    *slog.Logger
 }
 
-func NewMailerService(s *repo.SmtpRepo, ob *repo.EmailOutboxRepo, email *crypto.EmailCipher, webOrigin string, logger *slog.Logger) *MailerService {
+func NewMailerService(s repo.SmtpRepo, ob repo.EmailOutboxRepo, email *crypto.EmailCipher, webOrigin string, logger *slog.Logger) *MailerService {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -56,7 +56,7 @@ func (m *MailerService) IsConfigured(ctx context.Context) (bool, error) {
 // WebOrigin is injected here unless the caller already set one (e.g. the
 // admin SMTP-test handler), so per-call sites don't have to remember to
 // thread the public URL through every TemplateVars.
-func (m *MailerService) Enqueue(ctx context.Context, q repo.Querier, to, template string, vars TemplateVars) error {
+func (m *MailerService) Enqueue(ctx context.Context, tx repo.Tx, to, template string, vars TemplateVars) error {
 	if vars.WebOrigin == "" {
 		vars.WebOrigin = m.webOrigin
 	}
@@ -74,7 +74,7 @@ func (m *MailerService) Enqueue(ctx context.Context, q repo.Querier, to, templat
 		Body:       body,
 		Template:   template,
 	}
-	return m.outbox.Enqueue(ctx, q, row)
+	return m.outbox.Enqueue(ctx, tx, row)
 }
 
 func renderTemplate(template string, vars TemplateVars) (string, string) {

@@ -62,10 +62,30 @@ func TestLoadTrustedProxies(t *testing.T) {
 }
 
 func TestLoadMissingDatabaseURL(t *testing.T) {
-	setEnv(t, nil)
-	t.Setenv("DATABASE_URL", "")
+	// Postgres requires an explicit DATABASE_URL.
+	setEnv(t, map[string]string{"DATABASE_DRIVER": "postgres", "DATABASE_URL": ""})
 	_, err := Load()
 	require.Error(t, err)
+}
+
+func TestLoadDefaultsToSQLite(t *testing.T) {
+	// With no DATABASE_DRIVER and no DATABASE_URL, the app defaults to a local
+	// SQLite file so it runs with zero configuration.
+	setEnv(t, map[string]string{"DATABASE_URL": ""})
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "sqlite", cfg.DatabaseDriver)
+	require.Equal(t, "file:./dts.db", cfg.DatabaseURL)
+	// SQLite forces the embedded worker regardless of WORKER_MODE.
+	require.Equal(t, "embedded", cfg.WorkerMode)
+}
+
+func TestLoadPostgresRequiresExplicitDriver(t *testing.T) {
+	setEnv(t, map[string]string{"DATABASE_DRIVER": "postgres"})
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "postgres", cfg.DatabaseDriver)
+	require.Equal(t, "external", cfg.WorkerMode)
 }
 
 func TestLoadMissingKey(t *testing.T) {

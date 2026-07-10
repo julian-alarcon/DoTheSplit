@@ -22,6 +22,8 @@ import (
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
 	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
+	pgstore "github.com/julian-alarcon/dothesplit/api/internal/repo/postgres"
+	litestore "github.com/julian-alarcon/dothesplit/api/internal/repo/sqlite"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
 
@@ -50,8 +52,9 @@ var testHTTPClient = &http.Client{
 	},
 }
 
-// readMigrations concatenates every *.up.sql file in migrations/ in filename order.
-func readMigrations(t *testing.T) string {
+// readPostgresMigrations concatenates every *.up.sql file in migrations/ in
+// filename order. (SQLite applies its own embedded migrations via litestore.Open.)
+func readPostgresMigrations(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)
@@ -73,33 +76,60 @@ func readMigrations(t *testing.T) string {
 
 type testStack struct {
 	srv        *httptest.Server
-	pool       *pgxpool.Pool
-	ctr        testcontainers.Container
+	store      repo.Store
 	setupToken string // cleartext install token captured from EnsureToken
 	// Service handles exposed for tests that need to drive background paths
 	// (e.g. the recurring-expense worker tick) directly.
 	recurringSvc *service.RecurringService
 }
 
-// setupTokens maps test-server URL → install-token cleartext, so the
-// registerUser helper can transparently consume it for the very first
-// registration without changing the helper's signature (used by ~34 sites).
-var setupTokens sync.Map
-
-// setupOpt mutates the test config before the server is built.
-type setupOpt func(*config.Config)
-
-// withAuthRateLimit pins the auth limiter to the given per-minute value (the
-// harness default is generous; the hardening test uses this to assert the
-// production limit trips).
-func withAuthRateLimit(perMin int) setupOpt {
-	return func(c *config.Config) { c.AuthRateLimitPerMin = perMin }
+// testRawStore is the engine-agnostic test-support surface both concrete stores
+// implement (see repo/{postgres,sqlite}/testsupport.go). It lets a single test
+// seed/inspect rows without writing dialect-specific SQL in the test itself.
+type testRawStore interface {
+	SeedSMTPConfig(ctx context.Context) error
+	PinLatestCodeHash(ctx context.Context, purpose string, codeHash []byte) (int64, error)
+	ExpireActiveTokens(ctx context.Context, purpose string) error
+	CountVerificationTokens(ctx context.Context, purpose, userID string, activeOnly bool) (int, error)
+	CountActiveUsers(ctx context.Context) (int, error)
+	UserDisplayName(ctx context.Context, userID string) (string, error)
+	RecurringNextRun(ctx context.Context, id string) (time.Time, error)
 }
 
-func setup(t *testing.T, opts ...setupOpt) *testStack {
+// raw exposes the engine-specific test-support helpers on the active store.
+func (ts *testStack) raw() testRawStore { return ts.store.(testRawStore) }
+
+// testEngine is the per-engine store plus realtime wiring the harness needs.
+type testEngine struct {
+	store        repo.Store
+	usesListener bool
+	listenerPool *pgxpool.Pool // Postgres only
+	cleanup      func()
+}
+
+// testDBDriver selects the engine under test: TEST_DB_DRIVER=postgres (default)
+// or sqlite. CI runs the suite once per value.
+func testDBDriver() string {
+	if d := strings.ToLower(strings.TrimSpace(os.Getenv("TEST_DB_DRIVER"))); d != "" {
+		return d
+	}
+	return "postgres"
+}
+
+// newTestStore builds the store for the engine under test, applying migrations
+// and returning the realtime wiring. For SQLite it wires the hub publisher so
+// committed activity events reach SSE subscribers.
+func newTestStore(t *testing.T, hub *realtime.Hub) *testEngine {
+	t.Helper()
+	if testDBDriver() == "sqlite" {
+		return newSQLiteTestStore(t, hub)
+	}
+	return newPostgresTestStore(t)
+}
+
+func newPostgresTestStore(t *testing.T) *testEngine {
 	t.Helper()
 	ctx := context.Background()
-
 	pgc, err := tcpg.Run(ctx,
 		"postgres:18-alpine",
 		tcpg.WithDatabase("dts"),
@@ -124,15 +154,79 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	poolCfg.MaxConns = 16
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	require.NoError(t, err)
-	_, err = pool.Exec(ctx, readMigrations(t))
+	_, err = pool.Exec(ctx, readPostgresMigrations(t))
 	require.NoError(t, err)
+
+	// A dedicated single-connection pool for the LISTEN goroutine, mirroring cmd/api.
+	listenerPool, err := pgxpool.New(ctx, dsn)
+	require.NoError(t, err)
+
+	return &testEngine{
+		store:        pgstore.NewStore(pool),
+		usesListener: true,
+		listenerPool: listenerPool,
+		cleanup: func() {
+			listenerPool.Close()
+			pool.Close()
+			_ = pgc.Terminate(context.Background())
+		},
+	}
+}
+
+func newSQLiteTestStore(t *testing.T, hub *realtime.Hub) *testEngine {
+	t.Helper()
+	// A shared-cache in-memory database, unique per test, so the api goroutines
+	// and the test share one DB and it lives until every connection closes.
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", sanitizeName(t.Name()))
+	store, err := litestore.Open(context.Background(), dsn, hubPublisher{hub})
+	require.NoError(t, err)
+	return &testEngine{
+		store:        store,
+		usesListener: false,
+		cleanup:      store.Close,
+	}
+}
+
+// hubPublisher adapts the hub to repo.ActivityPublisher for the SQLite path
+// (matches storefactory.hubPublisher; duplicated here to keep the test package
+// independent of that internal type).
+type hubPublisher struct{ hub *realtime.Hub }
+
+func (p hubPublisher) PublishCommitted(ev repo.ActivityEventSignal) {
+	p.hub.Publish(realtime.Event{
+		ID: ev.ID, GroupID: ev.GroupID, ActorID: ev.ActorID, Action: ev.Action,
+		ExpenseID: ev.ExpenseID, SettlementID: ev.SettlementID, CreatedAt: ev.CreatedAt,
+	})
+}
+
+// sanitizeName makes a test name safe for a SQLite shared-cache identifier.
+func sanitizeName(s string) string {
+	return strings.NewReplacer("/", "_", " ", "_", "#", "_").Replace(s)
+}
+
+// setupTokens maps test-server URL → install-token cleartext, so the
+// registerUser helper can transparently consume it for the very first
+// registration without changing the helper's signature (used by ~34 sites).
+var setupTokens sync.Map
+
+// setupOpt mutates the test config before the server is built.
+type setupOpt func(*config.Config)
+
+// withAuthRateLimit pins the auth limiter to the given per-minute value (the
+// harness default is generous; the hardening test uses this to assert the
+// production limit trips).
+func withAuthRateLimit(perMin int) setupOpt {
+	return func(c *config.Config) { c.AuthRateLimitPerMin = perMin }
+}
+
+func setup(t *testing.T, opts ...setupOpt) *testStack {
+	t.Helper()
 
 	key := make([]byte, 32)
 	for i := range key {
 		key[i] = byte(i + 1)
 	}
 	cfg := &config.Config{
-		DatabaseURL:        dsn,
 		AccessTokenTTLMin:  15,
 		RefreshTokenTTLDay: 30,
 		// Generous so the suite (each registerUser now does register + token
@@ -150,28 +244,34 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	require.NoError(t, err)
 
-	users := repo.NewUserRepo(pool)
-	groups := repo.NewGroupRepo(pool)
-	expenses := repo.NewExpenseRepo(pool)
-	settlements := repo.NewSettlementRepo(pool)
-	balances := repo.NewBalanceRepo(pool)
-	recurring := repo.NewRecurringRepo(pool)
-	categories := repo.NewCategoryRepo(pool)
+	// Real-time hub, mirroring cmd/api. The SQLite store publishes committed
+	// activity events straight to it; the Postgres path feeds it via RunListener.
+	hub := realtime.NewHub()
+	eng := newTestStore(t, hub)
+
+	store := eng.store
+	users := store.Users()
+	groups := store.Groups()
+	expenses := store.Expenses()
+	settlements := store.Settlements()
+	balances := store.Balances()
+	recurring := store.Recurring()
+	categories := store.Categories()
 	categorySvc := service.NewCategoryService(categories)
-	transactionRepo := repo.NewTransactionRepo(pool)
-	auditRepo := repo.NewAuditRepo(pool)
-	smtpRepo := repo.NewSmtpRepo(pool)
-	setupRepo := repo.NewSetupRepo(pool)
-	verificationRepo := repo.NewVerificationRepo(pool)
-	outboxRepo := repo.NewEmailOutboxRepo(pool)
+	transactionRepo := store.Transactions()
+	auditRepo := store.Audit()
+	smtpRepo := store.Smtp()
+	setupRepo := store.Setup()
+	verificationRepo := store.Verification()
+	outboxRepo := store.EmailOutbox()
 
 	groupSvc := service.NewGroupService(groups, users, balances, email)
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, nil)
-	authSvc := service.NewAuthService(pool, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
-	authSvc.SetTokenAuth(repo.NewRefreshTokenRepo(pool), cfg.JWTSigningKey,
+	authSvc := service.NewAuthService(store, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
+	authSvc.SetTokenAuth(store.RefreshTokens(), cfg.JWTSigningKey,
 		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
 		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
-	setupSvc := service.NewSetupService(pool, setupRepo, authSvc, auditRepo)
+	setupSvc := service.NewSetupService(store, setupRepo, authSvc, auditRepo)
 	notificationSvc := service.NewNotificationService(users, mailerSvc, email)
 	// Mirror the production startup hook so the test instance starts in
 	// the same state cmd/api/main.go produces. Capture the cleartext token
@@ -186,19 +286,20 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	settlementSvc.SetNotifications(users, notificationSvc)
 	recurringSvc.SetNotifications(users, notificationSvc)
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
-	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
+	importSvc := service.NewSplitwiseImporter(store, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
+	groupExpenseImporterSvc := service.NewGroupExpenseImporter(groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
 
-	// Real-time hub + LISTEN goroutine, mirroring cmd/api/main.go so the SSE
-	// stream endpoint works in integration tests. Cancelled on cleanup.
-	hub := realtime.NewHub()
+	// Postgres feeds the hub via a LISTEN goroutine (mirroring cmd/api); SQLite
+	// publishes to the hub directly from the store, so no listener runs.
 	listenerCtx, cancelListener := context.WithCancel(context.Background())
-	go realtime.RunListener(listenerCtx, pool, hub, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if eng.usesListener {
+		go realtime.RunListener(listenerCtx, eng.listenerPool, hub, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}
 
 	h := server.New(&handlers.Server{
 		Cfg:              cfg,
-		Pool:             pool,
+		Store:            store,
 		Auth:             authSvc,
 		MeSvc:            newMeSvcWithAuth(users, email, cfg.PasswordPepper, authSvc),
 		Groups:           groupSvc,
@@ -208,12 +309,12 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 		Settlements:      settlementSvc,
 		Recurring:        recurringSvc,
 		Transactions:     service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring),
-		Activity:         service.NewActivityService(groupSvc, repo.NewActivityRepo(pool)),
-		SearchSvc:        service.NewSearchService(groupSvc, groups, repo.NewSearchRepo(pool), expenses, settlements),
+		Activity:         service.NewActivityService(groupSvc, store.Activity()),
+		SearchSvc:        service.NewSearchService(groupSvc, groups, store.Search(), expenses, settlements),
 		Imports:          importSvc,
 		GroupExpenseImps: groupExpenseImporterSvc,
 		Exporter:         exporterSvc,
-		Admin:            service.NewAdminService(pool, users, groups, auditRepo, authSvc, email, cfg.PasswordPepper),
+		Admin:            service.NewAdminService(store, users, groups, auditRepo, authSvc, email, cfg.PasswordPepper),
 		Smtp:             service.NewSmtpService(smtpRepo, email),
 		Setup:            setupSvc,
 		Mailer:           mailerSvc,
@@ -225,17 +326,16 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	srv := httptest.NewServer(h)
 	setupTokens.Store(srv.URL, setupTok)
 
-	ts := &testStack{srv: srv, pool: pool, ctr: pgc, setupToken: setupTok, recurringSvc: recurringSvc}
+	ts := &testStack{srv: srv, store: store, setupToken: setupTok, recurringSvc: recurringSvc}
 	t.Cleanup(func() {
 		cancelListener()
 		srv.Close()
-		pool.Close()
-		_ = pgc.Terminate(context.Background())
+		eng.cleanup()
 	})
 	return ts
 }
 
-func newMeSvcWithAuth(users *repo.UserRepo, email *crypto.EmailCipher, pepper []byte, auth *service.AuthService) *service.MeService {
+func newMeSvcWithAuth(users repo.UserRepo, email *crypto.EmailCipher, pepper []byte, auth *service.AuthService) *service.MeService {
 	m := service.NewMeService(users, email, pepper)
 	m.SetAuth(auth)
 	return m

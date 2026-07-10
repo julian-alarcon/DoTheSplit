@@ -1,4 +1,4 @@
-package repo
+package postgres
 
 import (
 	"context"
@@ -8,32 +8,39 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-// Setup is the single-row first-run install state.
-type Setup struct {
-	TokenHash        []byte
-	TokenGeneratedAt time.Time
-	CompletedAt      *time.Time
-	CompletedBy      *uuid.UUID
-}
-
-type SetupRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewSetupRepo(p *pgxpool.Pool) *SetupRepo { return &SetupRepo{pool: p} }
+type SetupRepo struct{ pool *pgxpool.Pool }
 
 // Get returns the row, or ErrNotFound when no install ceremony has yet been
 // kicked off (the boot path lazily inserts it).
-func (r *SetupRepo) Get(ctx context.Context) (*Setup, error) {
-	var s Setup
+func (r *SetupRepo) Get(ctx context.Context) (*repo.Setup, error) {
+	var s repo.Setup
 	err := r.pool.QueryRow(ctx, `
 		SELECT token_hash, token_generated_at, completed_at, completed_by
 		FROM app_setup WHERE id = true
 	`).Scan(&s.TokenHash, &s.TokenGeneratedAt, &s.CompletedAt, &s.CompletedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// GetForUpdate reads the single install row inside tx, locking it against a
+// racing completer (FOR UPDATE). Returns ErrNotFound when no row exists yet.
+func (r *SetupRepo) GetForUpdate(ctx context.Context, tx repo.Tx) (*repo.Setup, error) {
+	var s repo.Setup
+	err := native(tx).QueryRow(ctx, `
+		SELECT token_hash, token_generated_at, completed_at, completed_by
+		FROM app_setup WHERE id = true FOR UPDATE
+	`).Scan(&s.TokenHash, &s.TokenGeneratedAt, &s.CompletedAt, &s.CompletedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -56,12 +63,10 @@ func (r *SetupRepo) Upsert(ctx context.Context, hash []byte, at time.Time) error
 	return err
 }
 
-// Complete marks setup as finished. q may be a *pgx.Tx so completion can be
+// Complete marks setup as finished. tx may be non-nil so completion can be
 // committed atomically with the admin-user creation in SetupService.
-func (r *SetupRepo) Complete(ctx context.Context, q Querier, by uuid.UUID) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+func (r *SetupRepo) Complete(ctx context.Context, tx repo.Tx, by uuid.UUID) error {
+	q := resolve(r.pool, tx)
 	_, err := q.Exec(ctx, `
 		UPDATE app_setup
 		   SET completed_at = now(), completed_by = $1

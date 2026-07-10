@@ -1,4 +1,4 @@
-.PHONY: help gen gen-go gen-ts-frontend migrate-up migrate-down test test-go test-frontend test-e2e dev dev-api dev-frontend lint lint-go lint-frontend build build-frontend embed-frontend tidy up licenses sbom compliance
+.PHONY: help gen gen-go gen-ts-frontend migrate-up migrate-down test test-go test-go-postgres test-go-sqlite test-go-both test-frontend test-e2e dev dev-api dev-frontend lint lint-go lint-frontend build build-frontend embed-frontend tidy up licenses sbom compliance
 
 # Where the built Vue SPA is copied so the Go binary can //go:embed it.
 WEBUI_DIST := api/internal/webui/dist
@@ -21,18 +21,30 @@ gen-go: ## Generate Go models + embedded spec from docs/openapi.yaml
 gen-ts-frontend: ## Generate TypeScript types for the Vue SPA client
 	cd frontend && npm run gen:api
 
-migrate-up: ## Apply all migrations
+migrate-up: ## Apply all Postgres migrations
 	cd api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate \
 		-path ./migrations -database "$(DATABASE_URL)" up
 
-migrate-down: ## Roll back the most recent migration
+migrate-down: ## Roll back the most recent Postgres migration
 	cd api && go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate \
 		-path ./migrations -database "$(DATABASE_URL)" down 1
 
+# SQLite has no separate migrate step: the api/worker binary applies its
+# embedded migrations (api/internal/repo/sqlite/migrations) in-process on first
+# boot. Run the app with DATABASE_DRIVER=sqlite DATABASE_URL=file:/path/dts.db.
+
 test: test-go test-frontend ## Run all tests
 
-test-go: ## Run Go unit + integration tests
+test-go: ## Run Go unit + integration tests (Postgres engine)
 	cd api && go test ./... -race $(GOTEST_FLAGS)
+
+test-go-postgres: ## Run the Go suite against Postgres (testcontainers)
+	cd api && TEST_DB_DRIVER=postgres go test ./... -race $(GOTEST_FLAGS)
+
+test-go-sqlite: ## Run the Go suite against SQLite (in-process)
+	cd api && TEST_DB_DRIVER=sqlite go test ./... -race $(GOTEST_FLAGS)
+
+test-go-both: test-go-postgres test-go-sqlite ## Run the Go suite against both engines
 
 test-frontend: ## Run Vue SPA unit tests
 	cd frontend && npm test --silent

@@ -27,13 +27,13 @@ const (
 // follow-up round-trip.
 type SearchService struct {
 	groups   *GroupService
-	groupsRp *repo.GroupRepo
-	search   *repo.SearchRepo
-	expenses *repo.ExpenseRepo
-	settles  *repo.SettlementRepo
+	groupsRp repo.GroupRepo
+	search   repo.SearchRepo
+	expenses repo.ExpenseRepo
+	settles  repo.SettlementRepo
 }
 
-func NewSearchService(g *GroupService, gr *repo.GroupRepo, s *repo.SearchRepo, e *repo.ExpenseRepo, st *repo.SettlementRepo) *SearchService {
+func NewSearchService(g *GroupService, gr repo.GroupRepo, s repo.SearchRepo, e repo.ExpenseRepo, st repo.SettlementRepo) *SearchService {
 	return &SearchService{groups: g, groupsRp: gr, search: s, expenses: e, settles: st}
 }
 

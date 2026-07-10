@@ -15,8 +15,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
@@ -45,13 +43,13 @@ type SetupLocker interface {
 }
 
 type AuthService struct {
-	users        *repo.UserRepo
-	refresh      *repo.RefreshTokenRepo
-	audit        *repo.AuditRepo
-	verification *repo.VerificationRepo
+	users        repo.UserRepo
+	refresh      repo.RefreshTokenRepo
+	audit        repo.AuditRepo
+	verification repo.VerificationRepo
 	mailer       *MailerService
 	setupLock    SetupLocker
-	pool         *pgxpool.Pool
+	store        repo.Store
 	email        *crypto.EmailCipher
 	pepper       []byte
 	// jwtKey signs/verifies bearer access tokens; accessTTL/refreshTTL govern
@@ -87,14 +85,14 @@ const (
 // to HTTP 423 Locked.
 var ErrStepUpRateLimited = errors.New("step-up rate limited")
 
-func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, audit *repo.AuditRepo, verification *repo.VerificationRepo, mailer *MailerService, setupLock SetupLocker, email *crypto.EmailCipher, pepper []byte) *AuthService {
+func NewAuthService(store repo.Store, users repo.UserRepo, audit repo.AuditRepo, verification repo.VerificationRepo, mailer *MailerService, setupLock SetupLocker, email *crypto.EmailCipher, pepper []byte) *AuthService {
 	return &AuthService{
 		users:        users,
 		audit:        audit,
 		verification: verification,
 		mailer:       mailer,
 		setupLock:    setupLock,
-		pool:         pool,
+		store:        store,
 		email:        email,
 		pepper:       pepper,
 	}
@@ -104,7 +102,7 @@ func NewAuthService(pool *pgxpool.Pool, users *repo.UserRepo, audit *repo.AuditR
 // threads the refresh repo into the token-revocation paths so that password
 // change, account delete, and email-change confirm revoke refresh tokens.
 // Wired in cmd/api; tests that don't exercise auth may leave it unset.
-func (s *AuthService) SetTokenAuth(refresh *repo.RefreshTokenRepo, jwtKey []byte, accessTTL, refreshTTL time.Duration) {
+func (s *AuthService) SetTokenAuth(refresh repo.RefreshTokenRepo, jwtKey []byte, accessTTL, refreshTTL time.Duration) {
 	s.refresh = refresh
 	s.jwtKey = jwtKey
 	s.accessTTL = accessTTL
@@ -179,7 +177,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, displayName
 		}
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +260,7 @@ func ptrNow() *time.Time { t := time.Now(); return &t }
 // caller observes count==0. Returns the service-level User projection AND
 // the underlying repo.User row (the latter is what SetupService needs to
 // stamp `completed_by`).
-func (s *AuthService) RegisterTx(ctx context.Context, tx pgx.Tx, email, password, displayName string) (*User, *repo.User, error) {
+func (s *AuthService) RegisterTx(ctx context.Context, tx repo.Tx, email, password, displayName string) (*User, *repo.User, error) {
 	email = strings.TrimSpace(email)
 	displayName = strings.TrimSpace(displayName)
 	if email == "" || password == "" || displayName == "" {
@@ -295,11 +293,11 @@ func (s *AuthService) RegisterTx(ctx context.Context, tx pgx.Tx, email, password
 		PasswordHash:   pwdHash,
 	}
 
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('admin_bootstrap'))`); err != nil {
+	if err := s.store.LockBootstrap(ctx, tx); err != nil {
 		return nil, nil, err
 	}
-	var n int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&n); err != nil {
+	n, err := s.users.CountActive(ctx, tx)
+	if err != nil {
 		return nil, nil, err
 	}
 	role := "user"

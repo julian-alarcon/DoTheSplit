@@ -1,32 +1,19 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type RefreshToken struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	TokenHash  []byte
-	IssuedAt   time.Time
-	ExpiresAt  time.Time
-	RevokedAt  *time.Time
-	ReplacedBy *uuid.UUID
-}
+type RefreshTokenRepo struct{ pool *pgxpool.Pool }
 
-type RefreshTokenRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewRefreshTokenRepo(p *pgxpool.Pool) *RefreshTokenRepo { return &RefreshTokenRepo{pool: p} }
-
-func (r *RefreshTokenRepo) Create(ctx context.Context, t *RefreshToken) error {
+func (r *RefreshTokenRepo) Create(ctx context.Context, t *repo.RefreshToken) error {
 	return r.pool.QueryRow(ctx, `
 		INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3)
@@ -37,14 +24,14 @@ func (r *RefreshTokenRepo) Create(ctx context.Context, t *RefreshToken) error {
 // FindByTokenHash returns the token row regardless of revocation/expiry so the
 // service layer can distinguish "unknown" (ErrNotFound) from "presented again
 // after rotation" (revoked_at/replaced_by set), which is a reuse attack.
-func (r *RefreshTokenRepo) FindByTokenHash(ctx context.Context, tokenHash []byte) (*RefreshToken, error) {
-	var t RefreshToken
+func (r *RefreshTokenRepo) FindByTokenHash(ctx context.Context, tokenHash []byte) (*repo.RefreshToken, error) {
+	var t repo.RefreshToken
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, user_id, token_hash, issued_at, expires_at, revoked_at, replaced_by
 		FROM refresh_tokens WHERE token_hash = $1
 	`, tokenHash).Scan(&t.ID, &t.UserID, &t.TokenHash, &t.IssuedAt, &t.ExpiresAt, &t.RevokedAt, &t.ReplacedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -54,12 +41,12 @@ func (r *RefreshTokenRepo) FindByTokenHash(ctx context.Context, tokenHash []byte
 
 // Rotate revokes the presented token and inserts its successor in one tx,
 // linking the old row's replaced_by to the new id. Returns the new row.
-func (r *RefreshTokenRepo) Rotate(ctx context.Context, oldID uuid.UUID, next *RefreshToken) (*RefreshToken, error) {
+func (r *RefreshTokenRepo) Rotate(ctx context.Context, oldID uuid.UUID, next *repo.RefreshToken) (*repo.RefreshToken, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO refresh_tokens (user_id, token_hash, expires_at)

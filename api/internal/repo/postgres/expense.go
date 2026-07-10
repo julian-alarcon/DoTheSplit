@@ -1,4 +1,4 @@
-package repo
+package postgres
 
 import (
 	"context"
@@ -11,62 +11,37 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type Expense struct {
-	ID                 uuid.UUID
-	GroupID            uuid.UUID
-	PayerID            uuid.UUID
-	CreatedBy          uuid.UUID
-	CategoryID         uuid.UUID
-	AmountCents        int64
-	Currency           string
-	Description        string
-	Notes              string
-	IncurredAt         time.Time
-	CreatedAt          time.Time
-	DeletedAt          *time.Time
-	RecurringExpenseID *uuid.UUID
-	Splits             []Split
-}
-
-type Split struct {
-	ExpenseID  uuid.UUID
-	UserID     uuid.UUID
-	ShareCents int64
-}
-
-type ExpenseRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewExpenseRepo(p *pgxpool.Pool) *ExpenseRepo { return &ExpenseRepo{pool: p} }
+type ExpenseRepo struct{ pool *pgxpool.Pool }
 
 const (
 	expenseCols            = `id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, recurring_expense_id`
 	expenseColsWithDeleted = `id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, created_at, deleted_at, recurring_expense_id`
 )
 
-// CreateWithSplits inserts an expense and its splits atomically in its own
-// transaction. Callers that already hold a transaction (e.g. the importer,
-// which commits a whole group in one tx) should use CreateWithSplitsTx instead.
-func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *Expense) error {
+// CreateWithSplits inserts an expense and its splits atomically in its own tx.
+func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *repo.Expense) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := r.CreateWithSplitsTx(ctx, tx, e); err != nil {
+	if err := r.createWithSplits(ctx, tx, e); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-// CreateWithSplitsTx inserts an expense, its splits, and the activity event on
-// the supplied transaction. The caller owns the tx lifecycle (Begin/Commit/
-// Rollback).
-func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *Expense) error {
-	err := tx.QueryRow(ctx, `
+// CreateWithSplitsTx inserts on the caller-owned transaction.
+func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *repo.Expense) error {
+	return r.createWithSplits(ctx, native(tx), e)
+}
+
+func (r *ExpenseRepo) createWithSplits(ctx context.Context, q dbtx, e *repo.Expense) error {
+	err := q.QueryRow(ctx, `
 		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at
@@ -77,13 +52,13 @@ func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *Expe
 	}
 	for i := range e.Splits {
 		e.Splits[i].ExpenseID = e.ID
-		if _, err := tx.Exec(ctx, `
+		if _, err := q.Exec(ctx, `
 			INSERT INTO splits (expense_id, user_id, share_cents) VALUES ($1, $2, $3)
 		`, e.ID, e.Splits[i].UserID, e.Splits[i].ShareCents); err != nil {
 			return err
 		}
 	}
-	meta, err := expenseEventMeta(ctx, tx, e.ID)
+	meta, err := expenseEventMeta(ctx, q, e.ID)
 	if err != nil {
 		return err
 	}
@@ -98,20 +73,17 @@ func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx pgx.Tx, e *Expe
 		// Worker-generated: system actor (NULL) so the feed shows "Recurring".
 		actor = nil
 	}
-	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+	return insertActivityEvent(ctx, q, repo.ActivityEvent{
 		GroupID:   e.GroupID,
 		ActorID:   actor,
-		Action:    ActionExpenseCreated,
+		Action:    repo.ActionExpenseCreated,
 		ExpenseID: &e.ID,
 		Metadata:  meta,
-	}); err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
 // ListByGroup returns non-deleted expenses with their splits, newest first.
-func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Expense, error) {
+func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]repo.Expense, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+expenseCols+`
 		FROM expenses
@@ -122,9 +94,9 @@ func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Exp
 		return nil, err
 	}
 	defer rows.Close()
-	var exps []Expense
+	var exps []repo.Expense
 	for rows.Next() {
-		var e Expense
+		var e repo.Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
 			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.RecurringExpenseID); err != nil {
 			return nil, err
@@ -137,37 +109,24 @@ func (r *ExpenseRepo) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Exp
 	if len(exps) == 0 {
 		return exps, nil
 	}
-	// Fetch splits in a single query.
 	ids := make([]uuid.UUID, len(exps))
 	for i, e := range exps {
 		ids[i] = e.ID
 	}
-	srows, err := r.pool.Query(ctx, `
-		SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = ANY($1)
-	`, ids)
+	splitsByExpense, err := r.splitsFor(ctx, ids)
 	if err != nil {
 		return nil, err
-	}
-	defer srows.Close()
-	splitsByExpense := map[uuid.UUID][]Split{}
-	for srows.Next() {
-		var s Split
-		if err := srows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
-			return nil, err
-		}
-		splitsByExpense[s.ExpenseID] = append(splitsByExpense[s.ExpenseID], s)
 	}
 	for i := range exps {
 		exps[i].Splits = splitsByExpense[exps[i].ID]
 	}
-	return exps, srows.Err()
+	return exps, nil
 }
 
-// FindByIDs returns the non-deleted expenses (with their splits) for the given
-// IDs, keyed by id. Missing or soft-deleted IDs are simply absent.
-func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*Expense, error) {
+// FindByIDs returns non-deleted expenses (with splits) keyed by id.
+func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]*repo.Expense, error) {
 	if len(ids) == 0 {
-		return map[uuid.UUID]*Expense{}, nil
+		return map[uuid.UUID]*repo.Expense{}, nil
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+expenseCols+`
@@ -178,14 +137,15 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 		return nil, err
 	}
 	defer rows.Close()
-	out := make(map[uuid.UUID]*Expense, len(ids))
+	out := make(map[uuid.UUID]*repo.Expense, len(ids))
 	for rows.Next() {
-		var e Expense
+		var e repo.Expense
 		if err := rows.Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents,
 			&e.Currency, &e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.RecurringExpenseID); err != nil {
 			return nil, err
 		}
-		out[e.ID] = &e
+		ecopy := e
+		out[e.ID] = &ecopy
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -193,34 +153,47 @@ func (r *ExpenseRepo) FindByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.
 	if len(out) == 0 {
 		return out, nil
 	}
-	srows, err := r.pool.Query(ctx, `
+	splitsByExpense, err := r.splitsFor(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for id, ss := range splitsByExpense {
+		if e, ok := out[id]; ok {
+			e.Splits = ss
+		}
+	}
+	return out, nil
+}
+
+// splitsFor batch-loads splits for the given expense ids.
+func (r *ExpenseRepo) splitsFor(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]repo.Split, error) {
+	rows, err := r.pool.Query(ctx, `
 		SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = ANY($1)
 	`, ids)
 	if err != nil {
 		return nil, err
 	}
-	defer srows.Close()
-	for srows.Next() {
-		var s Split
-		if err := srows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
+	defer rows.Close()
+	out := map[uuid.UUID][]repo.Split{}
+	for rows.Next() {
+		var s repo.Split
+		if err := rows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
 			return nil, err
 		}
-		if e, ok := out[s.ExpenseID]; ok {
-			e.Splits = append(e.Splits, s)
-		}
+		out[s.ExpenseID] = append(out[s.ExpenseID], s)
 	}
-	return out, srows.Err()
+	return out, rows.Err()
 }
 
-func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, error) {
-	var e Expense
+func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*repo.Expense, error) {
+	var e repo.Expense
 	err := r.pool.QueryRow(ctx, `
 		SELECT `+expenseColsWithDeleted+`
 		FROM expenses WHERE id = $1
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -233,7 +206,7 @@ func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, err
 	}
 	defer srows.Close()
 	for srows.Next() {
-		var s Split
+		var s repo.Split
 		if err := srows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
 			return nil, err
 		}
@@ -243,63 +216,42 @@ func (r *ExpenseRepo) FindByID(ctx context.Context, id uuid.UUID) (*Expense, err
 }
 
 func (r *ExpenseRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var groupID uuid.UUID
-	tag, err := tx.Exec(ctx, `
-		UPDATE expenses SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL
-	`, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	if err := tx.QueryRow(ctx, `SELECT group_id FROM expenses WHERE id = $1`, id).Scan(&groupID); err != nil {
-		return err
-	}
-	// Category metadata still resolves: the row is soft-deleted, not removed.
-	meta, err := expenseEventMeta(ctx, tx, id)
-	if err != nil {
-		return err
-	}
-	var actor *uuid.UUID
-	if actorID != uuid.Nil {
-		actor = &actorID
-	}
-	if err := insertActivityEvent(ctx, tx, ActivityEvent{
-		GroupID:   groupID,
-		ActorID:   actor,
-		Action:    ActionExpenseDeleted,
-		ExpenseID: &id,
-		Metadata:  meta,
-	}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return r.setDeleted(ctx, id, actorID, true)
 }
 
 func (r *ExpenseRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UUID) error {
+	return r.setDeleted(ctx, id, actorID, false)
+}
+
+// setDeleted toggles the soft-delete state and writes the matching activity
+// event in one tx. delete=true sets deleted_at (guarding on currently-active);
+// delete=false clears it (guarding on currently-deleted).
+func (r *ExpenseRepo) setDeleted(ctx context.Context, id, actorID uuid.UUID, del bool) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var groupID uuid.UUID
-	tag, err := tx.Exec(ctx, `
-		UPDATE expenses SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL
-	`, id)
+	var (
+		sql    string
+		action repo.ActivityAction
+	)
+	if del {
+		sql = `UPDATE expenses SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`
+		action = repo.ActionExpenseDeleted
+	} else {
+		sql = `UPDATE expenses SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL`
+		action = repo.ActionExpenseRestored
+	}
+	tag, err := tx.Exec(ctx, sql, id)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
+	var groupID uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT group_id FROM expenses WHERE id = $1`, id).Scan(&groupID); err != nil {
 		return err
 	}
@@ -311,10 +263,10 @@ func (r *ExpenseRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	if actorID != uuid.Nil {
 		actor = &actorID
 	}
-	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+	if err := insertActivityEvent(ctx, tx, repo.ActivityEvent{
 		GroupID:   groupID,
 		ActorID:   actor,
-		Action:    ActionExpenseRestored,
+		Action:    action,
 		ExpenseID: &id,
 		Metadata:  meta,
 	}); err != nil {
@@ -323,13 +275,8 @@ func (r *ExpenseRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	return tx.Commit(ctx)
 }
 
-// Update applies description / amount / category / payer / splits changes in one tx.
-// If newSplits is non-nil, existing splits are replaced wholesale (the service layer
-// has already resolved per-user shares via resolveSplits). Otherwise, if amountCents
-// changed, existing splits are rescaled proportionally - preserving each user's
-// relative share; rounding remainder goes to the first splits in user_id order.
-// Every non-nil change writes an expense_revisions row; split changes are recorded
-// as a single 'splits' row with JSON before/after.
+// Update applies partial changes in one tx, writing an expense_revisions row per
+// changed field. See the interface doc for the split-rescale semantics.
 func (r *ExpenseRepo) Update(
 	ctx context.Context,
 	id, editorID uuid.UUID,
@@ -339,28 +286,28 @@ func (r *ExpenseRepo) Update(
 	payerID *uuid.UUID,
 	incurredAt *time.Time,
 	notes *string,
-	newSplits []Split,
-) (*Expense, error) {
+	newSplits []repo.Split,
+) (*repo.Expense, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var e Expense
+	var e repo.Expense
 	err = tx.QueryRow(ctx, `
 		SELECT `+expenseColsWithDeleted+`
 		FROM expenses WHERE id = $1 FOR UPDATE
 	`, id).Scan(&e.ID, &e.GroupID, &e.PayerID, &e.CreatedBy, &e.CategoryID, &e.AmountCents, &e.Currency,
 		&e.Description, &e.Notes, &e.IncurredAt, &e.CreatedAt, &e.DeletedAt, &e.RecurringExpenseID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
 	if e.DeletedAt != nil {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 
 	revisions := []struct{ field, oldV, newV string }{}
@@ -381,9 +328,6 @@ func (r *ExpenseRepo) Update(
 		e.PayerID = *payerID
 	}
 	if incurredAt != nil && !incurredAt.Equal(e.IncurredAt) {
-		// Store as RFC3339 UTC so old/new round-trips through Time.Parse on
-		// the frontend. Truncating to the wire precision keeps idempotent
-		// re-saves from generating spurious revision rows.
 		oldStr := e.IncurredAt.UTC().Format(time.RFC3339)
 		newStr := incurredAt.UTC().Format(time.RFC3339)
 		if oldStr != newStr {
@@ -397,10 +341,10 @@ func (r *ExpenseRepo) Update(
 		return nil, err
 	}
 
-	var splitsToWrite []Split
+	var splitsToWrite []repo.Split
 	splitsChanged := false
 	if newSplits != nil {
-		resolved := make([]Split, len(newSplits))
+		resolved := make([]repo.Split, len(newSplits))
 		copy(resolved, newSplits)
 		for i := range resolved {
 			resolved[i].ExpenseID = id
@@ -477,8 +421,6 @@ func (r *ExpenseRepo) Update(
 		}
 	}
 
-	// Emit the activity event reflecting the post-update category (so a
-	// category change shows the new icon). Only reached when something changed.
 	meta, err := expenseEventMeta(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -487,10 +429,10 @@ func (r *ExpenseRepo) Update(
 	if editorID != uuid.Nil {
 		actor = &editorID
 	}
-	if err := insertActivityEvent(ctx, tx, ActivityEvent{
+	if err := insertActivityEvent(ctx, tx, repo.ActivityEvent{
 		GroupID:   e.GroupID,
 		ActorID:   actor,
-		Action:    ActionExpenseUpdated,
+		Action:    repo.ActionExpenseUpdated,
 		ExpenseID: &id,
 		Metadata:  meta,
 	}); err != nil {
@@ -501,14 +443,13 @@ func (r *ExpenseRepo) Update(
 		return nil, err
 	}
 
-	// Reload splits for the returned expense.
 	srows, err := r.pool.Query(ctx, `SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
 	defer srows.Close()
 	for srows.Next() {
-		var s Split
+		var s repo.Split
 		if err := srows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
 			return nil, err
 		}
@@ -517,15 +458,15 @@ func (r *ExpenseRepo) Update(
 	return &e, srows.Err()
 }
 
-func fetchSplitsForUpdate(ctx context.Context, tx pgx.Tx, expenseID uuid.UUID) ([]Split, error) {
-	rows, err := tx.Query(ctx, `SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = $1 ORDER BY user_id`, expenseID)
+func fetchSplitsForUpdate(ctx context.Context, q dbtx, expenseID uuid.UUID) ([]repo.Split, error) {
+	rows, err := q.Query(ctx, `SELECT expense_id, user_id, share_cents FROM splits WHERE expense_id = $1 ORDER BY user_id`, expenseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Split
+	var out []repo.Split
 	for rows.Next() {
-		var s Split
+		var s repo.Split
 		if err := rows.Scan(&s.ExpenseID, &s.UserID, &s.ShareCents); err != nil {
 			return nil, err
 		}
@@ -536,7 +477,7 @@ func fetchSplitsForUpdate(ctx context.Context, tx pgx.Tx, expenseID uuid.UUID) (
 
 // marshalSplitsForRevision emits a compact JSON array of {user_id, share_cents},
 // sorted by user_id, for stable before/after diffs in expense_revisions.
-func marshalSplitsForRevision(splits []Split) (string, error) {
+func marshalSplitsForRevision(splits []repo.Split) (string, error) {
 	type row struct {
 		UserID     string `json:"user_id"`
 		ShareCents int64  `json:"share_cents"`
@@ -553,7 +494,7 @@ func marshalSplitsForRevision(splits []Split) (string, error) {
 	return string(b), nil
 }
 
-func splitsEqual(a, b []Split) bool {
+func splitsEqual(a, b []repo.Split) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -570,7 +511,7 @@ func splitsEqual(a, b []Split) bool {
 }
 
 // ListRevisions returns the full edit history for an expense (oldest first).
-func (r *ExpenseRepo) ListRevisions(ctx context.Context, expenseID uuid.UUID) ([]ExpenseRevision, error) {
+func (r *ExpenseRepo) ListRevisions(ctx context.Context, expenseID uuid.UUID) ([]repo.ExpenseRevision, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, expense_id, edited_by, edited_at, field, old_value, new_value
 		FROM expense_revisions WHERE expense_id = $1 ORDER BY edited_at ASC
@@ -579,9 +520,9 @@ func (r *ExpenseRepo) ListRevisions(ctx context.Context, expenseID uuid.UUID) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ExpenseRevision
+	var out []repo.ExpenseRevision
 	for rows.Next() {
-		var rv ExpenseRevision
+		var rv repo.ExpenseRevision
 		if err := rows.Scan(&rv.ID, &rv.ExpenseID, &rv.EditedBy, &rv.EditedAt,
 			&rv.Field, &rv.OldValue, &rv.NewValue); err != nil {
 			return nil, err
@@ -591,21 +532,10 @@ func (r *ExpenseRepo) ListRevisions(ctx context.Context, expenseID uuid.UUID) ([
 	return out, rows.Err()
 }
 
-type ExpenseRevision struct {
-	ID        uuid.UUID
-	ExpenseID uuid.UUID
-	EditedBy  uuid.UUID
-	EditedAt  time.Time
-	Field     string
-	OldValue  string
-	NewValue  string
-}
-
-// rescaleSplits turns existing share_cents into new shares proportional to
-// the new total. Rounding leftovers go to the first splits in user_id order
-// (matching the order enforced at read time).
-func rescaleSplits(existing []Split, oldTotal, newTotal int64) []Split {
-	out := make([]Split, len(existing))
+// rescaleSplits turns existing share_cents into new shares proportional to the
+// new total. Rounding leftovers go to the first splits in user_id order.
+func rescaleSplits(existing []repo.Split, oldTotal, newTotal int64) []repo.Split {
+	out := make([]repo.Split, len(existing))
 	copy(out, existing)
 	if oldTotal == 0 || len(out) == 0 {
 		return out

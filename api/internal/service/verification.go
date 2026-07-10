@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
@@ -87,7 +86,7 @@ func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) (*Use
 		return nil, ErrInvalidCode
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +149,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) erro
 		return nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil
 	}
@@ -235,7 +234,7 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, userID uuid.UUID, 
 		return err
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -292,7 +291,7 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 		return nil, ErrCodeExpired
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -302,10 +301,10 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 		return nil, err
 	}
 	if err := s.users.UpdateEmail(ctx, tx, userID, tok.NewEmailHash, tok.NewEmailEnc); err != nil {
-		// Translate the partial-unique-index violation into ErrEmailTaken
-		// so the handler maps it to 409 instead of a 500.
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		// The repo maps a unique-violation on the active-email index to
+		// repo.ErrConflict (engine-neutral); surface it as ErrEmailTaken so
+		// the handler maps it to 409 instead of a 500.
+		if errors.Is(err, repo.ErrConflict) {
 			return nil, ErrEmailTaken
 		}
 		return nil, err
@@ -344,7 +343,7 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, userID uuid.UUID, 
 // the admin handler can surface a clear "configure SMTP first" error before
 // it commits the user mutation. The public forgot-password path swallows
 // that error itself for enumeration safety.
-func (s *AuthService) EnqueuePasswordResetTx(ctx context.Context, tx repo.Querier, u *repo.User, plaintextEmail string) error {
+func (s *AuthService) EnqueuePasswordResetTx(ctx context.Context, tx repo.Tx, u *repo.User, plaintextEmail string) error {
 	if s.mailer == nil {
 		return ErrSmtpUnconfigured
 	}
@@ -411,7 +410,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 		return nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil
 	}
@@ -471,7 +470,7 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, new
 		return nil, err
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -480,7 +479,10 @@ func (s *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, new
 	if err := s.verification.Consume(ctx, tx, tok.ID); err != nil {
 		return nil, err
 	}
-	if err := s.users.UpdatePasswordHash(ctx, u.ID, newHash); err != nil {
+	// Update on the tx (not the pool): a pool write while this tx holds the
+	// write lock would self-deadlock on SQLite's single writer, and it keeps the
+	// password rotation atomic with consuming the token on both engines.
+	if err := s.users.UpdatePasswordHashTx(ctx, tx, u.ID, newHash); err != nil {
 		return nil, err
 	}
 	_ = s.audit.Insert(ctx, tx, &repo.AuditEntry{
@@ -522,9 +524,6 @@ func constantTimeEqual(a, b []byte) bool {
 	}
 	return v == 0
 }
-
-// Compile-time check: pgconn.PgError remains the type pgx surfaces.
-var _ = (*pgconn.PgError)(nil)
 
 // Reference crypto so go vet doesn't complain in case future refactors drop
 // the import path elsewhere.

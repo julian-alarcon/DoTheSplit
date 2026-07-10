@@ -204,9 +204,8 @@ func TestDeleteMe(t *testing.T) {
 	require.NotEqual(t, userAID, userB["id"].(string))
 
 	// The tombstone display_name must reference the deleted user's UUID.
-	var tombstone string
-	require.NoError(t, ts.pool.QueryRow(t.Context(),
-		`SELECT display_name FROM users WHERE id = $1`, userAID).Scan(&tombstone))
+	tombstone, err := ts.raw().UserDisplayName(t.Context(), userAID)
+	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(tombstone, "Deleted user #"), "got %q", tombstone)
 	require.Contains(t, tombstone, strings.Split(userAID, "-")[0])
 }

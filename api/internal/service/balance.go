@@ -20,11 +20,11 @@ type BalancesResult struct {
 }
 
 type BalanceService struct {
-	balances *repo.BalanceRepo
-	groups   *repo.GroupRepo
+	balances repo.BalanceRepo
+	groups   repo.GroupRepo
 }
 
-func NewBalanceService(b *repo.BalanceRepo, g *repo.GroupRepo) *BalanceService {
+func NewBalanceService(b repo.BalanceRepo, g repo.GroupRepo) *BalanceService {
 	return &BalanceService{balances: b, groups: g}
 }
 

@@ -27,14 +27,14 @@ var (
 const DefaultGroupCurrency = "EUR"
 
 type GroupService struct {
-	groups        *repo.GroupRepo
-	users         *repo.UserRepo
-	balances      *repo.BalanceRepo
+	groups        repo.GroupRepo
+	users         repo.UserRepo
+	balances      repo.BalanceRepo
 	email         *crypto.EmailCipher
 	notifications *NotificationService
 }
 
-func NewGroupService(g *repo.GroupRepo, u *repo.UserRepo, b *repo.BalanceRepo, e *crypto.EmailCipher) *GroupService {
+func NewGroupService(g repo.GroupRepo, u repo.UserRepo, b repo.BalanceRepo, e *crypto.EmailCipher) *GroupService {
 	return &GroupService{groups: g, users: u, balances: b, email: e}
 }
 

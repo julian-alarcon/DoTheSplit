@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/csvimport"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
@@ -45,16 +44,15 @@ type ImportGroupExpensesResult struct {
 // default-split rule (pinned 2-member percent or equal across all
 // members).
 type GroupExpenseImporter struct {
-	pool       *pgxpool.Pool
-	groupRepo  *repo.GroupRepo
+	groupRepo  repo.GroupRepo
 	groups     *GroupService
 	expenses   *ExpenseService
 	categories *CategoryService
 }
 
-func NewGroupExpenseImporter(pool *pgxpool.Pool, groupRepo *repo.GroupRepo, groups *GroupService, expenses *ExpenseService, categories *CategoryService) *GroupExpenseImporter {
+func NewGroupExpenseImporter(groupRepo repo.GroupRepo, groups *GroupService, expenses *ExpenseService, categories *CategoryService) *GroupExpenseImporter {
 	return &GroupExpenseImporter{
-		pool: pool, groupRepo: groupRepo, groups: groups,
+		groupRepo: groupRepo, groups: groups,
 		expenses: expenses, categories: categories,
 	}
 }

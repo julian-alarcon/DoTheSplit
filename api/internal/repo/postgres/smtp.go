@@ -1,41 +1,26 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"errors"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type SmtpConfig struct {
-	Host              string
-	Port              int
-	Username          *string
-	PasswordEncrypted []byte
-	FromAddress       string
-	TLSMode           string
-	UpdatedAt         time.Time
-	UpdatedBy         *uuid.UUID
-}
-
-type SmtpRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewSmtpRepo(p *pgxpool.Pool) *SmtpRepo { return &SmtpRepo{pool: p} }
+type SmtpRepo struct{ pool *pgxpool.Pool }
 
 // Get returns the single config row, or ErrNotFound if none has been written.
-func (r *SmtpRepo) Get(ctx context.Context) (*SmtpConfig, error) {
-	var c SmtpConfig
+func (r *SmtpRepo) Get(ctx context.Context) (*repo.SmtpConfig, error) {
+	var c repo.SmtpConfig
 	err := r.pool.QueryRow(ctx, `
 		SELECT host, port, username, password_encrypted, from_address, tls_mode, updated_at, updated_by
 		FROM smtp_config WHERE id = true
 	`).Scan(&c.Host, &c.Port, &c.Username, &c.PasswordEncrypted, &c.FromAddress, &c.TLSMode, &c.UpdatedAt, &c.UpdatedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -46,7 +31,7 @@ func (r *SmtpRepo) Get(ctx context.Context) (*SmtpConfig, error) {
 // Upsert writes the single-row config. passwordEncrypted is written verbatim;
 // pass nil to leave the existing ciphertext untouched, or an empty slice to
 // clear it.
-func (r *SmtpRepo) Upsert(ctx context.Context, c *SmtpConfig, leavePassword bool) error {
+func (r *SmtpRepo) Upsert(ctx context.Context, c *repo.SmtpConfig, leavePassword bool) error {
 	// Two upsert variants because COALESCE on bytea($) needs a typed NULL.
 	if leavePassword {
 		_, err := r.pool.Exec(ctx, `

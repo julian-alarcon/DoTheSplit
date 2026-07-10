@@ -18,14 +18,14 @@ import (
 // the extra columns) and the future /v1/imports/dothesplit.
 type GroupCSVExporter struct {
 	groups      *GroupService
-	groupRepo   *repo.GroupRepo
+	groupRepo   repo.GroupRepo
 	expenses    *ExpenseService
-	settlements *repo.SettlementRepo
+	settlements repo.SettlementRepo
 	categories  *CategoryService
-	users       *repo.UserRepo
+	users       repo.UserRepo
 }
 
-func NewGroupCSVExporter(g *GroupService, gr *repo.GroupRepo, e *ExpenseService, st *repo.SettlementRepo, c *CategoryService, u *repo.UserRepo) *GroupCSVExporter {
+func NewGroupCSVExporter(g *GroupService, gr repo.GroupRepo, e *ExpenseService, st repo.SettlementRepo, c *CategoryService, u repo.UserRepo) *GroupCSVExporter {
 	return &GroupCSVExporter{groups: g, groupRepo: gr, expenses: e, settlements: st, categories: c, users: u}
 }
 

@@ -21,7 +21,7 @@ func (s *Server) Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Readyz(w http.ResponseWriter, r *http.Request) {
-	if err := s.Pool.Ping(r.Context()); err != nil {
+	if err := s.Store.Ping(r.Context()); err != nil {
 		// Don't echo the raw driver error to the client: it can leak
 		// connection-string fragments and infrastructure detail. Log it
 		// server-side and return a static message.

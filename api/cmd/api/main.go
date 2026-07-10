@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/config"
 	"github.com/julian-alarcon/dothesplit/api/internal/crypto"
 	"github.com/julian-alarcon/dothesplit/api/internal/handlers"
 	"github.com/julian-alarcon/dothesplit/api/internal/realtime"
-	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 	"github.com/julian-alarcon/dothesplit/api/internal/server"
 	"github.com/julian-alarcon/dothesplit/api/internal/service"
+	"github.com/julian-alarcon/dothesplit/api/internal/storefactory"
+	"github.com/julian-alarcon/dothesplit/api/internal/worker"
 )
 
 // Stamped at build time via go build -ldflags "-X main.version=... -X main.commit=...".
@@ -49,32 +49,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Build the engine-specific store (Postgres or SQLite) and realtime wiring.
+	sf, err := storefactory.Open(ctx, cfg, logger)
 	if err != nil {
-		logger.Error("pgx pool", slog.String("err", err.Error()))
+		logger.Error("open store", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
-	defer pool.Close()
-
-	// Dedicated single-connection pool for the realtime LISTEN. RunListener
-	// parks one connection forever on WaitForNotification; drawing it from the
-	// shared request pool would permanently shrink that pool by one (the default
-	// max is max(4, NumCPU)), and a single dashboard load already fans out 4
-	// parallel queries - so the parked listener would force request queries to
-	// queue on acquire. Isolating it here keeps the request pool at full size.
-	listenerCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
-	if err != nil {
-		logger.Error("listener pool config", slog.String("err", err.Error()))
-		os.Exit(1)
-	}
-	listenerCfg.MaxConns = 1
-	listenerCfg.MinConns = 1
-	listenerPool, err := pgxpool.NewWithConfig(ctx, listenerCfg)
-	if err != nil {
-		logger.Error("listener pool", slog.String("err", err.Error()))
-		os.Exit(1)
-	}
-	defer listenerPool.Close()
+	defer sf.Close()
+	store := sf.Store
+	hub := sf.Hub
 
 	email, err := crypto.NewEmailCipher(cfg.EmailEncKey, cfg.EmailHMACKey)
 	if err != nil {
@@ -82,28 +65,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Real-time fan-out: a single LISTEN connection feeds the in-memory hub that
-	// SSE clients subscribe to. Started below, after the server is built.
-	hub := realtime.NewHub()
-
-	users := repo.NewUserRepo(pool)
-	refreshTokens := repo.NewRefreshTokenRepo(pool)
-	groups := repo.NewGroupRepo(pool)
-	expenses := repo.NewExpenseRepo(pool)
-	settlements := repo.NewSettlementRepo(pool)
-	balances := repo.NewBalanceRepo(pool)
-	recurring := repo.NewRecurringRepo(pool)
-	categories := repo.NewCategoryRepo(pool)
-	transactionRepo := repo.NewTransactionRepo(pool)
-	activityRepo := repo.NewActivityRepo(pool)
-	searchRepo := repo.NewSearchRepo(pool)
-	auditRepo := repo.NewAuditRepo(pool)
-	smtpRepo := repo.NewSmtpRepo(pool)
-	setupRepo := repo.NewSetupRepo(pool)
-	verificationRepo := repo.NewVerificationRepo(pool)
-	outboxRepo := repo.NewEmailOutboxRepo(pool)
+	users := store.Users()
+	refreshTokens := store.RefreshTokens()
+	groups := store.Groups()
+	expenses := store.Expenses()
+	settlements := store.Settlements()
+	balances := store.Balances()
+	recurring := store.Recurring()
+	categories := store.Categories()
+	transactionRepo := store.Transactions()
+	activityRepo := store.Activity()
+	searchRepo := store.Search()
+	auditRepo := store.Audit()
+	smtpRepo := store.Smtp()
+	setupRepo := store.Setup()
+	verificationRepo := store.Verification()
+	outboxRepo := store.EmailOutbox()
 	mailerSvc := service.NewMailerService(smtpRepo, outboxRepo, email, cfg.WebOrigin, logger)
-	auth := service.NewAuthService(pool, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
+	auth := service.NewAuthService(store, users, auditRepo, verificationRepo, mailerSvc, setupRepo, email, cfg.PasswordPepper)
 	auth.SetTokenAuth(refreshTokens, cfg.JWTSigningKey,
 		time.Duration(cfg.AccessTokenTTLMin)*time.Minute,
 		time.Duration(cfg.RefreshTokenTTLDay)*24*time.Hour)
@@ -120,12 +99,12 @@ func main() {
 	transactionSvc := service.NewTransactionService(groupSvc, transactionRepo, expenses, settlements, recurring)
 	activitySvc := service.NewActivityService(groupSvc, activityRepo)
 	searchSvc := service.NewSearchService(groupSvc, groups, searchRepo, expenses, settlements)
-	importSvc := service.NewSplitwiseImporter(pool, users, groups, expenseSvc, categorySvc, settlements, auth, email)
-	groupExpenseImporterSvc := service.NewGroupExpenseImporter(pool, groups, groupSvc, expenseSvc, categorySvc)
+	importSvc := service.NewSplitwiseImporter(store, users, groups, expenseSvc, categorySvc, settlements, auth, email)
+	groupExpenseImporterSvc := service.NewGroupExpenseImporter(groups, groupSvc, expenseSvc, categorySvc)
 	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
-	adminSvc := service.NewAdminService(pool, users, groups, auditRepo, auth, email, cfg.PasswordPepper)
+	adminSvc := service.NewAdminService(store, users, groups, auditRepo, auth, email, cfg.PasswordPepper)
 	smtpSvc := service.NewSmtpService(smtpRepo, email)
-	setupSvc := service.NewSetupService(pool, setupRepo, auth, auditRepo)
+	setupSvc := service.NewSetupService(store, setupRepo, auth, auditRepo)
 
 	// Wire notifications into the services that produce them. The hook is
 	// optional so tests can construct services without a real mailer.
@@ -150,7 +129,7 @@ func main() {
 	}
 
 	srv := &handlers.Server{
-		Cfg: cfg, Pool: pool,
+		Cfg: cfg, Store: store,
 		Auth:             auth,
 		MeSvc:            meSvc,
 		Groups:           groupSvc,
@@ -187,10 +166,22 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Park a LISTEN connection that fans Postgres activity notifications out to
-	// SSE subscribers. Uses its own single-connection pool (above) so it never
-	// competes with request queries. Exits when ctx is cancelled on shutdown.
-	go realtime.RunListener(ctx, listenerPool, hub, logger)
+	// Real-time delivery. Postgres: park a LISTEN connection that fans DB
+	// notifications out to SSE subscribers (its own single-conn pool, so it
+	// never competes with request queries). SQLite: the store publishes
+	// committed events straight to the hub, so no listener runs.
+	if sf.UsesListener {
+		go realtime.RunListener(ctx, sf.ListenerPool, hub, logger)
+	}
+
+	// Embedded worker: when WORKER_MODE=embedded (always on SQLite) run the
+	// recurring/outbox tick in-process instead of a separate container. On
+	// Postgres the tick's advisory lock still coordinates with any external
+	// worker, so running both is safe.
+	if cfg.WorkerMode == "embedded" {
+		go worker.Run(ctx, store, recurringSvc, mailerSvc, 60*time.Second, logger)
+		logger.Info("embedded worker started")
+	}
 
 	go func() {
 		logger.Info("listening", slog.String("addr", cfg.HTTPAddr))

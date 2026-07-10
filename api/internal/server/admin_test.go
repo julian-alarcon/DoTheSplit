@@ -177,10 +177,7 @@ func TestAdminResetSendsEmail(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// A password_reset token row exists for the target.
-	var n int
-	err := ts.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM email_verification_tokens WHERE user_id = $1 AND purpose = 'password_reset' AND consumed_at IS NULL`,
-		targetID).Scan(&n)
+	n, err := ts.raw().CountVerificationTokens(context.Background(), "password_reset", targetID, true)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
@@ -330,9 +327,7 @@ func TestRegisterRejectsRoleField(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
 
 	// And confirm no user was created with that email.
-	var n int
-	err := ts.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&n)
+	n, err := ts.raw().CountActiveUsers(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, n, "only the bootstrap admin should exist")
 }

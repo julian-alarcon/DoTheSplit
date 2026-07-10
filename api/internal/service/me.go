@@ -41,13 +41,13 @@ var (
 )
 
 type MeService struct {
-	users  *repo.UserRepo
+	users  repo.UserRepo
 	auth   *AuthService
 	email  *crypto.EmailCipher
 	pepper []byte
 }
 
-func NewMeService(users *repo.UserRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
+func NewMeService(users repo.UserRepo, email *crypto.EmailCipher, pepper []byte) *MeService {
 	return &MeService{users: users, email: email, pepper: pepper}
 }
 

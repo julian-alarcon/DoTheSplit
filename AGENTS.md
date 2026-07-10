@@ -11,8 +11,8 @@ DoTheSplit - a expense-sharing app.
 - **Backend**: Go 1.26, standard-library `net/http` (the 1.22+ `ServeMux` with method+wildcard patterns), pgx/v5, `golang-migrate`, `oapi-codegen`. No web framework. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
 - **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
 - **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware attaches the authenticated user to the request context (`middleware.WithUser`, read via `middleware.User(r.Context())`), so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
-- **Database**: PostgreSQL 18. Migrations in [api/migrations/](api/migrations/).
-- **Worker**: separate Go binary for recurring expenses ([api/cmd/worker/](api/cmd/worker/)).
+- **Database**: SQLite (default) **or** PostgreSQL 18, selected by `DATABASE_DRIVER` (`sqlite` when unset; Postgres deployments must set `DATABASE_DRIVER=postgres` + `DATABASE_URL`). Postgres migrations in [api/migrations/](api/migrations/); SQLite migrations are embedded in [api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/) and applied in-process on first boot. See "Database" below.
+- **Worker**: recurring-expense materialization + email-outbox drain, ticking every 60s. Same logic ([api/internal/worker/](api/internal/worker/)) runs two ways per `WORKER_MODE`: as a standalone binary ([api/cmd/worker/](api/cmd/worker/), `external`, the Postgres default) or as a goroutine inside the api (`embedded`, forced on SQLite). See "Worker topology" below.
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only).
 
 ## The golden rule: contract-first
@@ -49,7 +49,7 @@ handlers → services → repositories → DB
 
 - **Handlers** ([api/internal/handlers/](api/internal/handlers/)): bind JSON, call services, translate errors to HTTP status codes. No business logic. Use `errors.Is` on service sentinels.
 - **Services** ([api/internal/service/](api/internal/service/)): validate, orchestrate, enforce invariants. Return sentinel errors (`ErrNotMember`, `ErrBadSplit`, etc.). Use transactions for anything that writes more than one table.
-- **Repositories** ([api/internal/repo/](api/internal/repo/)): pgx SQL, no domain rules. Map `pgx.ErrNoRows` → `repo.ErrNotFound`.
+- **Repositories** ([api/internal/repo/](api/internal/repo/)): the `repo` package defines engine-neutral domain types + interfaces (`repo.Store`, `repo.Tx`, one interface per table) in [store.go](api/internal/repo/store.go)/[types.go](api/internal/repo/types.go). Two implementations satisfy them: [api/internal/repo/postgres/](api/internal/repo/postgres/) (pgx/v5) and [api/internal/repo/sqlite/](api/internal/repo/sqlite/) (`database/sql` + modernc.org/sqlite). Services depend only on the interfaces; [storefactory](api/internal/storefactory/) builds the right `Store` from `DATABASE_DRIVER`. No domain rules in repos; each maps its no-rows error → `repo.ErrNotFound` and its unique-violation → `repo.ErrConflict`. A `...Tx` method takes a `repo.Tx` (the engine unwraps it to its native `pgx.Tx`/`*sql.Tx`); a nilable `tx` means "run on the pool".
 - **Router** ([api/internal/server/router.go](api/internal/server/router.go)): register endpoints on a `net/http.ServeMux` with method+pattern routes (`"POST /v1/groups/{id}/expenses"`, read params via `r.PathValue`); compose global + per-route middleware with `mw.Chain`, gating authenticated routes with `mw.RequireSession()` (and `mw.RequireAdmin()` for admin). Middleware are `func(http.Handler) http.Handler`; the authenticated user and request id travel through the request context, not a framework context.
 
 Rules of thumb:
@@ -62,13 +62,41 @@ Rules of thumb:
 
 ## Database
 
-- PostgreSQL **18** in compose. The volume mounts at `/var/lib/postgresql` (the parent, not `/var/lib/postgresql/data` like in PG 16) because PG 18's image stores data in a version-specific subdir (`/var/lib/postgresql/18/docker/`) so `pg_upgrade --link` can work across majors. Mounting at `data` makes the container fail to start - if you ever see "unused mount/volume" in the Postgres logs, that's the cause.
+Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (`sqlite` default, or `postgres`). Pick per deployment: SQLite for a single-node, single-file, zero-dependency install (default; `DATABASE_URL` defaults to `file:./dts.db`); Postgres for multi-instance / scale-out (set `DATABASE_DRIVER=postgres` + `DATABASE_URL`).
+
+**Portability rules (both engines must stay in lockstep):**
+
+- ID/timestamp generation differs by engine but the domain result is identical. Postgres keeps its DB defaults (`gen_random_uuid()`, `now()`) and reads them back via `RETURNING` (the original migration is untouched). SQLite's schema has **no** such defaults - its repos generate `uuid.New()` / `time.Now().UTC()` in Go and insert them explicitly. When adding a column, keep this split: pg default + `RETURNING`, sqlite Go-generated.
+- SQLite stores UUID/JSON/timestamps as TEXT, BYTEA as BLOB, BIGINT/SMALLINT as INTEGER, BOOLEAN as INTEGER 0/1. Timestamps are RFC3339Nano UTC text so lexical order == chronological order (keyset pagination relies on it) - use the `tsVal`/`scanTS` helpers, never scan a TEXT column straight into `time.Time` (modernc can't).
+- Engine-divergent SQL lives only in the two repo packages: JSON reads use `->>'k'` (pg) vs `json_extract(col,'$.k')` (sqlite); `= ANY($1)` (pg) vs `IN (?,?,…)` (sqlite); `ILIKE` (pg) vs `lower() LIKE lower()` (sqlite); row locking (`FOR NO KEY UPDATE SKIP LOCKED`, `FOR UPDATE`) is pg-only and simply omitted on sqlite's single writer.
+- **Never run a pool (non-`Tx`) write inside an open `Store.Begin` transaction** - on SQLite the single writer self-deadlocks. Use the `...Tx` variant so the write joins the transaction (also correct/atomic on Postgres).
+
+**Postgres specifics:**
+
+- PostgreSQL **18** in compose. The volume mounts at `/var/lib/postgresql` (the parent, not `/var/lib/postgresql/data` like in PG 16) because PG 18's image stores data in a version-specific subdir (`/var/lib/postgresql/18/docker/`) so `pg_upgrade --link` can work across majors. Mounting at `data` makes the container fail to start.
 - Major-version upgrades require `pg_upgrade` or `pg_dump`/`pg_restore`. A plain image bump leaves the old data files unreadable.
-- Migrations are append-only. Never edit a committed `*.up.sql`; add a new migration.
-- Every migration needs a matching `.down.sql`.
-- Keep FK cascades explicit. Group deletion cascades to `group_members`, `expenses` (→ `splits`), `settlements`, `recurring_expenses`.
-- Amounts are `BIGINT` cents. IDs are UUIDs with `gen_random_uuid()`.
-- Apply locally with `make migrate-up` or let the Docker `migrate` one-shot do it on `up`.
+- Migrations ([api/migrations/](api/migrations/)) are append-only. Never edit a committed `*.up.sql`; add a new migration. Every migration needs a matching `.down.sql`. Apply with `make migrate-up` or the Docker `migrate` one-shot. Real-time uses a `pg_notify` trigger + LISTEN (see [realtime](api/internal/realtime/)).
+
+**SQLite specifics:**
+
+- Migrations ([api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/)) are embedded via `go:embed` and applied in-process on first boot - there is no separate migrate container. Keep them a faithful translation of the Postgres schema; the category seed uses fixed UUIDs (stable across both engines). Same append-only rule.
+- The connection DSN sets `foreign_keys(ON)` (FK enforcement is off by default per-connection - the group-delete cascade depends on it), `journal_mode(WAL)`, `busy_timeout`, `synchronous(NORMAL)`.
+- No LISTEN/NOTIFY: the store publishes committed activity events to the in-process realtime hub after commit (`repo.ActivityPublisher`), so real-time only works within one process - hence SQLite forces the embedded worker.
+
+**Shared:** Keep FK cascades explicit (group deletion cascades to `group_members`, `expenses`→`splits`, `settlements`, `recurring_expenses`, `activity_events`). Amounts are integer cents; IDs are UUIDs.
+
+## Worker topology
+
+The 60s tick (materialize due recurring expenses + drain the email outbox) is one code path ([api/internal/worker/](api/internal/worker/)) deployable two ways, selected by `WORKER_MODE`:
+
+- **`external`** (Postgres default): a separate `worker` container/binary ([api/cmd/worker/](api/cmd/worker/)). The api does not run the tick. This is what [docker-compose.yml](docker-compose.yml) ships.
+- **`embedded`**: the tick runs as a goroutine inside the api ([cmd/api/main.go](api/cmd/api/main.go) starts `worker.Run` when `cfg.WorkerMode == "embedded"`). No separate container.
+
+**SQLite forces `embedded`** regardless of the env value: a separate process can't reach the api's in-process realtime hub (no LISTEN/NOTIFY) and would contend for the single writer.
+
+**Postgres can opt into `embedded`** for a single-node deployment (one fewer container). It's safe even alongside an external worker: each tick first takes a session advisory lock via the store's `TickLocker` (`pg_try_advisory_lock`, [repo/postgres/store.go](api/internal/repo/postgres/store.go)), so exactly one runner materializes per tick and the rest skip - no double-materialization. Verified live: with an embedded api worker + a standalone worker racing the same due recurring, exactly one expense was created.
+
+Trade-offs for choosing `embedded` on Postgres: **pro** - fewer containers, simpler ops for single-node. **con** - the tick shares the api's process/CPU/connection-pool (a heavy batch competes with request serving), an api restart bounces the worker with it, and N api replicas each wake per tick to contend for the lock (cheap but not free). Prefer `external` for multi-replica / scale-out; `embedded` for a lean single node. See [docker-compose.postgres-embedded.yml](docker-compose.postgres-embedded.yml) for a ready example.
 
 ## Frontend conventions
 
@@ -127,9 +155,7 @@ The only cookie the API sets is the rotating refresh token, `dts_refresh`: httpO
 Three layers, all run in CI on every PR:
 
 - **Go unit tests** colocate with packages (`*_test.go`). Pure logic only - split math, balance simplification, Argon2 round-trip, config loading.
-- **Go integration tests** spin up real Postgres via `testcontainers-go/postgres`. Two homes:
-  - [api/internal/server/](api/internal/server/) for HTTP-level tests through the full stack (golden path, admin authz, group authz matrix, strict-JSON regression matrix, recurring worker tick, avatar pipeline, bearer token flow).
-  - [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) for schema-only invariants (up/down round-trip, group-delete FK cascades).
+- **Go integration tests** run against a real database. The full [api/internal/server/](api/internal/server/) suite is **engine-parameterized** by `TEST_DB_DRIVER` (`postgres` default via `testcontainers-go/postgres`, or `sqlite` in-process/in-memory) - the `setup()` harness builds the matching `repo.Store`, so every HTTP-level test (golden path, admin authz, group authz matrix, strict-JSON matrix, recurring worker tick, SSE stream, avatar pipeline, bearer flow) runs on both engines. Schema-only invariants live in [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) (Postgres) and [api/internal/repo/sqlite/migrations_sqlite_test.go](api/internal/repo/sqlite/migrations_sqlite_test.go) (SQLite): up/down round-trip + group-delete FK cascades. Tests that need dialect-specific raw SQL go through the `testRawStore` helpers ([repo/{postgres,sqlite}/testsupport.go](api/internal/repo/)), never inline SQL.
 - **SPA unit tests** via [vitest](https://vitest.dev) under [frontend/src/\*\*/\*.test.ts](frontend/src/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math; currency/short-name suites pin formatting.
 - **End-to-end** via [Playwright](https://playwright.dev) under [frontend/tests/e2e/](frontend/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the Vue SPA on the single api origin (`:8080`). Catches contract drift between the SPA and the Go API.
 
@@ -140,14 +166,16 @@ Invariants for adding tests:
 - **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
 - **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
 
-Run everything with `make test`. Go alone: `make test-go`. SPA unit alone: `make test-frontend`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `SETUP_TOKEN=... make test-e2e`.
+Run everything with `make test`. Go alone: `make test-go` (Postgres). Both engines: `make test-go-both` (or `make test-go-sqlite` / `make test-go-postgres` individually) - CI runs the Go suite once per engine. SPA unit alone: `make test-frontend`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `SETUP_TOKEN=... make test-e2e`.
 
 Linting also gates CI on every PR: `make lint` runs golangci-lint (Go, pinned in the `lint-go` target) and eslint (SPA). Run it before pushing.
 
 ## Running the app
 
-- `docker compose up -d --build` - full stack; the api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`. (postgres, migrate, api, worker - there is no separate web container.)
-- `make up` - same, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `frontend/package.json`) into the image so `/healthz` and the page footer self-identify.
+- `docker compose up -d --build` - full Postgres stack; the api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`. (postgres, migrate, api, worker - there is no separate web container.)
+- `docker compose -f docker-compose.sqlite.yml up -d --build` - single-container SQLite deployment (one api container + a DB-file volume; no postgres, no migrate one-shot, no separate worker - `WORKER_MODE=embedded` runs the tick in-process). `DATABASE_DRIVER=sqlite` forces the embedded worker regardless of `WORKER_MODE`.
+- `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` - Postgres stack with the worker embedded in the api (no separate worker container). Single-node only; see "Worker topology".
+- `make up` - Postgres stack, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `frontend/package.json`) into the image so `/healthz` and the page footer self-identify.
 - Local non-Docker dev: `make dev-api` (Go API on `:8080`) + `make dev-frontend` (Vite dev server on `:4321`, proxying `/v1` to `:8080`).
 - `make build` builds the SPA, copies it into the embed dir, then builds the Go binaries. After any change that affects the API contract: `make gen`, then rebuild the `api` + `worker` images (a frontend-only change still means rebuilding `api`, since the SPA is embedded).
 - Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit:X.Y.Z` - one image now). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.

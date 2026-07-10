@@ -15,16 +15,7 @@ import (
 // exercised here.
 func configureSMTP(t *testing.T, ts *testStack) {
 	t.Helper()
-	_, err := ts.pool.Exec(context.Background(), `
-		INSERT INTO smtp_config (id, host, port, from_address, tls_mode)
-		VALUES (true, 'localhost', 2525, 'noreply@example.test', 'none')
-		ON CONFLICT (id) DO UPDATE SET
-			host = EXCLUDED.host,
-			port = EXCLUDED.port,
-			from_address = EXCLUDED.from_address,
-			tls_mode = EXCLUDED.tls_mode
-	`)
-	require.NoError(t, err)
+	require.NoError(t, ts.raw().SeedSMTPConfig(context.Background()))
 }
 
 // pinVerificationCode overwrites the most recent unconsumed register-purpose
@@ -34,17 +25,9 @@ func configureSMTP(t *testing.T, ts *testStack) {
 func pinVerificationCode(t *testing.T, ts *testStack, known string) {
 	t.Helper()
 	sum := sha256.Sum256([]byte(known))
-	tag, err := ts.pool.Exec(context.Background(), `
-		UPDATE email_verification_tokens
-		SET code_hash = $1, attempts = 0
-		WHERE id = (
-			SELECT id FROM email_verification_tokens
-			WHERE consumed_at IS NULL AND purpose = 'register'
-			ORDER BY created_at DESC LIMIT 1
-		)
-	`, sum[:])
+	n, err := ts.raw().PinLatestCodeHash(context.Background(), "register", sum[:])
 	require.NoError(t, err)
-	require.Equal(t, int64(1), tag.RowsAffected(), "expected exactly one pending register token")
+	require.Equal(t, int64(1), n, "expected exactly one pending register token")
 }
 
 // pinPasswordResetCode is the password_reset analogue of
@@ -53,17 +36,9 @@ func pinVerificationCode(t *testing.T, ts *testStack, known string) {
 func pinPasswordResetCode(t *testing.T, ts *testStack, known string) {
 	t.Helper()
 	sum := sha256.Sum256([]byte(known))
-	tag, err := ts.pool.Exec(context.Background(), `
-		UPDATE email_verification_tokens
-		SET code_hash = $1, attempts = 0
-		WHERE id = (
-			SELECT id FROM email_verification_tokens
-			WHERE consumed_at IS NULL AND purpose = 'password_reset'
-			ORDER BY created_at DESC LIMIT 1
-		)
-	`, sum[:])
+	n, err := ts.raw().PinLatestCodeHash(context.Background(), "password_reset", sum[:])
 	require.NoError(t, err)
-	require.Equal(t, int64(1), tag.RowsAffected(), "expected exactly one pending password_reset token")
+	require.Equal(t, int64(1), n, "expected exactly one pending password_reset token")
 }
 
 // TestEmailVerificationFlow covers the SMTP-configured registration path.
@@ -296,9 +271,7 @@ func TestPasswordResetExpired(t *testing.T) {
 	knownCode := "999999"
 	pinPasswordResetCode(t, ts, knownCode)
 	// Force-expire the token.
-	_, err := ts.pool.Exec(context.Background(),
-		`UPDATE email_verification_tokens SET expires_at = now() - interval '1 minute' WHERE consumed_at IS NULL AND purpose = 'password_reset'`)
-	require.NoError(t, err)
+	require.NoError(t, ts.raw().ExpireActiveTokens(context.Background(), "password_reset"))
 
 	resp, _ = request(t, "POST", base+"/v1/auth/password-reset/confirm", map[string]any{
 		"email":        "carol@test.dev",
@@ -322,9 +295,7 @@ func TestPasswordResetEnumerationSafe(t *testing.T) {
 	}, nil)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
-	var n int
-	err := ts.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM email_verification_tokens WHERE purpose = 'password_reset'`).Scan(&n)
+	n, err := ts.raw().CountVerificationTokens(context.Background(), "password_reset", "", false)
 	require.NoError(t, err)
 	require.Equal(t, 0, n, "no password_reset token should be created for an unknown email")
 }

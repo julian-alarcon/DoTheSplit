@@ -46,11 +46,11 @@ var (
 )
 
 type SmtpService struct {
-	repo  *repo.SmtpRepo
+	repo  repo.SmtpRepo
 	email *crypto.EmailCipher
 }
 
-func NewSmtpService(r *repo.SmtpRepo, email *crypto.EmailCipher) *SmtpService {
+func NewSmtpService(r repo.SmtpRepo, email *crypto.EmailCipher) *SmtpService {
 	return &SmtpService{repo: r, email: email}
 }
 

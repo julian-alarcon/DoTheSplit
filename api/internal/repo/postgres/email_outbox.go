@@ -1,4 +1,4 @@
-package repo
+package postgres
 
 import (
 	"context"
@@ -6,35 +6,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-// OutboxRow is a single queued outbound email.
-type OutboxRow struct {
-	ID            uuid.UUID
-	ToEmailEnc    []byte
-	Subject       string
-	Body          string
-	Template      string
-	Attempts      int16
-	LastError     *string
-	SentAt        *time.Time
-	NextAttemptAt time.Time
-	CreatedAt     time.Time
-}
-
-type EmailOutboxRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewEmailOutboxRepo(p *pgxpool.Pool) *EmailOutboxRepo { return &EmailOutboxRepo{pool: p} }
+type EmailOutboxRepo struct{ pool *pgxpool.Pool }
 
 // Enqueue writes a row, optionally inside a caller-supplied transaction so the
 // outbox insert commits atomically with the action that triggered the email
 // (e.g. settlement creation). Returns the assigned id and created_at.
-func (r *EmailOutboxRepo) Enqueue(ctx context.Context, q Querier, row *OutboxRow) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+func (r *EmailOutboxRepo) Enqueue(ctx context.Context, tx repo.Tx, row *repo.OutboxRow) error {
+	q := resolve(r.pool, tx)
 	return q.QueryRow(ctx, `
 		INSERT INTO email_outbox (to_email_enc, subject, body, template)
 		VALUES ($1, $2, $3, $4)
@@ -46,7 +28,7 @@ func (r *EmailOutboxRepo) Enqueue(ctx context.Context, q Querier, row *OutboxRow
 // ClaimDue returns up to limit pending rows whose next_attempt_at has elapsed.
 // The caller (the worker) is expected to hold the outbox advisory lock so two
 // workers can't race on the same rows.
-func (r *EmailOutboxRepo) ClaimDue(ctx context.Context, limit int) ([]OutboxRow, error) {
+func (r *EmailOutboxRepo) ClaimDue(ctx context.Context, limit int) ([]repo.OutboxRow, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, to_email_enc, subject, body, template, attempts, last_error, sent_at, next_attempt_at, created_at
 		FROM email_outbox
@@ -58,9 +40,9 @@ func (r *EmailOutboxRepo) ClaimDue(ctx context.Context, limit int) ([]OutboxRow,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []OutboxRow
+	var out []repo.OutboxRow
 	for rows.Next() {
-		var o OutboxRow
+		var o repo.OutboxRow
 		if err := rows.Scan(&o.ID, &o.ToEmailEnc, &o.Subject, &o.Body, &o.Template,
 			&o.Attempts, &o.LastError, &o.SentAt, &o.NextAttemptAt, &o.CreatedAt); err != nil {
 			return nil, err

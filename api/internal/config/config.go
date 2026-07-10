@@ -12,10 +12,21 @@ import (
 )
 
 type Config struct {
-	HTTPAddr    string `envconfig:"API_HTTP_ADDR"        default:":8080"`
-	DatabaseURL string `envconfig:"DATABASE_URL"`
-	WebOrigin   string `envconfig:"WEB_ORIGIN"           default:"http://localhost:8080"`
-	LogLevel    string `envconfig:"LOG_LEVEL"            default:"info"`
+	HTTPAddr string `envconfig:"API_HTTP_ADDR"        default:":8080"`
+	// DatabaseDriver selects the persistence engine: "sqlite" (default) or
+	// "postgres". For sqlite, DatabaseURL is a file DSN (defaults to
+	// file:./dts.db) or ":memory:"; migrations are applied in-process at boot and
+	// there is no separate migrate container. Postgres deployments must set
+	// DATABASE_DRIVER=postgres and a DATABASE_URL.
+	DatabaseDriver string `envconfig:"DATABASE_DRIVER"      default:"sqlite"`
+	DatabaseURL    string `envconfig:"DATABASE_URL"`
+	// WorkerMode controls the recurring/outbox worker topology: "external"
+	// (default) runs it as a separate process/container; "embedded" runs it as
+	// a goroutine inside the api binary. SQLite forces "embedded" (single-writer
+	// file + in-process realtime hub), regardless of this value.
+	WorkerMode string `envconfig:"WORKER_MODE"          default:"external"`
+	WebOrigin  string `envconfig:"WEB_ORIGIN"           default:"http://localhost:8080"`
+	LogLevel   string `envconfig:"LOG_LEVEL"            default:"info"`
 
 	CookieSecure bool   `envconfig:"COOKIE_SECURE"         default:"false"`
 	CookieDomain string `envconfig:"COOKIE_DOMAIN"         default:""`
@@ -74,12 +85,38 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	driver := strings.ToLower(strings.TrimSpace(envStr("DATABASE_DRIVER", "sqlite")))
+	switch driver {
+	case "postgres", "sqlite":
+	default:
+		return nil, fmt.Errorf("DATABASE_DRIVER: must be 'postgres' or 'sqlite', got %q", driver)
+	}
+
+	workerMode := strings.ToLower(strings.TrimSpace(envStr("WORKER_MODE", "external")))
+	switch workerMode {
+	case "external", "embedded":
+	default:
+		return nil, fmt.Errorf("WORKER_MODE: must be 'external' or 'embedded', got %q", workerMode)
+	}
+	// SQLite is single-node by construction: a separate worker process can't
+	// reach the api's in-memory realtime hub and would contend with it for the
+	// single SQLite writer. Force the embedded worker.
+	if driver == "sqlite" {
+		workerMode = "embedded"
+	}
+
 	dbURL, err := readSecret("DATABASE_URL")
 	if err != nil {
 		return nil, err
 	}
 	if dbURL == "" {
-		return nil, errors.New("DATABASE_URL is required")
+		// SQLite works out of the box with a local file; Postgres always needs
+		// an explicit connection string.
+		if driver == "sqlite" {
+			dbURL = "file:./dts.db"
+		} else {
+			return nil, errors.New("DATABASE_URL is required")
+		}
 	}
 	encRaw, err := readSecret("EMAIL_ENC_KEY")
 	if err != nil {
@@ -116,7 +153,9 @@ func Load() (*Config, error) {
 	}
 	return &Config{
 		HTTPAddr:            envStr("API_HTTP_ADDR", ":8080"),
+		DatabaseDriver:      driver,
 		DatabaseURL:         dbURL,
+		WorkerMode:          workerMode,
 		WebOrigin:           envStr("WEB_ORIGIN", "http://localhost:8080"),
 		LogLevel:            envStr("LOG_LEVEL", "info"),
 		CookieSecure:        cookieSecure,

@@ -14,8 +14,8 @@ Open-source expense-sharing app.
 
 - Backend: Go with the standard-library [`net/http`](https://pkg.go.dev/net/http) server (1.22+ `ServeMux` routing; no third-party web framework)
 - Frontend: Vue 3 SPA (client-side-rendered) + Vite, built to static files and embedded into the Go binary (mobile-first, PWA-ready; future mobile via wrapper)
-- Database: PostgreSQL 18 (encryption at rest)
-- Infra: Docker Compose on TrueNAS (services: `postgres`, `migrate`, `api`, `worker`; the api binary serves the embedded SPA, so there is no separate `web` service)
+- Database: SQLite (default) or PostgreSQL 18, selected by `DATABASE_DRIVER`; field-level encryption at rest either way
+- Infra: Docker Compose on TrueNAS. Postgres stack: `postgres`, `migrate`, `api`, `worker`. SQLite stack: a single `api` container (embedded migrations + embedded worker, one DB file). The api binary serves the embedded SPA, so there is no separate `web` service.
 
 ## Repo Structure
 
@@ -28,7 +28,7 @@ Open-source expense-sharing app.
 
 ## Architecture
 
-- Flow: Client → API → PostgreSQL
+- Flow: Client → API → DB (SQLite or PostgreSQL, behind one `repo.Store` abstraction)
 - Backend: auth, persistence, business logic
 - Frontend: UI state, optimistic updates
 
@@ -107,8 +107,8 @@ Health probes (`/healthz`, `/readyz`) are the only unversioned routes.
 
 ## Background Jobs
 
-- separate Go worker process (not in-DB)
-- tasks: recurring expenses
+- worker tick (not in-DB): recurring-expense materialization + email-outbox drain
+- runs as a separate process (Postgres default, `WORKER_MODE=external`) or embedded in the api (`WORKER_MODE=embedded`; forced on SQLite - single node, in-process realtime hub)
 
 ## Compliance
 

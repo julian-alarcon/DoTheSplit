@@ -1,74 +1,30 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type Group struct {
-	ID              uuid.UUID
-	Name            string
-	DefaultCurrency string
-	CreatedBy       uuid.UUID
-	CreatedAt       time.Time
-	// DefaultSplit pins a 2-member percentage split that prefills the create-expense
-	// form. nil = no default. Auto-cleared when the group grows past 2 members.
-	DefaultSplit []DefaultSplitEntry
-	// UnreadCount is the number of activity events newer than the member's
-	// last-read marker, excluding their own actions. Populated by ListForUser /
-	// FindByIDForUser; zero on rows fetched by member-agnostic queries.
-	UnreadCount int
-}
-
-type DefaultSplitEntry struct {
-	UserID      uuid.UUID `json:"user_id"`
-	BasisPoints int64     `json:"basis_points"`
-}
-
-// scanDefaultSplit unmarshals the JSONB column. NULL → nil.
-func scanDefaultSplit(raw []byte) ([]DefaultSplitEntry, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	var out []DefaultSplitEntry
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-type GroupMember struct {
-	GroupID         uuid.UUID
-	UserID          uuid.UUID
-	DisplayName     string
-	JoinedAt        time.Time
-	AvatarUpdatedAt *time.Time
-	DeletedAt       *time.Time
-}
-
-type GroupRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewGroupRepo(p *pgxpool.Pool) *GroupRepo { return &GroupRepo{pool: p} }
+type GroupRepo struct{ pool *pgxpool.Pool }
 
 // Create inserts the group and adds the creator as a member in its own
 // transaction. Callers that already hold a transaction (e.g. the importer)
 // should use CreateTx instead.
-func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
+func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, creatorID uuid.UUID) (*repo.Group, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	g, err := r.CreateTx(ctx, tx, name, defaultCurrency, creatorID)
+	g, err := r.createTx(ctx, tx, name, defaultCurrency, creatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -78,10 +34,14 @@ func (r *GroupRepo) Create(ctx context.Context, name, defaultCurrency string, cr
 	return g, nil
 }
 
-// CreateTx inserts the group and adds the creator as a member on the supplied
-// querier (a *pgxpool.Pool or pgx.Tx). The caller owns any transaction.
-func (r *GroupRepo) CreateTx(ctx context.Context, q Querier, name, defaultCurrency string, creatorID uuid.UUID) (*Group, error) {
-	g := &Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
+// CreateTx inserts the group and adds the creator as a member on the
+// caller-owned transaction.
+func (r *GroupRepo) CreateTx(ctx context.Context, tx repo.Tx, name, defaultCurrency string, creatorID uuid.UUID) (*repo.Group, error) {
+	return r.createTx(ctx, native(tx), name, defaultCurrency, creatorID)
+}
+
+func (r *GroupRepo) createTx(ctx context.Context, q dbtx, name, defaultCurrency string, creatorID uuid.UUID) (*repo.Group, error) {
+	g := &repo.Group{Name: name, DefaultCurrency: defaultCurrency, CreatedBy: creatorID}
 	if err := q.QueryRow(ctx, `
 		INSERT INTO groups (name, default_currency, created_by) VALUES ($1, $2, $3)
 		RETURNING id, created_at
@@ -96,19 +56,19 @@ func (r *GroupRepo) CreateTx(ctx context.Context, q Querier, name, defaultCurren
 	return g, nil
 }
 
-func (r *GroupRepo) FindByID(ctx context.Context, id uuid.UUID) (*Group, error) {
-	var g Group
+func (r *GroupRepo) FindByID(ctx context.Context, id uuid.UUID) (*repo.Group, error) {
+	var g repo.Group
 	var rawSplit []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, name, default_currency, created_by, created_at, default_split FROM groups WHERE id = $1
 	`, id).Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	if g.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
+	if g.DefaultSplit, err = repo.ScanDefaultSplit(rawSplit); err != nil {
 		return nil, err
 	}
 	return &g, nil
@@ -118,7 +78,7 @@ func (r *GroupRepo) FindByID(ctx context.Context, id uuid.UUID) (*Group, error) 
 // the number of activity events newer than the member's last_read_activity_at
 // marker (all of them when the marker is NULL), excluding the user's own
 // actions, computed in a correlated subquery so the listing stays one query.
-func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group, error) {
+func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]repo.Group, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT g.id, g.name, g.default_currency, g.created_by, g.created_at, g.default_split,
 		       (SELECT count(*) FROM activity_events ae
@@ -134,14 +94,14 @@ func (r *GroupRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]Group,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Group
+	var out []repo.Group
 	for rows.Next() {
-		var g Group
+		var g repo.Group
 		var rawSplit []byte
 		if err := rows.Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit, &g.UnreadCount); err != nil {
 			return nil, err
 		}
-		if g.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
+		if g.DefaultSplit, err = repo.ScanDefaultSplit(rawSplit); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -161,24 +121,12 @@ func (r *GroupRepo) MarkActivityRead(ctx context.Context, groupID, userID uuid.U
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
 
-// UpdateInput captures partial-update fields for a group.
-// nil pointer = leave unchanged. For DefaultSplit: nil = unchanged, non-nil
-// pointer to nil slice = clear it, non-nil pointer to slice = replace it.
-// CreatedBy transfers ownership; service layer enforces that the new owner
-// is already a member.
-type UpdateInput struct {
-	Name            *string
-	DefaultCurrency *string
-	DefaultSplit    *[]DefaultSplitEntry
-	CreatedBy       *uuid.UUID
-}
-
-func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*Group, error) {
+func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in repo.UpdateInput) (*repo.Group, error) {
 	if in.Name == nil && in.DefaultCurrency == nil && in.DefaultSplit == nil && in.CreatedBy == nil {
 		return r.FindByID(ctx, id)
 	}
@@ -200,7 +148,7 @@ func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*
 		}
 	}
 
-	var g Group
+	var g repo.Group
 	var rawSplit []byte
 	err := r.pool.QueryRow(ctx, `
 		UPDATE groups SET
@@ -213,12 +161,12 @@ func (r *GroupRepo) Update(ctx context.Context, id uuid.UUID, in UpdateInput) (*
 	`, id, in.Name, in.DefaultCurrency, splitProvided, splitJSON, in.CreatedBy).
 		Scan(&g.ID, &g.Name, &g.DefaultCurrency, &g.CreatedBy, &g.CreatedAt, &rawSplit)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	if g.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
+	if g.DefaultSplit, err = repo.ScanDefaultSplit(rawSplit); err != nil {
 		return nil, err
 	}
 	return &g, nil
@@ -238,22 +186,14 @@ func (r *GroupRepo) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
 
-// AdminGroupRow extends Group with cross-instance counts used by the admin
-// listing.
-type AdminGroupRow struct {
-	Group
-	MemberCount  int
-	ExpenseCount int
-}
-
 // ListAll returns a paginated view of all groups in the instance with member
 // and (non-deleted) expense counts. Admin-only.
-func (r *GroupRepo) ListAll(ctx context.Context, limit, offset int) ([]AdminGroupRow, int, error) {
+func (r *GroupRepo) ListAll(ctx context.Context, limit, offset int) ([]repo.AdminGroupRow, int, error) {
 	var total int
 	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM groups`).Scan(&total); err != nil {
 		return nil, 0, err
@@ -270,15 +210,15 @@ func (r *GroupRepo) ListAll(ctx context.Context, limit, offset int) ([]AdminGrou
 		return nil, 0, err
 	}
 	defer rows.Close()
-	var out []AdminGroupRow
+	var out []repo.AdminGroupRow
 	for rows.Next() {
-		var row AdminGroupRow
+		var row repo.AdminGroupRow
 		var rawSplit []byte
 		if err := rows.Scan(&row.ID, &row.Name, &row.DefaultCurrency, &row.CreatedBy, &row.CreatedAt, &rawSplit,
 			&row.MemberCount, &row.ExpenseCount); err != nil {
 			return nil, 0, err
 		}
-		if row.DefaultSplit, err = scanDefaultSplit(rawSplit); err != nil {
+		if row.DefaultSplit, err = repo.ScanDefaultSplit(rawSplit); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, row)
@@ -287,7 +227,7 @@ func (r *GroupRepo) ListAll(ctx context.Context, limit, offset int) ([]AdminGrou
 }
 
 // ListMembers returns members + their display names for a group.
-func (r *GroupRepo) ListMembers(ctx context.Context, groupID uuid.UUID) ([]GroupMember, error) {
+func (r *GroupRepo) ListMembers(ctx context.Context, groupID uuid.UUID) ([]repo.GroupMember, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT m.group_id, m.user_id, u.display_name, m.joined_at, u.avatar_updated_at, u.deleted_at
 		FROM group_members m
@@ -299,9 +239,9 @@ func (r *GroupRepo) ListMembers(ctx context.Context, groupID uuid.UUID) ([]Group
 		return nil, err
 	}
 	defer rows.Close()
-	var out []GroupMember
+	var out []repo.GroupMember
 	for rows.Next() {
-		var m GroupMember
+		var m repo.GroupMember
 		if err := rows.Scan(&m.GroupID, &m.UserID, &m.DisplayName, &m.JoinedAt, &m.AvatarUpdatedAt, &m.DeletedAt); err != nil {
 			return nil, err
 		}
@@ -363,17 +303,17 @@ func (r *GroupRepo) RemoveMember(ctx context.Context, groupID, userID uuid.UUID)
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
 
-// AddMemberTx inserts a membership on the supplied querier (a *pgxpool.Pool or
-// pgx.Tx), idempotently. Unlike AddMember it does not read the row back; the
-// importer ignores the returned member, so this avoids a needless round-trip
-// and keeps the insert in the caller's transaction.
-func (r *GroupRepo) AddMemberTx(ctx context.Context, q Querier, groupID, userID uuid.UUID) error {
-	_, err := q.Exec(ctx, `
+// AddMemberTx inserts a membership on the caller-owned transaction, idempotently.
+// Unlike AddMember it does not read the row back; the importer ignores the
+// returned member, so this avoids a needless round-trip and keeps the insert in
+// the caller's transaction.
+func (r *GroupRepo) AddMemberTx(ctx context.Context, tx repo.Tx, groupID, userID uuid.UUID) error {
+	_, err := native(tx).Exec(ctx, `
 		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
 	`, groupID, userID)
@@ -382,7 +322,7 @@ func (r *GroupRepo) AddMemberTx(ctx context.Context, q Querier, groupID, userID 
 
 // AddMember inserts a membership. Returns the new member's row (with display name).
 // If the user is already a member, returns the existing row.
-func (r *GroupRepo) AddMember(ctx context.Context, groupID, userID uuid.UUID) (*GroupMember, error) {
+func (r *GroupRepo) AddMember(ctx context.Context, groupID, userID uuid.UUID) (*repo.GroupMember, error) {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO group_members (group_id, user_id) VALUES ($1, $2)
 		ON CONFLICT DO NOTHING
@@ -390,7 +330,7 @@ func (r *GroupRepo) AddMember(ctx context.Context, groupID, userID uuid.UUID) (*
 	if err != nil {
 		return nil, err
 	}
-	var m GroupMember
+	var m repo.GroupMember
 	err = r.pool.QueryRow(ctx, `
 		SELECT m.group_id, m.user_id, u.display_name, m.joined_at, u.avatar_updated_at, u.deleted_at
 		FROM group_members m JOIN users u ON u.id = m.user_id

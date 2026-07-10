@@ -10,7 +10,7 @@ import (
 // database on every request rather than trusting the cached service.User
 // projection so role revocation takes effect immediately. A soft-deleted
 // admin is also rejected.
-func RequireAdmin(users *repo.UserRepo) Middleware {
+func RequireAdmin(users repo.UserRepo) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := User(r.Context())

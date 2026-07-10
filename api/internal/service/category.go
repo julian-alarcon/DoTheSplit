@@ -19,7 +19,7 @@ var ErrUnknownCategory = errors.New("unknown category")
 // CategoryService caches the seeded category set in memory. The table is
 // effectively read-only in v1, so we load once and reuse.
 type CategoryService struct {
-	cats *repo.CategoryRepo
+	cats repo.CategoryRepo
 
 	mu      sync.RWMutex
 	loaded  bool
@@ -28,7 +28,7 @@ type CategoryService struct {
 	ordered []repo.Category
 }
 
-func NewCategoryService(c *repo.CategoryRepo) *CategoryService {
+func NewCategoryService(c repo.CategoryRepo) *CategoryService {
 	return &CategoryService{cats: c}
 }
 

@@ -1,49 +1,28 @@
-package repo
+package postgres
 
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
-type User struct {
-	ID              uuid.UUID
-	EmailHash       []byte
-	EmailEncrypted  []byte
-	DisplayName     string
-	PasswordHash    string
-	CreatedAt       time.Time
-	DeletedAt       *time.Time
-	Avatar          []byte
-	AvatarUpdatedAt *time.Time
-	WeekStart       int16
-	Role            string
-	EmailVerifiedAt *time.Time
-	// NotificationPrefs is the raw JSONB blob; service layer parses it into
-	// a typed projection so callers don't deal with map[string]any here.
-	NotificationPrefs []byte
-}
-
-type UserRepo struct {
-	pool *pgxpool.Pool
-}
-
-func NewUserRepo(p *pgxpool.Pool) *UserRepo { return &UserRepo{pool: p} }
+type UserRepo struct{ pool *pgxpool.Pool }
 
 const userCols = `id, email_hash, email_encrypted, display_name, password_hash, created_at, deleted_at, avatar_updated_at, week_start, role, email_verified_at, notification_prefs`
 
-func scanUser(row pgx.Row, u *User) error {
+func scanUser(row pgx.Row, u *repo.User) error {
 	return row.Scan(&u.ID, &u.EmailHash, &u.EmailEncrypted, &u.DisplayName,
 		&u.PasswordHash, &u.CreatedAt, &u.DeletedAt, &u.AvatarUpdatedAt, &u.WeekStart,
 		&u.Role, &u.EmailVerifiedAt, &u.NotificationPrefs)
 }
 
-func (r *UserRepo) Create(ctx context.Context, u *User) error {
+func (r *UserRepo) Create(ctx context.Context, u *repo.User) error {
 	return r.pool.QueryRow(ctx, `
 		INSERT INTO users (email_hash, email_encrypted, display_name, password_hash)
 		VALUES ($1, $2, $3, $4)
@@ -52,14 +31,14 @@ func (r *UserRepo) Create(ctx context.Context, u *User) error {
 }
 
 // FindByEmailHash returns only non-deleted users.
-func (r *UserRepo) FindByEmailHash(ctx context.Context, emailHash []byte) (*User, error) {
-	var u User
+func (r *UserRepo) FindByEmailHash(ctx context.Context, emailHash []byte) (*repo.User, error) {
+	var u repo.User
 	err := scanUser(r.pool.QueryRow(ctx, `
 		SELECT `+userCols+`
 		FROM users WHERE email_hash = $1 AND deleted_at IS NULL
 	`, emailHash), &u)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -69,14 +48,14 @@ func (r *UserRepo) FindByEmailHash(ctx context.Context, emailHash []byte) (*User
 
 // FindByID returns the user regardless of soft-delete state. Callers that want
 // only active users should check DeletedAt themselves.
-func (r *UserRepo) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
-	var u User
+func (r *UserRepo) FindByID(ctx context.Context, id uuid.UUID) (*repo.User, error) {
+	var u repo.User
 	err := scanUser(r.pool.QueryRow(ctx, `
 		SELECT `+userCols+`
 		FROM users WHERE id = $1
 	`, id), &u)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -94,7 +73,7 @@ func (r *UserRepo) UpdateDisplayName(ctx context.Context, id uuid.UUID, name str
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -110,14 +89,23 @@ func (r *UserRepo) UpdateWeekStart(ctx context.Context, id uuid.UUID, v int16) e
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
 
 // UpdatePasswordHash rotates the encoded Argon2id hash.
 func (r *UserRepo) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
-	ct, err := r.pool.Exec(ctx, `
+	return r.updatePasswordHash(ctx, r.pool, id, hash)
+}
+
+// UpdatePasswordHashTx rotates the hash inside a caller-owned transaction.
+func (r *UserRepo) UpdatePasswordHashTx(ctx context.Context, tx repo.Tx, id uuid.UUID, hash string) error {
+	return r.updatePasswordHash(ctx, native(tx), id, hash)
+}
+
+func (r *UserRepo) updatePasswordHash(ctx context.Context, q dbtx, id uuid.UUID, hash string) error {
+	ct, err := q.Exec(ctx, `
 		UPDATE users SET password_hash = $2
 		WHERE id = $1 AND deleted_at IS NULL
 	`, id, hash)
@@ -125,7 +113,7 @@ func (r *UserRepo) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash st
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -150,7 +138,7 @@ func (r *UserRepo) SetAvatar(ctx context.Context, id uuid.UUID, png []byte) erro
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -162,24 +150,22 @@ func (r *UserRepo) GetAvatar(ctx context.Context, id uuid.UUID) ([]byte, error) 
 		SELECT avatar FROM users WHERE id = $1
 	`, id).Scan(&png)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
 	if png == nil {
-		return nil, ErrNotFound
+		return nil, repo.ErrNotFound
 	}
 	return png, nil
 }
 
 // CountActive returns the number of non-deleted users. Used by the bootstrap
 // path inside a transaction with an advisory lock to detect "first user".
-func (r *UserRepo) CountActive(ctx context.Context, q Querier) (int, error) {
+func (r *UserRepo) CountActive(ctx context.Context, tx repo.Tx) (int, error) {
+	q := resolve(r.pool, tx)
 	var n int
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
 	err := q.QueryRow(ctx, `SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&n)
 	return n, err
 }
@@ -202,7 +188,7 @@ func (r *UserRepo) SetRole(ctx context.Context, id uuid.UUID, role string) error
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -210,7 +196,7 @@ func (r *UserRepo) SetRole(ctx context.Context, id uuid.UUID, role string) error
 // ListPaginated returns a page of users ordered by created_at DESC.
 // includeDeleted controls whether soft-deleted rows are returned.
 // Returns the rows plus the total count for paginator UIs.
-func (r *UserRepo) ListPaginated(ctx context.Context, limit, offset int, includeDeleted bool) ([]User, int, error) {
+func (r *UserRepo) ListPaginated(ctx context.Context, limit, offset int, includeDeleted bool) ([]repo.User, int, error) {
 	where := "WHERE deleted_at IS NULL"
 	if includeDeleted {
 		where = ""
@@ -229,9 +215,9 @@ func (r *UserRepo) ListPaginated(ctx context.Context, limit, offset int, include
 		return nil, 0, err
 	}
 	defer rows.Close()
-	var out []User
+	var out []repo.User
 	for rows.Next() {
-		var u User
+		var u repo.User
 		if err := scanUser(rows, &u); err != nil {
 			return nil, 0, err
 		}
@@ -245,10 +231,8 @@ func (r *UserRepo) ListPaginated(ctx context.Context, limit, offset int, include
 // bootstrap-admin path. The caller is responsible for hashing the password.
 // If tx is non-nil the insert participates in it; otherwise a new pool query
 // is used.
-func (r *UserRepo) CreateWithRole(ctx context.Context, q Querier, u *User, role string) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+func (r *UserRepo) CreateWithRole(ctx context.Context, tx repo.Tx, u *repo.User, role string) error {
+	q := resolve(r.pool, tx)
 	return q.QueryRow(ctx, `
 		INSERT INTO users (email_hash, email_encrypted, display_name, password_hash, role)
 		VALUES ($1, $2, $3, $4, $5)
@@ -260,10 +244,8 @@ func (r *UserRepo) CreateWithRole(ctx context.Context, q Querier, u *User, role 
 // MarkEmailVerified stamps email_verified_at = now() and is idempotent: a
 // second call is a no-op rather than an error so the verify flow can be
 // safely retried by the user without producing a 404.
-func (r *UserRepo) MarkEmailVerified(ctx context.Context, q Querier, id uuid.UUID) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+func (r *UserRepo) MarkEmailVerified(ctx context.Context, tx repo.Tx, id uuid.UUID) error {
+	q := resolve(r.pool, tx)
 	_, err := q.Exec(ctx, `
 		UPDATE users SET email_verified_at = now()
 		WHERE id = $1 AND deleted_at IS NULL AND email_verified_at IS NULL
@@ -272,22 +254,22 @@ func (r *UserRepo) MarkEmailVerified(ctx context.Context, q Querier, id uuid.UUI
 }
 
 // UpdateEmail replaces the user's email_hash and email_encrypted atomically.
-// Caller is responsible for the soft-delete-aware uniqueness check (the
-// partial unique index `users_email_hash_active_key` will surface a unique
-// violation as a pgconn.PgError with code 23505).
-func (r *UserRepo) UpdateEmail(ctx context.Context, q Querier, id uuid.UUID, emailHash, emailEnc []byte) error {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
+// An active-email uniqueness violation (the partial unique index
+// `users_email_hash_active_key`) is mapped to repo.ErrConflict.
+func (r *UserRepo) UpdateEmail(ctx context.Context, tx repo.Tx, id uuid.UUID, emailHash, emailEnc []byte) error {
+	q := resolve(r.pool, tx)
 	ct, err := q.Exec(ctx, `
 		UPDATE users SET email_hash = $2, email_encrypted = $3
 		WHERE id = $1 AND deleted_at IS NULL
 	`, id, emailHash, emailEnc)
 	if err != nil {
+		if isUniqueViolation(err) {
+			return repo.ErrConflict
+		}
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -303,7 +285,7 @@ func (r *UserRepo) UpdateNotificationPrefs(ctx context.Context, id uuid.UUID, pr
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }
@@ -315,11 +297,9 @@ func (r *UserRepo) UpdateNotificationPrefs(ctx context.Context, id uuid.UUID, pr
 // yet. The same return shape is used in both branches so callers can't
 // distinguish "real" from "stub" via the response, which preserves the
 // no-enumeration property of the import endpoint.
-func (r *UserRepo) FindOrCreateStub(ctx context.Context, q Querier, emailHash, emailEnc []byte, displayName, scrambledPwHash string) (*User, error) {
-	if q == nil {
-		q = poolQuerier{r.pool}
-	}
-	var u User
+func (r *UserRepo) FindOrCreateStub(ctx context.Context, tx repo.Tx, emailHash, emailEnc []byte, displayName, scrambledPwHash string) (*repo.User, error) {
+	q := resolve(r.pool, tx)
+	var u repo.User
 	err := scanUser(q.QueryRow(ctx, `
 		SELECT `+userCols+`
 		FROM users WHERE email_hash = $1 AND deleted_at IS NULL
@@ -360,7 +340,7 @@ func (r *UserRepo) SoftDelete(ctx context.Context, id uuid.UUID, tombstone strin
 		return err
 	}
 	if ct.RowsAffected() == 0 {
-		return ErrNotFound
+		return repo.ErrNotFound
 	}
 	return nil
 }

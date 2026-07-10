@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/julian-alarcon/dothesplit/api/internal/repo"
 )
 
@@ -33,14 +31,14 @@ const setupTokenBytes = 32
 // the cleartext token at boot, and atomically minting the very first admin
 // in lockstep with marking app_setup.completed_at.
 type SetupService struct {
-	pool  *pgxpool.Pool
-	repo  *repo.SetupRepo
+	store repo.Store
+	repo  repo.SetupRepo
 	auth  *AuthService
-	audit *repo.AuditRepo
+	audit repo.AuditRepo
 }
 
-func NewSetupService(pool *pgxpool.Pool, r *repo.SetupRepo, auth *AuthService, audit *repo.AuditRepo) *SetupService {
-	return &SetupService{pool: pool, repo: r, auth: auth, audit: audit}
+func NewSetupService(store repo.Store, r repo.SetupRepo, auth *AuthService, audit repo.AuditRepo) *SetupService {
+	return &SetupService{store: store, repo: r, auth: auth, audit: audit}
 }
 
 // Locked reports whether the install ceremony is finished. Wraps the repo.
@@ -94,31 +92,25 @@ func (s *SetupService) EnsureToken(ctx context.Context) (cleartext string, fresh
 //  7. Commit. The caller then logs in via /v1/auth/token; the install state is
 //     already committed regardless.
 func (s *SetupService) CompleteWithToken(ctx context.Context, tokenCT, email, displayName, password string) (*User, error) {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.store.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	var hash []byte
-	var completedAt *time.Time
-	err = tx.QueryRow(ctx, `
-		SELECT token_hash, completed_at FROM app_setup
-		 WHERE id = true
-		   FOR UPDATE
-	`).Scan(&hash, &completedAt)
+	cur, err := s.repo.GetForUpdate(ctx, tx)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, repo.ErrNotFound) {
 			return nil, ErrInvalidToken
 		}
 		return nil, err
 	}
-	if completedAt != nil {
+	if cur.CompletedAt != nil {
 		return nil, ErrSetupCompleted
 	}
 
 	supplied := sha256.Sum256([]byte(tokenCT))
-	if subtle.ConstantTimeCompare(supplied[:], hash) != 1 {
+	if subtle.ConstantTimeCompare(supplied[:], cur.TokenHash) != 1 {
 		return nil, ErrInvalidToken
 	}
 

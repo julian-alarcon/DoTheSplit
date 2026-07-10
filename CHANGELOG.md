@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/julian-alarcon/DoTheSplit/compare/v1.0.1...v1.1.0) (2026-07-10)
+
+
+### Features
+
+* **api:** support SQLite alongside PostgreSQL behind a repo.Store engine abstraction ([72d61f0](https://github.com/julian-alarcon/DoTheSplit/commit/72d61f0b2986b5f5edc1d54e8f4540ee3e7069f7))
+* **infra:** add SQLite and embedded-worker Docker Compose deployments and dual-engine make targets ([a0b3bb9](https://github.com/julian-alarcon/DoTheSplit/commit/a0b3bb990a5a328928fec685d976367c58342f9c))
+
 ## [1.0.1](https://github.com/julian-alarcon/DoTheSplit/compare/v1.0.0...v1.0.1) (2026-06-27)
 
 

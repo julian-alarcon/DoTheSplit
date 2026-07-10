@@ -32,6 +32,7 @@ Generated from `go-licenses csv ./cmd/api ./cmd/worker` against [api/go.mod](api
 
 | Module | License | Source |
 |---|---|---|
+| github.com/dustin/go-humanize | MIT | https://github.com/dustin/go-humanize/blob/v1.0.1/LICENSE |
 | github.com/golang-jwt/jwt/v5 | MIT | https://github.com/golang-jwt/jwt/blob/v5.3.1/LICENSE |
 | github.com/google/uuid | BSD-3-Clause | https://github.com/google/uuid/blob/v1.6.0/LICENSE |
 | github.com/jackc/pgpassfile | MIT | https://github.com/jackc/pgpassfile/blob/v1.0.0/LICENSE |
@@ -39,10 +40,15 @@ Generated from `go-licenses csv ./cmd/api ./cmd/worker` against [api/go.mod](api
 | github.com/jackc/pgx/v5 | MIT | https://github.com/jackc/pgx/blob/v5.10.0/LICENSE |
 | github.com/jackc/puddle/v2 | MIT | https://github.com/jackc/puddle/blob/v2.2.2/LICENSE |
 | github.com/oapi-codegen/runtime/types | Apache-2.0 | https://github.com/oapi-codegen/runtime/blob/v1.4.1/LICENSE |
+| github.com/remyoudompheng/bigfft | BSD-3-Clause | https://github.com/remyoudompheng/bigfft/blob/24d4a6f8daec/LICENSE |
 | golang.org/x/crypto | BSD-3-Clause | https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE |
 | golang.org/x/sync/semaphore | BSD-3-Clause | https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE |
-| golang.org/x/sys/cpu | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE |
+| golang.org/x/sys | BSD-3-Clause | https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE |
 | golang.org/x/text | BSD-3-Clause | https://cs.opensource.google/go/x/text/+/v0.38.0:LICENSE |
+| modernc.org/libc | BSD-3-Clause | https://gitlab.com/cznic/libc/-/blob/v1.73.4/LICENSE |
+| modernc.org/mathutil | BSD-3-Clause | https://gitlab.com/cznic/mathutil/-/blob/v1.7.1/LICENSE |
+| modernc.org/memory | BSD-3-Clause | https://gitlab.com/cznic/memory/-/blob/v1.11.0/LICENSE |
+| modernc.org/sqlite | BSD-3-Clause | https://gitlab.com/cznic/sqlite/-/blob/v1.53.0/LICENSE |
 
 ## Frontend (npm packages)
 

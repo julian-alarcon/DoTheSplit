@@ -70,6 +70,12 @@
       "version": "v0.53.0",
       "license": "BSD-3-Clause",
       "url": "https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE"
+    },
+    {
+      "name": "modernc.org/sqlite",
+      "version": "v1.53.0",
+      "license": "BSD-3-Clause",
+      "url": "https://gitlab.com/cznic/sqlite/-"
     }
   ],
   "frontend": [

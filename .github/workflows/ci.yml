@@ -50,7 +50,7 @@ jobs:
         run: make lint-frontend
 
   test-go:
-    name: test / go (race)
+    name: test / go (race, postgres + sqlite)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -80,8 +80,13 @@ jobs:
         # a test run.
         run: docker pull postgres:18-alpine
 
-      - name: go test (race)
-        run: make test-go GOTEST_FLAGS="-coverprofile=coverage.out"
+      - name: go test (race, postgres)
+        run: make test-go-postgres GOTEST_FLAGS="-coverprofile=coverage.out"
+
+      - name: go test (race, sqlite)
+        # The full integration suite runs against SQLite too (in-process, no
+        # container), so both engines are gated on every PR.
+        run: make test-go-sqlite
 
       - name: upload coverage
         if: always()

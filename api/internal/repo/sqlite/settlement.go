@@ -42,14 +42,17 @@ func (r *SettlementRepo) CreateTx(ctx context.Context, tx repo.Tx, s *repo.Settl
 func (r *SettlementRepo) createTx(ctx context.Context, tx repo.Tx, s *repo.Settlement, actorID uuid.UUID) error {
 	q := native(tx).tx
 	s.ID = uuid.New()
-	s.CreatedAt = time.Now().UTC()
+	// A CSV restore may supply the original creation time; otherwise stamp now.
+	if s.CreatedAt.IsZero() {
+		s.CreatedAt = time.Now().UTC()
+	}
 	if _, err := q.ExecContext(ctx, `
 		INSERT INTO settlements (id, group_id, from_user, to_user, amount_cents, note, settled_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, s.ID, s.GroupID, s.FromUser, s.ToUser, s.AmountCents, s.Note, tsVal(s.SettledAt), tsVal(s.CreatedAt)); err != nil {
 		return err
 	}
-	return insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementCreated)
+	return insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementCreated, s.CreatedAt)
 }
 
 func (r *SettlementRepo) FindByID(ctx context.Context, id uuid.UUID) (*repo.Settlement, error) {
@@ -93,7 +96,7 @@ func (r *SettlementRepo) Update(ctx context.Context, s *repo.Settlement, actorID
 	if n, _ := res.RowsAffected(); n == 0 {
 		return repo.ErrNotFound
 	}
-	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementUpdated); err != nil {
+	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementUpdated, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -121,7 +124,7 @@ func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID u
 	if err := q.QueryRowContext(ctx, `SELECT group_id FROM settlements WHERE id = ?`, id).Scan(&groupID); err != nil {
 		return err
 	}
-	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementDeleted); err != nil {
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementDeleted, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -149,7 +152,7 @@ func (r *SettlementRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid
 	if err := q.QueryRowContext(ctx, `SELECT group_id FROM settlements WHERE id = ?`, id).Scan(&groupID); err != nil {
 		return err
 	}
-	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementRestored); err != nil {
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementRestored, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

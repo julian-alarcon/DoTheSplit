@@ -41,11 +41,17 @@ func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *rep
 }
 
 func (r *ExpenseRepo) createWithSplits(ctx context.Context, q dbtx, e *repo.Expense) error {
+	// A CSV restore may supply the original creation time; otherwise let the DB
+	// default (now()) apply and read it back via RETURNING.
+	var createdAt *time.Time
+	if !e.CreatedAt.IsZero() {
+		createdAt = &e.CreatedAt
+	}
 	err := q.QueryRow(ctx, `
-		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO expenses (group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, now()))
 		RETURNING id, created_at
-	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.Notes, e.IncurredAt, e.RecurringExpenseID).
+	`, e.GroupID, e.PayerID, e.CreatedBy, e.CategoryID, e.AmountCents, e.Currency, e.Description, e.Notes, e.IncurredAt, e.RecurringExpenseID, createdAt).
 		Scan(&e.ID, &e.CreatedAt)
 	if err != nil {
 		return err
@@ -79,7 +85,20 @@ func (r *ExpenseRepo) createWithSplits(ctx context.Context, q dbtx, e *repo.Expe
 		Action:    repo.ActionExpenseCreated,
 		ExpenseID: &e.ID,
 		Metadata:  meta,
+		CreatedAt: expenseEventCreatedAt(e),
 	})
+}
+
+// expenseEventCreatedAt returns the timestamp the feed row should carry. For a
+// CSV restore e.CreatedAt is the pinned original time; the normal path also
+// passes e.CreatedAt (already read back from the DB) so the event and expense
+// share one timestamp. Recurring worker events return zero so insertActivityEvent
+// stamps "now" (the materialization moment).
+func expenseEventCreatedAt(e *repo.Expense) time.Time {
+	if e.RecurringExpenseID != nil {
+		return time.Time{}
+	}
+	return e.CreatedAt
 }
 
 // ListByGroup returns non-deleted expenses with their splits, newest first.

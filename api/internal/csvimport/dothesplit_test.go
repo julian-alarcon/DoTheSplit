@@ -34,6 +34,13 @@ func TestParseDoTheSplit_FullHeader(t *testing.T) {
 	if r0.SignedCents[0] != 200 || r0.SignedCents[1] != -200 {
 		t.Errorf("row0 SignedCents = %v", r0.SignedCents)
 	}
+	wantCreated := time.Date(2024, 1, 1, 18, 43, 10, 0, time.UTC)
+	if !r0.Created.Equal(wantCreated) {
+		t.Errorf("row0 Created = %v, want %v", r0.Created, wantCreated)
+	}
+	if r0.CreatedByName != "Alice" {
+		t.Errorf("row0 CreatedByName = %q, want Alice", r0.CreatedByName)
+	}
 }
 
 func TestParseDoTheSplit_OptionalColumnsMissing(t *testing.T) {
@@ -56,6 +63,30 @@ func TestParseDoTheSplit_OptionalColumnsMissing(t *testing.T) {
 	wantTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	if !r.IncurredAt.Equal(wantTime) {
 		t.Errorf("row IncurredAt = %v, want %v", r.IncurredAt, wantTime)
+	}
+	if !r.Created.IsZero() || r.CreatedByName != "" {
+		t.Errorf("expected zero Created/empty CreatedByName when columns absent, got %v / %q", r.Created, r.CreatedByName)
+	}
+}
+
+func TestParseDoTheSplit_UnparseableCreatedFallsBackToZero(t *testing.T) {
+	// A malformed Created value must not fail the row; it degrades to zero so
+	// the importer falls back to the current time.
+	in := "Date,Description,Category,Cost,Currency,Created,CreatedBy,Alice,Bob\n" +
+		"2024-01-01,Coffee,Dining out,4.00,EUR,not-a-timestamp,Alice,2.00,-2.00\n"
+	res, err := ParseDoTheSplit(in)
+	if err != nil {
+		t.Fatalf("ParseDoTheSplit: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(res.Rows))
+	}
+	r := res.Rows[0]
+	if !r.Created.IsZero() {
+		t.Errorf("Created = %v, want zero for unparseable value", r.Created)
+	}
+	if r.CreatedByName != "Alice" {
+		t.Errorf("CreatedByName = %q, want Alice", r.CreatedByName)
 	}
 }
 

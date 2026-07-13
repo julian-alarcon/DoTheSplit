@@ -74,6 +74,43 @@ func TestParseGroupExpenses_TrailingMemberColumnsIgnored(t *testing.T) {
 	}
 }
 
+func TestParseGroupExpenses_CreatedColumns(t *testing.T) {
+	// Created/CreatedBy present with values are parsed; a re-import can then
+	// restore the original creator/timestamp.
+	in := "Date,Description,Category,Cost,Currency,Created,CreatedBy,Alice,Bob\n" +
+		"2026-06-01,Pizza,Food,42.00,EUR,2026-06-01T19:31:07Z,Alice,21.00,-21.00\n"
+	res, err := ParseGroupExpenses(in)
+	if err != nil {
+		t.Fatalf("ParseGroupExpenses: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(res.Rows))
+	}
+	r := res.Rows[0]
+	wantCreated := time.Date(2026, 6, 1, 19, 31, 7, 0, time.UTC)
+	if !r.Created.Equal(wantCreated) {
+		t.Errorf("Created = %v, want %v", r.Created, wantCreated)
+	}
+	if r.CreatedByName != "Alice" {
+		t.Errorf("CreatedByName = %q, want Alice", r.CreatedByName)
+	}
+}
+
+func TestParseGroupExpenses_CreatedColumnsAbsent(t *testing.T) {
+	// Without the columns, Created/CreatedByName stay zero/empty so the
+	// importer falls back to the current time and the importing actor.
+	in := "Date,Description,Category,Cost,Currency,Time,Payer,Notes\n" +
+		"2026-06-01,Pizza,Food,42.00,EUR,19:30:00,Alice,Friday night\n"
+	res, err := ParseGroupExpenses(in)
+	if err != nil {
+		t.Fatalf("ParseGroupExpenses: %v", err)
+	}
+	r := res.Rows[0]
+	if !r.Created.IsZero() || r.CreatedByName != "" {
+		t.Errorf("expected zero Created/empty CreatedByName, got %v / %q", r.Created, r.CreatedByName)
+	}
+}
+
 func TestParseGroupExpenses_SkipsMalformed(t *testing.T) {
 	in := "Date,Description,Category,Cost,Currency\n" +
 		",no date,,1.00,EUR\n" +

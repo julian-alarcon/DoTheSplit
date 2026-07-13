@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -40,15 +41,21 @@ func (r *SettlementRepo) CreateTx(ctx context.Context, tx repo.Tx, s *repo.Settl
 }
 
 func (r *SettlementRepo) createTx(ctx context.Context, q dbtx, s *repo.Settlement, actorID uuid.UUID) error {
+	// A CSV restore may supply the original creation time; otherwise let the DB
+	// default (now()) apply and read it back via RETURNING.
+	var createdAt *time.Time
+	if !s.CreatedAt.IsZero() {
+		createdAt = &s.CreatedAt
+	}
 	if err := q.QueryRow(ctx, `
-		INSERT INTO settlements (group_id, from_user, to_user, amount_cents, note, settled_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO settlements (group_id, from_user, to_user, amount_cents, note, settled_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()))
 		RETURNING id, created_at
-	`, s.GroupID, s.FromUser, s.ToUser, s.AmountCents, s.Note, s.SettledAt).
+	`, s.GroupID, s.FromUser, s.ToUser, s.AmountCents, s.Note, s.SettledAt, createdAt).
 		Scan(&s.ID, &s.CreatedAt); err != nil {
 		return err
 	}
-	if err := insertSettlementEvent(ctx, q, s.GroupID, s.ID, actorID, repo.ActionSettlementCreated); err != nil {
+	if err := insertSettlementEvent(ctx, q, s.GroupID, s.ID, actorID, repo.ActionSettlementCreated, s.CreatedAt); err != nil {
 		return err
 	}
 	return nil
@@ -89,7 +96,7 @@ func (r *SettlementRepo) Update(ctx context.Context, s *repo.Settlement, actorID
 	if tag.RowsAffected() == 0 {
 		return repo.ErrNotFound
 	}
-	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementUpdated); err != nil {
+	if err := insertSettlementEvent(ctx, tx, s.GroupID, s.ID, actorID, repo.ActionSettlementUpdated, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -116,7 +123,7 @@ func (r *SettlementRepo) SoftDelete(ctx context.Context, id uuid.UUID, actorID u
 	if err := tx.QueryRow(ctx, `SELECT group_id FROM settlements WHERE id = $1`, id).Scan(&groupID); err != nil {
 		return err
 	}
-	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementDeleted); err != nil {
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementDeleted, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -143,7 +150,7 @@ func (r *SettlementRepo) Restore(ctx context.Context, id uuid.UUID, actorID uuid
 	if err := tx.QueryRow(ctx, `SELECT group_id FROM settlements WHERE id = $1`, id).Scan(&groupID); err != nil {
 		return err
 	}
-	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementRestored); err != nil {
+	if err := insertSettlementEvent(ctx, tx, groupID, id, actorID, repo.ActionSettlementRestored, time.Time{}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

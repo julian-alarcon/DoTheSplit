@@ -288,7 +288,7 @@ func setup(t *testing.T, opts ...setupOpt) *testStack {
 	expenseSvc := service.NewExpenseService(expenses, groups, categorySvc)
 	importSvc := service.NewSplitwiseImporter(store, users, groups, expenseSvc, categorySvc, settlements, authSvc, email)
 	groupExpenseImporterSvc := service.NewGroupExpenseImporter(groups, groupSvc, expenseSvc, categorySvc)
-	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users)
+	exporterSvc := service.NewGroupCSVExporter(groupSvc, groups, expenseSvc, settlements, categorySvc, users, store.Activity())
 
 	// Postgres feeds the hub via a LISTEN goroutine (mirroring cmd/api); SQLite
 	// publishes to the hub directly from the store, so no listener runs.

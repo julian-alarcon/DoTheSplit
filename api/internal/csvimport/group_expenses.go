@@ -22,7 +22,13 @@ type GroupExpenseRow struct {
 	Currency    string
 	PayerName   string
 	Notes       string
-	Raw         string
+	// Created is the original creation timestamp from the optional
+	// "Created" column (RFC3339). Zero when absent or unparseable.
+	Created time.Time
+	// CreatedByName is the original creator's display name from the
+	// optional "CreatedBy" column. Empty when absent.
+	CreatedByName string
+	Raw           string
 }
 
 // GroupExpenseResult is the full parse outcome for ParseGroupExpenses.
@@ -185,6 +191,16 @@ func parseGroupExpenseRow(rec []string, colIdx map[string]int) (GroupExpenseRow,
 	}
 	if i := colIdx["notes"]; i != -1 {
 		row.Notes = strings.TrimSpace(rec[i])
+	}
+	if i := colIdx["created"]; i != -1 {
+		if c := strings.TrimSpace(rec[i]); c != "" {
+			if parsed, err := time.Parse(time.RFC3339, c); err == nil {
+				row.Created = parsed.UTC()
+			}
+		}
+	}
+	if i := colIdx["createdby"]; i != -1 {
+		row.CreatedByName = strings.TrimSpace(rec[i])
 	}
 	return row, true
 }

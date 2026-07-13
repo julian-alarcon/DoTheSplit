@@ -48,7 +48,10 @@ func (r *ExpenseRepo) CreateWithSplits(ctx context.Context, e *repo.Expense) err
 func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *repo.Expense) error {
 	q := native(tx).tx
 	e.ID = uuid.New()
-	e.CreatedAt = time.Now().UTC()
+	// A CSV restore may supply the original creation time; otherwise stamp now.
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = time.Now().UTC()
+	}
 	if _, err := q.ExecContext(ctx, `
 		INSERT INTO expenses (id, group_id, payer_id, created_by, category_id, amount_cents, currency, description, notes, incurred_at, recurring_expense_id, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -75,8 +78,10 @@ func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *rep
 	if e.CreatedBy != uuid.Nil {
 		actor = &e.CreatedBy
 	}
+	eventCreatedAt := e.CreatedAt
 	if e.RecurringExpenseID != nil {
-		actor = nil // worker-generated: system actor
+		actor = nil                  // worker-generated: system actor
+		eventCreatedAt = time.Time{} // stamp "now" (the materialization moment)
 	}
 	return insertActivityEvent(ctx, tx, repo.ActivityEvent{
 		GroupID:   e.GroupID,
@@ -84,6 +89,7 @@ func (r *ExpenseRepo) CreateWithSplitsTx(ctx context.Context, tx repo.Tx, e *rep
 		Action:    repo.ActionExpenseCreated,
 		ExpenseID: &e.ID,
 		Metadata:  meta,
+		CreatedAt: eventCreatedAt,
 	})
 }
 

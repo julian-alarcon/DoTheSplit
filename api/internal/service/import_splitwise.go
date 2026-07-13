@@ -306,8 +306,18 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 				AmountCents: st.AmountCents,
 				Note:        st.Note,
 				SettledAt:   when,
+				// Optional CSV "Created" column pins the original creation time;
+				// zero lets the DB/Go default apply.
+				CreatedAt: row.Created,
 			}
-			if err := s.settlements.CreateTx(ctx, tx, settlement, actorID); err != nil {
+			// Optional CSV "CreatedBy" column: the settlement's creator lives on
+			// the activity event, so pass the resolved member as the event actor.
+			// Unknown/empty name falls back to the importing operator.
+			settlementActor := actorID
+			if idx := csvimport.PayerIdx(parsed.UserNames, row.CreatedByName); idx != -1 {
+				settlementActor = memberIDs[idx]
+			}
+			if err := s.settlements.CreateTx(ctx, tx, settlement, settlementActor); err != nil {
 				return ImportSplitwiseResult{}, err
 			}
 			continue
@@ -358,10 +368,18 @@ func (s *SplitwiseImporter) run(ctx context.Context, actorID uuid.UUID, in Impor
 			if incurred.IsZero() {
 				incurred = defaultOccurredAt()
 			}
+			// Optional CSV "CreatedBy" column restores the original author;
+			// unknown/empty name falls back to the importing operator.
+			creator := actorID
+			if idx := csvimport.PayerIdx(parsed.UserNames, row.CreatedByName); idx != -1 {
+				creator = memberIDs[idx]
+			}
 			exp := &repo.Expense{
-				GroupID:    g.ID,
-				PayerID:    memberIDs[payerIdx],
-				CreatedBy:  actorID,
+				GroupID:   g.ID,
+				PayerID:   memberIDs[payerIdx],
+				CreatedBy: creator,
+				// Optional CSV "Created" column pins the original creation time.
+				CreatedAt:  row.Created,
 				CategoryID: catUUID,
 				// Always the group's currency. dothesplit groups are
 				// single-currency; for mixed-currency Splitwise CSVs we

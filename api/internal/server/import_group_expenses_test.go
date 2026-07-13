@@ -7,6 +7,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestImportGroupExpenses_RestoresCreatorAndTimestamp verifies the group-append
+// importer honors the optional Created/CreatedBy columns: the appended expense
+// is authored by the named member (Bob) with the original timestamp, even though
+// Alice runs the import.
+func TestImportGroupExpenses_RestoresCreatorAndTimestamp(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration: needs Docker/testcontainers")
+	}
+	ts := setup(t)
+	base := ts.srv.URL
+
+	_, aCookie := registerUser(t, base, "alice@test.dev", "passwordpassword", "Alice")
+	_, _ = registerUser(t, base, "bob@test.dev", "passwordpassword", "Bob")
+
+	resp, group := request(t, "POST", base+"/v1/groups", map[string]any{
+		"name": "Trip", "default_currency": "EUR",
+	}, aCookie)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, group)
+	groupID := group["id"].(string)
+	resp, _ = request(t, "POST", base+"/v1/groups/"+groupID+"/members",
+		map[string]any{"email": "bob@test.dev"}, aCookie)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// CreatedBy names Bob and Created carries an explicit historical timestamp.
+	csv := "Date,Description,Category,Cost,Currency,Payer,Notes,Created,CreatedBy\n" +
+		"2026-06-01,Pizza,Food,42.00,EUR,Bob,,2026-06-01T19:31:07Z,Bob\n"
+	body := map[string]any{"csv": csv, "dry_run": false}
+	resp, out := request(t, "POST", base+"/v1/groups/"+groupID+"/imports/expenses", body, aCookie)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, out)
+
+	items, _ := activityItems(t, base, groupID, "", aCookie)
+	require.Len(t, items, 1)
+	ev := items[0].(map[string]any)
+	require.Equal(t, "expense.created", ev["action"])
+	require.Equal(t, "Bob", ev["actor"].(map[string]any)["display_name"],
+		"CreatedBy column must set the activity actor to the named member")
+	require.Equal(t,
+		truncSecond(t, "2026-06-01T19:31:07Z"),
+		truncSecond(t, ev["occurred_at"].(string)),
+		"Created column must pin the event timestamp")
+}
+
 // TestImportGroupExpenses_EqualSplit drives the most common path: a
 // 3-member group with no pinned default split. The importer should
 // parse the CSV, fall back to equal splits across all members, and

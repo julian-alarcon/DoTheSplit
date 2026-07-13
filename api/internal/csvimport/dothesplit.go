@@ -143,6 +143,16 @@ func ParseDoTheSplit(raw string) (Result, error) {
 		if i := colIdx["notes"]; i != -1 {
 			row.Notes = strings.TrimSpace(rec[i])
 		}
+		if i := colIdx["created"]; i != -1 {
+			if c := strings.TrimSpace(rec[i]); c != "" {
+				if parsed, err := time.Parse(time.RFC3339, c); err == nil {
+					row.Created = parsed.UTC()
+				}
+			}
+		}
+		if i := colIdx["createdby"]; i != -1 {
+			row.CreatedByName = strings.TrimSpace(rec[i])
+		}
 		row.Raw = strings.Join(rec, ",")
 		res.Rows = append(res.Rows, row)
 		if !containsString(res.Currencies, row.Currency) {

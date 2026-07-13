@@ -198,6 +198,11 @@ type ActivityEvent struct {
 	ExpenseID    *uuid.UUID
 	SettlementID *uuid.UUID
 	Metadata     map[string]any
+	// CreatedAt, when non-zero, pins the feed row's timestamp instead of the
+	// DB/Go "now" default. Set only by the CSV importers when restoring an
+	// expense/settlement's original creation time; every other write leaves it
+	// zero.
+	CreatedAt time.Time
 }
 
 // ActivityRow is the keyset cursor tuple: (created_at, id).

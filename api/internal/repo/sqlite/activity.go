@@ -28,7 +28,10 @@ func insertActivityEvent(ctx context.Context, tx repo.Tx, ev repo.ActivityEvent)
 		return err
 	}
 	id := uuid.New()
-	now := time.Now().UTC()
+	now := ev.CreatedAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
 	st := native(tx)
 	if _, err := st.tx.ExecContext(ctx, `
 		INSERT INTO activity_events (id, group_id, actor_id, action, expense_id, settlement_id, metadata, created_at)
@@ -69,7 +72,9 @@ func expenseEventMeta(ctx context.Context, q dbtx, expenseID uuid.UUID) (map[str
 }
 
 // insertSettlementEvent writes a settlement activity event inside an existing tx.
-func insertSettlementEvent(ctx context.Context, tx repo.Tx, groupID, settlementID, actorID uuid.UUID, action repo.ActivityAction) error {
+// createdAt pins the feed row's timestamp when non-zero (CSV restore); pass the
+// zero time for the normal path so the current time applies.
+func insertSettlementEvent(ctx context.Context, tx repo.Tx, groupID, settlementID, actorID uuid.UUID, action repo.ActivityAction, createdAt time.Time) error {
 	var actor *uuid.UUID
 	if actorID != uuid.Nil {
 		actor = &actorID
@@ -79,6 +84,7 @@ func insertSettlementEvent(ctx context.Context, tx repo.Tx, groupID, settlementI
 		ActorID:      actor,
 		Action:       action,
 		SettlementID: &settlementID,
+		CreatedAt:    createdAt,
 	})
 }
 
@@ -157,4 +163,27 @@ func inPlaceholders[T any](items []T) (string, []any) {
 		args[i] = v
 	}
 	return strings.Join(ph, ","), args
+}
+
+// SettlementCreators returns settlement_id -> actor_id for every
+// settlement.created event in the group with a non-null actor.
+func (r *ActivityRepo) SettlementCreators(ctx context.Context, groupID uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	rows, err := r.s.db.QueryContext(ctx, `
+		SELECT settlement_id, actor_id
+		FROM activity_events
+		WHERE group_id = ? AND action = ? AND settlement_id IS NOT NULL AND actor_id IS NOT NULL
+	`, groupID, string(repo.ActionSettlementCreated))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[uuid.UUID]uuid.UUID)
+	for rows.Next() {
+		var sid, aid uuid.UUID
+		if err := rows.Scan(&sid, &aid); err != nil {
+			return nil, err
+		}
+		out[sid] = aid
+	}
+	return out, rows.Err()
 }

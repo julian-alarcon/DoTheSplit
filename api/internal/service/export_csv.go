@@ -23,10 +23,11 @@ type GroupCSVExporter struct {
 	settlements repo.SettlementRepo
 	categories  *CategoryService
 	users       repo.UserRepo
+	activity    repo.ActivityRepo
 }
 
-func NewGroupCSVExporter(g *GroupService, gr repo.GroupRepo, e *ExpenseService, st repo.SettlementRepo, c *CategoryService, u repo.UserRepo) *GroupCSVExporter {
-	return &GroupCSVExporter{groups: g, groupRepo: gr, expenses: e, settlements: st, categories: c, users: u}
+func NewGroupCSVExporter(g *GroupService, gr repo.GroupRepo, e *ExpenseService, st repo.SettlementRepo, c *CategoryService, u repo.UserRepo, a repo.ActivityRepo) *GroupCSVExporter {
+	return &GroupCSVExporter{groups: g, groupRepo: gr, expenses: e, settlements: st, categories: c, users: u, activity: a}
 }
 
 // ExportResult carries metadata the handler needs to build the response
@@ -55,6 +56,13 @@ func (s *GroupCSVExporter) Export(ctx context.Context, w io.Writer, actorID, gro
 		return ExportResult{}, err
 	}
 	stls, err := s.settlements.ListByGroup(ctx, groupID)
+	if err != nil {
+		return ExportResult{}, err
+	}
+	// Settlements have no creator column of their own; the author lives on the
+	// settlement.created activity event. Fetch it so the CreatedBy column
+	// round-trips (a re-import restores the same creator).
+	settlementCreators, err := s.activity.SettlementCreators(ctx, groupID)
 	if err != nil {
 		return ExportResult{}, err
 	}
@@ -144,6 +152,10 @@ func (s *GroupCSVExporter) Export(ctx context.Context, w io.Writer, actorID, gro
 		if i, ok := memberIdx[st.ToUser]; ok {
 			signed[i] -= st.AmountCents
 		}
+		createdBy := ""
+		if actor, ok := settlementCreators[st.ID]; ok {
+			createdBy = resolveName(actor)
+		}
 		rows = append(rows, ledgerRow{
 			Date:        st.SettledAt,
 			Created:     st.CreatedAt,
@@ -153,7 +165,7 @@ func (s *GroupCSVExporter) Export(ctx context.Context, w io.Writer, actorID, gro
 			Currency:    g.DefaultCurrency,
 			PayerName:   resolveName(st.FromUser),
 			Notes:       "",
-			CreatedBy:   "",
+			CreatedBy:   createdBy,
 			Signed:      signed,
 		})
 	}

@@ -184,6 +184,11 @@ type TransactionRepo interface {
 
 type ActivityRepo interface {
 	ListByGroup(ctx context.Context, groupID uuid.UUID, limit int, after *ActivityRow) ([]ActivityHydrated, error)
+	// SettlementCreators returns settlement_id -> actor_id for every
+	// settlement.created event in the group that has a non-null actor. Used by
+	// the CSV exporter to fill the settlement CreatedBy column (settlements have
+	// no creator of their own; it lives only on the create event).
+	SettlementCreators(ctx context.Context, groupID uuid.UUID) (map[uuid.UUID]uuid.UUID, error)
 }
 
 type SearchRepo interface {

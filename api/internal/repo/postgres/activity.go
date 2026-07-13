@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,10 +26,14 @@ func insertActivityEvent(ctx context.Context, q dbtx, ev repo.ActivityEvent) err
 	if err != nil {
 		return err
 	}
+	var createdAt *time.Time
+	if !ev.CreatedAt.IsZero() {
+		createdAt = &ev.CreatedAt
+	}
 	_, err = q.Exec(ctx, `
-		INSERT INTO activity_events (group_id, actor_id, action, expense_id, settlement_id, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, ev.GroupID, ev.ActorID, string(ev.Action), ev.ExpenseID, ev.SettlementID, b)
+		INSERT INTO activity_events (group_id, actor_id, action, expense_id, settlement_id, metadata, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()))
+	`, ev.GroupID, ev.ActorID, string(ev.Action), ev.ExpenseID, ev.SettlementID, b, createdAt)
 	return err
 }
 
@@ -54,7 +59,9 @@ func expenseEventMeta(ctx context.Context, q dbtx, expenseID uuid.UUID) (map[str
 }
 
 // insertSettlementEvent writes a settlement activity event inside an existing tx.
-func insertSettlementEvent(ctx context.Context, q dbtx, groupID, settlementID, actorID uuid.UUID, action repo.ActivityAction) error {
+// createdAt pins the feed row's timestamp when non-zero (CSV restore); pass the
+// zero time for the normal path so the DB default applies.
+func insertSettlementEvent(ctx context.Context, q dbtx, groupID, settlementID, actorID uuid.UUID, action repo.ActivityAction, createdAt time.Time) error {
 	var actor *uuid.UUID
 	if actorID != uuid.Nil {
 		actor = &actorID
@@ -64,6 +71,7 @@ func insertSettlementEvent(ctx context.Context, q dbtx, groupID, settlementID, a
 		ActorID:      actor,
 		Action:       action,
 		SettlementID: &settlementID,
+		CreatedAt:    createdAt,
 	})
 }
 
@@ -123,6 +131,29 @@ func (r *ActivityRepo) ListByGroup(ctx context.Context, groupID uuid.UUID, limit
 		}
 		h.Action = repo.ActivityAction(action)
 		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// SettlementCreators returns settlement_id -> actor_id for every
+// settlement.created event in the group with a non-null actor.
+func (r *ActivityRepo) SettlementCreators(ctx context.Context, groupID uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT settlement_id, actor_id
+		FROM activity_events
+		WHERE group_id = $1 AND action = $2 AND settlement_id IS NOT NULL AND actor_id IS NOT NULL
+	`, groupID, string(repo.ActionSettlementCreated))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[uuid.UUID]uuid.UUID)
+	for rows.Next() {
+		var sid, aid uuid.UUID
+		if err := rows.Scan(&sid, &aid); err != nil {
+			return nil, err
+		}
+		out[sid] = aid
 	}
 	return out, rows.Err()
 }

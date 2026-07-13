@@ -92,6 +92,14 @@ type Row struct {
 	// Notes is the dothesplit-only "Notes" column. Empty when the source
 	// did not carry one (Splitwise has no equivalent).
 	Notes string
+	// Created is the original creation timestamp from the dothesplit-only
+	// "Created" column (RFC3339). Zero when absent or unparseable; callers
+	// then fall back to the current time.
+	Created time.Time
+	// CreatedByName is the original creator's display name from the
+	// dothesplit-only "CreatedBy" column. Empty when absent; callers then
+	// fall back to the importing actor.
+	CreatedByName string
 }
 
 // Result is the full parse outcome.

@@ -162,6 +162,14 @@ func (s *GroupExpenseImporter) Run(ctx context.Context, actorID, groupID uuid.UU
 		if when.IsZero() {
 			when = row.Date
 		}
+		// Optional CSV columns: restore the original creator/timestamp when
+		// present, else leave them unset so Create defaults to the importing
+		// actor and the current time. An unknown creator name is ignored (falls
+		// back to the actor) rather than skipping the row.
+		var createdBy *uuid.UUID
+		if id, ok := nameIdx[strings.ToLower(strings.TrimSpace(row.CreatedByName))]; ok && row.CreatedByName != "" {
+			createdBy = &id
+		}
 		input := CreateExpenseInput{
 			GroupID:     groupID,
 			PayerID:     payerID,
@@ -173,6 +181,8 @@ func (s *GroupExpenseImporter) Run(ctx context.Context, actorID, groupID uuid.UU
 			IncurredAt:  when,
 			Mode:        splitMode,
 			Splits:      splitInputs,
+			CreatedBy:   createdBy,
+			CreatedAt:   row.Created,
 		}
 		plans = append(plans, plan{
 			input:     input,

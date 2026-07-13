@@ -64,6 +64,14 @@ type CreateExpenseInput struct {
 	IncurredAt  time.Time
 	Mode        SplitMode
 	Splits      []SplitInput
+	// CreatedBy, when non-nil, overrides the creator recorded on the expense
+	// (and the activity actor). Used by the CSV importer to restore the
+	// original author; the normal request path leaves it nil so the acting
+	// user is the creator.
+	CreatedBy *uuid.UUID
+	// CreatedAt, when non-zero, pins the expense's original creation time
+	// (and the feed row's). CSV-restore only; otherwise the DB/Go "now" applies.
+	CreatedAt time.Time
 }
 
 // Create validates inputs, resolves the split mode to exact share_cents per user,
@@ -115,16 +123,29 @@ func (s *ExpenseService) Create(ctx context.Context, actorID uuid.UUID, in Creat
 		return nil, err
 	}
 
+	// Creator defaults to the acting user. A CSV restore may override it with
+	// the original author, which must itself be a group member.
+	creator := actorID
+	if in.CreatedBy != nil {
+		if ok, err := s.groups.IsMember(ctx, in.GroupID, *in.CreatedBy); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, ErrSplitNotMember
+		}
+		creator = *in.CreatedBy
+	}
+
 	e := &repo.Expense{
 		GroupID:     in.GroupID,
 		PayerID:     in.PayerID,
-		CreatedBy:   actorID,
+		CreatedBy:   creator,
 		CategoryID:  cat.ID,
 		AmountCents: in.AmountCents,
 		Currency:    in.Currency,
 		Description: in.Description,
 		Notes:       in.Notes,
 		IncurredAt:  in.IncurredAt,
+		CreatedAt:   in.CreatedAt,
 		Splits:      shares,
 	}
 	if err := s.exps.CreateWithSplits(ctx, e); err != nil {

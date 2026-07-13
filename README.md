@@ -10,10 +10,12 @@
 
 ---
 
-DoTheSplit runs on **SQLite** (default, zero-dependency single container) or
-**PostgreSQL** (for multi-instance / scale-out), chosen by `DATABASE_DRIVER`.
+DoTheSplit runs on **SQLite** (the default, zero-dependency single container) or
+**PostgreSQL** (for multi-instance / scale-out). Each compose file sets
+`DATABASE_DRIVER` for you (it is required and has no default, so an unset env
+fails fast).
 
-### SQLite (default, simplest)
+### SQLite (default)
 
 ```bash
 cp .env.example .env
@@ -30,7 +32,7 @@ cp .env.example .env
 
 # One api container, one DB file on a volume. No Postgres, no migrate step,
 # no separate worker (all run in-process).
-docker compose -f docker-compose.sqlite.yml up -d --build
+docker compose up -d --build
 ```
 
 ### PostgreSQL (scale-out)
@@ -39,9 +41,9 @@ docker compose -f docker-compose.sqlite.yml up -d --build
 # Same four keys as above, plus a Postgres password:
 echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
 # Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
-# The compose file sets DATABASE_DRIVER=postgres on the api + worker services.
+# The postgres compose file sets DATABASE_DRIVER=postgres on the api + worker services.
 
-docker compose up -d
+docker compose -f docker-compose.postgres.yml up -d --build
 ```
 
 Open http://localhost:8080.
@@ -54,7 +56,7 @@ Open http://localhost:8080.
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
 - `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/api/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
-- `/docker-compose.yml`: local + LAN deployment stack
+- `/docker-compose.yml`: default (SQLite) deployment stack; `/docker-compose.postgres.yml` is the Postgres stack
 - `/scripts`: SBOM and third-party-license generators
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy

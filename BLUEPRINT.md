@@ -14,7 +14,7 @@ Open-source expense-sharing app.
 
 - Backend: Go with the standard-library [`net/http`](https://pkg.go.dev/net/http) server (1.22+ `ServeMux` routing; no third-party web framework)
 - Frontend: Vue 3 SPA (client-side-rendered) + Vite, built to static files and embedded into the Go binary (mobile-first, PWA-ready; future mobile via wrapper)
-- Database: SQLite (default) or PostgreSQL 18, selected by `DATABASE_DRIVER`; field-level encryption at rest either way
+- Database: SQLite or PostgreSQL 18, selected by `DATABASE_DRIVER` (required, no default); field-level encryption at rest either way
 - Infra: Docker Compose on TrueNAS. Postgres stack: `postgres`, `migrate`, `api`, `worker`. SQLite stack: a single `api` container (embedded migrations + embedded worker, one DB file). The api binary serves the embedded SPA, so there is no separate `web` service.
 
 ## Repo Structure

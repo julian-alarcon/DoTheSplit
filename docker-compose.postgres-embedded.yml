@@ -1,16 +1,16 @@
 # Postgres, single-node, embedded worker.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build
+#   docker compose -f docker-compose.postgres.yml -f docker-compose.postgres-embedded.yml up -d --build
 #
-# Same Postgres stack as docker-compose.yml but the recurring/outbox tick runs
-# as a goroutine inside the api (WORKER_MODE=embedded) instead of a separate
-# worker container - one fewer container for a lean single-node deployment. The
-# tick still takes the pg advisory lock, so this remains safe even if you also
-# run the standalone worker elsewhere.
+# Same Postgres stack as docker-compose.postgres.yml but the recurring/outbox
+# tick runs as a goroutine inside the api (WORKER_MODE=embedded) instead of a
+# separate worker container - one fewer container for a lean single-node
+# deployment. The tick still takes the pg advisory lock, so this remains safe
+# even if you also run the standalone worker elsewhere.
 #
 # Trade-off: the tick shares the api's process/CPU/connection-pool and an api
-# restart bounces it. For multi-replica / scale-out, use the default
-# docker-compose.yml (separate worker) instead.
+# restart bounces it. For multi-replica / scale-out, use
+# docker-compose.postgres.yml (separate worker) instead.
 services:
   api:
     environment:

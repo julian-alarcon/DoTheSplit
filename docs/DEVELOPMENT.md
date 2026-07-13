@@ -30,7 +30,7 @@ DoTheSplit speaks to **either SQLite or PostgreSQL** behind one `repo.Store` int
 - `api/internal/repo/postgres` - pgx/v5.
 - `api/internal/repo/sqlite` - `database/sql` + the pure-Go `modernc.org/sqlite` driver (no CGO). Connection pragmas: WAL, `busy_timeout`, `foreign_keys=ON`, `synchronous=NORMAL`.
 
-The `DATABASE_DRIVER` env var selects the engine (`sqlite`, the default when unset, or `postgres`); `api/internal/storefactory` constructs the right `Store` and wires migrations. Because both implementations satisfy the same interface, the service/handler layers are engine-agnostic.
+The `DATABASE_DRIVER` env var selects the engine (`sqlite` or `postgres`); it is **required with no default**, so `config.Load()` errors if it is unset. `api/internal/storefactory` constructs the right `Store` and wires migrations. Because both implementations satisfy the same interface, the service/handler layers are engine-agnostic.
 
 Encryption at rest is application-level (above the DB) and identical on both engines - the engine choice never touches the crypto (see [What the keys do](#what-the-three-keys-do)).
 
@@ -157,19 +157,23 @@ The tag still triggers `publish.yml` and `compliance.yml`. The CHANGELOG entry w
 
 ## Run
 
+Bare `docker compose` targets the default **SQLite** stack (`docker-compose.yml`). For the Postgres stack, add `-f docker-compose.postgres.yml` to each command:
+
 ```bash
 docker compose up -d                 # start/resume the stack
 docker compose up -d --build         # rebuild only stale images, then start
 docker compose up -d --build api     # rebuild + restart just the api (also rebuilds the embedded SPA)
 docker compose logs -f api           # follow api logs
 docker compose ps                    # service status
-docker compose down                  # stop (keeps the Postgres volume)
-docker compose down -v               # stop AND destroy the Postgres volume
+docker compose down                  # stop (keeps the DB volume)
+docker compose down -v               # stop AND destroy the DB volume
 ```
 
 ### Services
 
-The table below is the **Postgres** stack (`docker-compose.yml`, which sets `DATABASE_DRIVER: postgres` on `api`/`worker`):
+The default stack is **SQLite** (`docker-compose.yml`, `DATABASE_DRIVER=sqlite`): a single `api` container plus one DB-file volume at `/data` - no `postgres`, `migrate`, or `worker` service. Migrations apply in-process at boot and the worker runs embedded (see below).
+
+The **Postgres** stack (`docker-compose.postgres.yml`, which sets `DATABASE_DRIVER: postgres` on `api`/`worker`) has four services:
 
 | Service    | Image               | Purpose                                           |
 | ---------- | ------------------- | ------------------------------------------------- |
@@ -178,14 +182,12 @@ The table below is the **Postgres** stack (`docker-compose.yml`, which sets `DAT
 | `api`      | `dothesplit`        | HTTP API + embedded Vue SPA on `:8080`            |
 | `worker`   | `dothesplit`        | Same image, runs `/worker` - materializes recurring expenses |
 
-The **SQLite** stack (`docker-compose.sqlite.yml`, `DATABASE_DRIVER=sqlite`) is a single `api` container plus one DB-file volume at `/data` - no `postgres`, `migrate`, or `worker` service. Migrations apply in-process at boot and the worker runs embedded (see below).
-
 ### Worker topology
 
 `WORKER_MODE` picks how the recurring-expense worker runs:
 
 - `external` (default) - a separate `worker` container, used by the Postgres stack.
-- `embedded` - a goroutine inside the api process. **SQLite forces `embedded`** (there is no separate worker container). Postgres may opt into embedded for a single-node deploy via `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` (worker container disabled). The embedded worker still takes a Postgres advisory lock, so it stays safe alongside an external worker during a transition.
+- `embedded` - a goroutine inside the api process. **SQLite forces `embedded`** (there is no separate worker container). Postgres may opt into embedded for a single-node deploy via `docker compose -f docker-compose.postgres.yml -f docker-compose.postgres-embedded.yml up -d --build` (worker container disabled). The embedded worker still takes a Postgres advisory lock, so it stays safe alongside an external worker during a transition.
 
 ## Smoke test the running stack
 
@@ -289,10 +291,10 @@ Postgres's on-disk format is not compatible across major versions. Bumping the i
 
 Two paths:
 
-1. **Dev / LAN with no data you care about**: `docker compose down -v` (destroys the volume), then `docker compose up -d --build`. Migrations recreate the schema from scratch; all app data is lost.
-2. **Preserving data**: `pg_dump` from the old container, `docker compose down -v`, bring up the new image, restore with `psql` or `pg_restore`.
+1. **Dev / LAN with no data you care about**: `docker compose -f docker-compose.postgres.yml down -v` (destroys the volume), then `docker compose -f docker-compose.postgres.yml up -d --build`. Migrations recreate the schema from scratch; all app data is lost.
+2. **Preserving data**: `pg_dump` from the old container, `docker compose -f docker-compose.postgres.yml down -v`, bring up the new image, restore with `psql` or `pg_restore`.
 
-The compose file mounts the volume at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) because PG 18's official image expects the parent directory so `pg_upgrade --link` can work in place across majors. Don't change this.
+The Postgres compose file mounts the volume at `/var/lib/postgresql` (not `/var/lib/postgresql/data`) because PG 18's official image expects the parent directory so `pg_upgrade --link` can work in place across majors. Don't change this.
 
 SQLite has no cross-version on-disk incompatibility to manage - the `dts.db` file is portable and embedded migrations apply in-process on the next boot, so a SQLite deployment just bumps the image tag.
 
@@ -331,7 +333,7 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
 | `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |
 | `make build`      | Build the SPA, embed it, then build Go binaries (`bin/api`, `bin/worker`) |
-| `make up`         | `docker compose up -d --build`, baking current SHA in              |
+| `make up`         | `docker compose up -d --build`, baking current SHA in (default SQLite stack) |
 | `make compliance` | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/` |
 
 **`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./frontend/package.json').version")` and passes both to the api Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../frontend/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.

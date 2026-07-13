@@ -11,7 +11,7 @@ DoTheSplit - a expense-sharing app.
 - **Backend**: Go 1.26, standard-library `net/http` (the 1.22+ `ServeMux` with method+wildcard patterns), pgx/v5, `golang-migrate`, `oapi-codegen`. No web framework. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
 - **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
 - **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware attaches the authenticated user to the request context (`middleware.WithUser`, read via `middleware.User(r.Context())`), so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
-- **Database**: SQLite (default) **or** PostgreSQL 18, selected by `DATABASE_DRIVER` (`sqlite` when unset; Postgres deployments must set `DATABASE_DRIVER=postgres` + `DATABASE_URL`). Postgres migrations in [api/migrations/](api/migrations/); SQLite migrations are embedded in [api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/) and applied in-process on first boot. See "Database" below.
+- **Database**: SQLite **or** PostgreSQL 18, selected by `DATABASE_DRIVER` (**required, no default** - the app refuses to boot if unset; `sqlite` or `postgres`). Postgres additionally needs `DATABASE_URL`. Postgres migrations in [api/migrations/](api/migrations/); SQLite migrations are embedded in [api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/) and applied in-process on first boot. See "Database" below.
 - **Worker**: recurring-expense materialization + email-outbox drain, ticking every 60s. Same logic ([api/internal/worker/](api/internal/worker/)) runs two ways per `WORKER_MODE`: as a standalone binary ([api/cmd/worker/](api/cmd/worker/), `external`, the Postgres default) or as a goroutine inside the api (`embedded`, forced on SQLite). See "Worker topology" below.
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only).
 
@@ -62,7 +62,7 @@ Rules of thumb:
 
 ## Database
 
-Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (`sqlite` default, or `postgres`). Pick per deployment: SQLite for a single-node, single-file, zero-dependency install (default; `DATABASE_URL` defaults to `file:./dts.db`); Postgres for multi-instance / scale-out (set `DATABASE_DRIVER=postgres` + `DATABASE_URL`).
+Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (**required, no default**: `sqlite` or `postgres` - `Load()` errors if unset). Pick per deployment: SQLite for a single-node, single-file, zero-dependency install (`DATABASE_URL` defaults to `file:./dts.db`); Postgres for multi-instance / scale-out (also set `DATABASE_URL`).
 
 **Portability rules (both engines must stay in lockstep):**
 
@@ -89,14 +89,14 @@ Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (`s
 
 The 60s tick (materialize due recurring expenses + drain the email outbox) is one code path ([api/internal/worker/](api/internal/worker/)) deployable two ways, selected by `WORKER_MODE`:
 
-- **`external`** (Postgres default): a separate `worker` container/binary ([api/cmd/worker/](api/cmd/worker/)). The api does not run the tick. This is what [docker-compose.yml](docker-compose.yml) ships.
+- **`external`** (Postgres default): a separate `worker` container/binary ([api/cmd/worker/](api/cmd/worker/)). The api does not run the tick. This is what [docker-compose.postgres.yml](docker-compose.postgres.yml) ships.
 - **`embedded`**: the tick runs as a goroutine inside the api ([cmd/api/main.go](api/cmd/api/main.go) starts `worker.Run` when `cfg.WorkerMode == "embedded"`). No separate container.
 
 **SQLite forces `embedded`** regardless of the env value: a separate process can't reach the api's in-process realtime hub (no LISTEN/NOTIFY) and would contend for the single writer.
 
 **Postgres can opt into `embedded`** for a single-node deployment (one fewer container). It's safe even alongside an external worker: each tick first takes a session advisory lock via the store's `TickLocker` (`pg_try_advisory_lock`, [repo/postgres/store.go](api/internal/repo/postgres/store.go)), so exactly one runner materializes per tick and the rest skip - no double-materialization. Verified live: with an embedded api worker + a standalone worker racing the same due recurring, exactly one expense was created.
 
-Trade-offs for choosing `embedded` on Postgres: **pro** - fewer containers, simpler ops for single-node. **con** - the tick shares the api's process/CPU/connection-pool (a heavy batch competes with request serving), an api restart bounces the worker with it, and N api replicas each wake per tick to contend for the lock (cheap but not free). Prefer `external` for multi-replica / scale-out; `embedded` for a lean single node. See [docker-compose.postgres-embedded.yml](docker-compose.postgres-embedded.yml) for a ready example.
+Trade-offs for choosing `embedded` on Postgres: **pro** - fewer containers, simpler ops for single-node. **con** - the tick shares the api's process/CPU/connection-pool (a heavy batch competes with request serving), an api restart bounces the worker with it, and N api replicas each wake per tick to contend for the lock (cheap but not free). Prefer `external` for multi-replica / scale-out; `embedded` for a lean single node (SQLite always uses embedded). See [docker-compose.postgres-embedded.yml](docker-compose.postgres-embedded.yml) for a ready Postgres example.
 
 ## Frontend conventions
 
@@ -166,15 +166,15 @@ Invariants for adding tests:
 - **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
 - **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
 
-Run everything with `make test`. Go alone: `make test-go` (Postgres). Both engines: `make test-go-both` (or `make test-go-sqlite` / `make test-go-postgres` individually) - CI runs the Go suite once per engine. SPA unit alone: `make test-frontend`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `SETUP_TOKEN=... make test-e2e`.
+Run everything with `make test`. Go alone: `make test-go` (Postgres). Both engines: `make test-go-both` (or `make test-go-sqlite` / `make test-go-postgres` individually) - CI runs the Go suite once per engine. SPA unit alone: `make test-frontend`. E2E alone: boot a stack (`docker compose up -d --build` for SQLite, or `docker compose -f docker-compose.postgres.yml up -d --build` for Postgres), scrape the token from the api logs, then `SETUP_TOKEN=... make test-e2e`. CI runs the e2e suite against both engines.
 
 Linting also gates CI on every PR: `make lint` runs golangci-lint (Go, pinned in the `lint-go` target) and eslint (SPA). Run it before pushing.
 
 ## Running the app
 
-- `docker compose up -d --build` - full Postgres stack; the api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`. (postgres, migrate, api, worker - there is no separate web container.)
-- `docker compose -f docker-compose.sqlite.yml up -d --build` - single-container SQLite deployment (one api container + a DB-file volume; no postgres, no migrate one-shot, no separate worker - `WORKER_MODE=embedded` runs the tick in-process). `DATABASE_DRIVER=sqlite` forces the embedded worker regardless of `WORKER_MODE`.
-- `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` - Postgres stack with the worker embedded in the api (no separate worker container). Single-node only; see "Worker topology".
+- `docker compose up -d --build` - default single-container SQLite deployment (`docker-compose.yml`: one api container + a DB-file volume; no postgres, no migrate one-shot, no separate worker - `WORKER_MODE=embedded` runs the tick in-process). The api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`.
+- `docker compose -f docker-compose.postgres.yml up -d --build` - full Postgres stack (postgres, migrate, api, worker; requires `POSTGRES_PASSWORD` + `DATABASE_URL`).
+- `docker compose -f docker-compose.postgres.yml -f docker-compose.postgres-embedded.yml up -d --build` - Postgres stack with the worker embedded in the api (no separate worker container). Single-node only; see "Worker topology".
 - `make up` - Postgres stack, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `frontend/package.json`) into the image so `/healthz` and the page footer self-identify.
 - Local non-Docker dev: `make dev-api` (Go API on `:8080`) + `make dev-frontend` (Vite dev server on `:4321`, proxying `/v1` to `:8080`).
 - `make build` builds the SPA, copies it into the embed dir, then builds the Go binaries. After any change that affects the API contract: `make gen`, then rebuild the `api` + `worker` images (a frontend-only change still means rebuilding `api`, since the SPA is embedded).

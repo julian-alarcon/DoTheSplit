@@ -2,16 +2,16 @@
 
 ## Choose a database engine first
 
-DoTheSplit runs on **SQLite (the default) or PostgreSQL**, selected by the `DATABASE_DRIVER` env var:
+DoTheSplit runs on **SQLite or PostgreSQL**, selected by the `DATABASE_DRIVER` env var. This var is **required and has no default** - the app refuses to start if it is unset, so the engine is always an explicit choice. The compose files below each set it for you.
 
-- **`DATABASE_DRIVER=sqlite`** (default when unset): a single `api` container plus one DB-file volume. No separate Postgres, migrate, or worker containers. Migrations are embedded in the binary and applied in-process on first boot; the recurring-expense worker runs embedded in the api process. This is the simplest path and the right choice for a single-node install. Compose file: `docker-compose.sqlite.yml`.
-- **`DATABASE_DRIVER=postgres`**: the scale-out / multi-instance path (separate `postgres`, `migrate`, `api`, and `worker` services). Now that SQLite is the default, Postgres deployments **must set `DATABASE_DRIVER=postgres` explicitly**. Compose file: `docker-compose.yml`.
+- **`DATABASE_DRIVER=sqlite`**: a single `api` container plus one DB-file volume. No separate Postgres, migrate, or worker containers. Migrations are embedded in the binary and applied in-process on first boot; the recurring-expense worker runs embedded in the api process. This is the simplest path and the right choice for a single-node install. Compose file: `docker-compose.yml` (the default).
+- **`DATABASE_DRIVER=postgres`**: the scale-out / multi-instance path (separate `postgres`, `migrate`, `api`, and `worker` services), which also requires `DATABASE_URL`. Compose file: `docker-compose.postgres.yml`.
 
 The engine choice does **not** change encryption at rest: emails, passwords, SMTP credentials, and token hashes are encrypted/hashed at the application layer above the DB on both engines (see [Secrets](#secrets)). Neither engine encrypts the whole database file. The four crypto keys are required for both.
 
 Install paths below:
 
-- **[Generic Docker host](#generic-docker-host)**: any Linux box (or VM) with Docker and Docker Compose v2. Works for self-hosters who already run a compose stack, for evaluation on a workstation, or as the basis for adapting to other orchestrators (Portainer, Komodo, plain `systemd` units, etc.). Covers both the SQLite (default) and Postgres stacks.
+- **[Generic Docker host](#generic-docker-host)**: any Linux box (or VM) with Docker and Docker Compose v2. Works for self-hosters who already run a compose stack, for evaluation on a workstation, or as the basis for adapting to other orchestrators (Portainer, Komodo, plain `systemd` units, etc.). Covers both the SQLite and Postgres stacks.
 - **[TrueNAS SCALE Custom App](#truenas-scale-custom-app)**: full walkthrough through the Apps wizard, with host-path bind mounts so snapshots and replication can target the dataset.
 
 Both paths ship HTTP-only on the LAN by default. For internet-exposed deployments see [HTTPS / internet exposure](#https--internet-exposure).
@@ -28,7 +28,7 @@ For local development you usually want the Quick start in [README.md](README.md#
 - `openssl` for key generation.
 - ~200 MB of disk for images plus whatever your data grows to.
 
-### SQLite (default, single container)
+### SQLite (single container)
 
 The simplest install: one `api` container and one DB-file volume. No Postgres, migrate, or worker containers. Migrations apply in-process on first boot and the recurring-expense worker runs embedded in the api process.
 
@@ -46,7 +46,7 @@ mkdir -p ~/dothesplit && cd ~/dothesplit
 
 Save the secrets in a password manager **now** - see [Secrets](#secrets).
 
-**Step 2: Write `docker-compose.sqlite.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.0.0`:
+**Step 2: Write `docker-compose.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.0.0`:
 
 ```yaml
 services:
@@ -92,21 +92,21 @@ The api writes `dts.db` and its WAL/shm sidecars to `/data`; the container conne
 **Step 3: Bring it up.**
 
 ```sh
-docker compose -f docker-compose.sqlite.yml up -d
-docker compose -f docker-compose.sqlite.yml ps   # api healthy after ~10s
+docker compose up -d
+docker compose ps   # api healthy after ~10s
 ```
 
-Then continue at [Step 5: Consume the first-run setup token](#step-5-consume-the-first-run-setup-token) below (substitute the `-f docker-compose.sqlite.yml` flag in the log/verify commands).
+Then continue at [Step 5: Consume the first-run setup token](#step-5-consume-the-first-run-setup-token) below.
 
-**Backups (SQLite):** stop the api (`docker compose -f docker-compose.sqlite.yml stop`) before snapshotting the `dts_sqlite_data` volume so the WAL is checkpointed, and back up `.env` separately - a DB file without the keys cannot be decrypted.
+**Backups (SQLite):** stop the api (`docker compose stop`) before snapshotting the `dts_sqlite_data` volume so the WAL is checkpointed, and back up `.env` separately - a DB file without the keys cannot be decrypted.
 
-**Updates (SQLite):** no migrations directory to refresh (they're embedded). Bump the image tag, then `docker compose -f docker-compose.sqlite.yml pull && docker compose -f docker-compose.sqlite.yml up -d`. Embedded migrations apply in-process on the next boot.
+**Updates (SQLite):** no migrations directory to refresh (they're embedded). Bump the image tag, then `docker compose pull && docker compose up -d`. Embedded migrations apply in-process on the next boot.
 
 ---
 
 ### PostgreSQL (scale-out / multi-instance)
 
-Use this when you want a separate database server, multiple api instances, or an external worker. Requires `DATABASE_DRIVER=postgres` (now that sqlite is the default), a `DATABASE_URL`, and `POSTGRES_PASSWORD`.
+Use this when you want a separate database server, multiple api instances, or an external worker. Requires `DATABASE_DRIVER=postgres` (the driver is required with no default), a `DATABASE_URL`, and `POSTGRES_PASSWORD`.
 
 ### Step 1: Get the release artifacts
 
@@ -139,9 +139,9 @@ Edit `.env` and update `DATABASE_URL` so the password matches `POSTGRES_PASSWORD
 
 Save the secrets in a password manager **now**. Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the database has data in it makes that data unrecoverable; rotating `JWT_SIGNING_KEY` only forces token clients to log in again. See [Secrets you must back up](README.md#secrets-you-must-back-up) for the rationale.
 
-### Step 3: Write `docker-compose.yml`
+### Step 3: Write `docker-compose.postgres.yml`
 
-Save this as `docker-compose.yml` next to `.env`. It mirrors the project's compose file but pulls pinned release images from GHCR instead of building from source. Substitute your release tag for `v1.0.0`:
+Save this as `docker-compose.postgres.yml` next to `.env`. It mirrors the project's compose file but pulls pinned release images from GHCR instead of building from source. Substitute your release tag for `v1.0.0`:
 
 ```yaml
 services:
@@ -250,7 +250,7 @@ volumes:
   dts_pg_data:
 ```
 
-The project's own `docker-compose.yml` already sets `DATABASE_DRIVER: postgres` on the `api` and `worker` services; the snippet above mirrors it. A single-node Postgres deployment can also run the worker embedded in the api process (dropping the separate `worker` container) via `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` - see [worker topology](docs/DEVELOPMENT.md#run).
+The project's own `docker-compose.postgres.yml` already sets `DATABASE_DRIVER: postgres` on the `api` and `worker` services; the snippet above mirrors it. A single-node Postgres deployment can also run the worker embedded in the api process (dropping the separate `worker` container) via `docker compose -f docker-compose.postgres.yml -f docker-compose.postgres-embedded.yml up -d --build` - see [worker topology](docs/DEVELOPMENT.md#run).
 
 The Postgres mount target is `/var/lib/postgresql` (the parent dir, not `…/data`). PG 18 stores data in a major-version-specific subdir so future `pg_upgrade --link` works in place; mounting at `…/data` makes the container fail to start.
 
@@ -259,14 +259,14 @@ The host port bindings are loopback-only (`127.0.0.1:`); change to `0.0.0.0:` (o
 ### Step 4: Bring it up
 
 ```sh
-docker compose up -d
-docker compose ps        # all services should be healthy after ~20s
+docker compose -f docker-compose.postgres.yml up -d
+docker compose -f docker-compose.postgres.yml ps        # all services should be healthy after ~20s
 ```
 
 ### Step 5: Consume the first-run setup token
 
 ```sh
-docker compose logs api | grep -A2 'first-run setup'
+docker compose -f docker-compose.postgres.yml logs api | grep -A2 'first-run setup'
 ```
 
 The log line includes `token=<value>` and `url=…/setup`. Open `http://<host>:8080/setup`, paste the token, fill in display name + email + password (≥10 chars). On success you are redirected to `/groups` and the setup form is permanently locked.
@@ -285,16 +285,16 @@ curl -fsS http://localhost:8080/readyz    # 200 once DB is reachable
 curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v0.8.0.tar.gz \
   | tar -xz --strip-components=1 'dothesplit-0.8.0/api/migrations'
 
-# Bump image tags in docker-compose.yml, then:
-docker compose pull
-docker compose up -d
+# Bump image tags in docker-compose.postgres.yml, then:
+docker compose -f docker-compose.postgres.yml pull
+docker compose -f docker-compose.postgres.yml up -d
 ```
 
 The `migrate` one-shot runs again on every up; it is idempotent. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for the special case of major Postgres version bumps.
 
 ### Backups
 
-Postgres: stop the stack (`docker compose stop postgres`) before snapshotting the `dts_pg_data` volume, or run `pg_dump` against the running container. SQLite: stop the api and snapshot the `dts_sqlite_data` volume (holds `dts.db` + `-wal`/`-shm`). Either way, back up `.env` separately: a database dump/file without the keys cannot be decrypted.
+Postgres: stop the stack (`docker compose -f docker-compose.postgres.yml stop postgres`) before snapshotting the `dts_pg_data` volume, or run `pg_dump` against the running container. SQLite: stop the api and snapshot the `dts_sqlite_data` volume (holds `dts.db` + `-wal`/`-shm`). Either way, back up `.env` separately: a database dump/file without the keys cannot be decrypted.
 
 ---
 
@@ -309,7 +309,7 @@ The four crypto keys - `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, `PASSWORD_PEPPER`, `JW
 This path uses host-path bind mounts under `/mnt/<pool>/apps-data/dothesplit/` so TrueNAS Periodic Snapshots and Replication Tasks can target the dataset directly. It walks through the **Postgres** stack (postgres/migrate/api/worker).
 
 > [!TIP]
-> For a single-node TrueNAS install you can run the simpler **SQLite** stack instead: one `api` container, no Postgres/migrate/worker. Skip the `pgdata`/`migrations` directories and the Postgres/`DATABASE_URL`/`POSTGRES_PASSWORD` bits below. Create one dataset (e.g. `ssd-storage/apps-data/dothesplit/data`), bind-mount it at `/data`, set `DATABASE_DRIVER=sqlite` and `DATABASE_URL=file:/data/dts.db` plus the four crypto keys, and use the single-service YAML from [SQLite (default, single container)](#sqlite-default-single-container). Snapshot the `data` dataset (holds `dts.db` + WAL) for backups.
+> For a single-node TrueNAS install you can run the simpler **SQLite** stack instead: one `api` container, no Postgres/migrate/worker. Skip the `pgdata`/`migrations` directories and the Postgres/`DATABASE_URL`/`POSTGRES_PASSWORD` bits below. Create one dataset (e.g. `ssd-storage/apps-data/dothesplit/data`), bind-mount it at `/data`, set `DATABASE_DRIVER=sqlite` and `DATABASE_URL=file:/data/dts.db` plus the four crypto keys, and use the single-service YAML from [SQLite (single container)](#sqlite-single-container). Snapshot the `data` dataset (holds `dts.db` + WAL) for backups.
 
 ### Prerequisites
 
@@ -378,7 +378,7 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
 
 1. **Apps → Discover Apps → Custom App**.
 2. **Application Name**: `dothesplit`.
-3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. The `api` and `worker` services use the pinned GHCR release image (one image serves both the JSON API and the embedded SPA) instead of building from source. Substitute your release tag for `v1.0.0`:
+3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.postgres.yml`](docker-compose.postgres.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. The `api` and `worker` services use the pinned GHCR release image (one image serves both the JSON API and the embedded SPA) instead of building from source. Substitute your release tag for `v1.0.0`:
 
    ```yaml
    services:

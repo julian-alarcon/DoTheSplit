@@ -154,8 +154,18 @@ jobs:
           fi
 
   e2e:
-    name: e2e / playwright
+    name: e2e / playwright (${{ matrix.engine }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # SQLite is the default stack (bare docker-compose.yml).
+          - engine: sqlite
+            compose: docker-compose.yml
+          # Postgres stack lives in docker-compose.postgres.yml.
+          - engine: postgres
+            compose: docker-compose.postgres.yml
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -175,8 +185,9 @@ jobs:
 
       - name: generate stack secrets
         # Throw-away keys: the docker compose stack is destroyed after this
-        # job, so the secrets never leave the runner. The api refuses to
-        # boot without all four, so we always generate fresh ones.
+        # job, so the secrets never leave the runner. The api refuses to boot
+        # without all four, so we always generate fresh ones. The Postgres vars
+        # are appended too but ignored by the SQLite stack.
         run: |
           {
             echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
@@ -190,7 +201,7 @@ jobs:
             echo "POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr '+/' '-_')"
           } >> .env
           # Patch DATABASE_URL with the random password so the migrate +
-          # api containers can both connect.
+          # api containers can both connect (Postgres stack only).
           PWD=$(grep ^POSTGRES_PASSWORD= .env | cut -d= -f2-)
           {
             echo "POSTGRES_USER=dts"
@@ -204,7 +215,7 @@ jobs:
           } >> .env
 
       - name: boot stack
-        run: docker compose up -d --build
+        run: docker compose -f ${{ matrix.compose }} up -d --build
 
       - name: wait for health
         # The api serves both /healthz and the embedded SPA on :8080. Poll
@@ -219,7 +230,7 @@ jobs:
             sleep 2
           done
           echo "stack failed to become ready in 120s"
-          docker compose logs --tail=200
+          docker compose -f ${{ matrix.compose }} logs --tail=200
           exit 1
 
       - name: extract setup token
@@ -229,13 +240,13 @@ jobs:
         # without a side channel.
         id: token
         run: |
-          tok=$(docker compose logs api 2>&1 \
+          tok=$(docker compose -f ${{ matrix.compose }} logs api 2>&1 \
                 | grep -o '"token":"[A-Za-z0-9_-]*"' \
                 | head -1 \
                 | sed -E 's/"token":"([^"]+)"/\1/')
           if [ -z "$tok" ]; then
             echo "::error::could not extract setup token from api logs"
-            docker compose logs api --tail=100
+            docker compose -f ${{ matrix.compose }} logs api --tail=100
             exit 1
           fi
           echo "token=$tok" >> "$GITHUB_OUTPUT"
@@ -250,13 +261,13 @@ jobs:
 
       - name: capture container logs on failure
         if: failure()
-        run: docker compose logs --tail=500
+        run: docker compose -f ${{ matrix.compose }} logs --tail=500
 
       - name: upload playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.engine }}
           path: frontend/playwright-report/
           if-no-files-found: ignore
 

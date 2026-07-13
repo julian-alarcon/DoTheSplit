@@ -1,0 +1,132 @@
+# PostgreSQL stack (multi-instance / scale-out): postgres + migrate + api + worker.
+#
+#   docker compose -f docker-compose.postgres.yml up -d --build
+#
+# Requires POSTGRES_PASSWORD + DATABASE_URL in .env. The default stack is SQLite
+# (docker-compose.yml); use this file when you want a separate database server,
+# multiple api instances, or an external worker.
+services:
+  postgres:
+    image: postgres:18.4-alpine3.22
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dts}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-dts}
+    volumes:
+      # Postgres 18+ expects the mount at /var/lib/postgresql so data goes
+      # into a major-version-specific subdir (e.g. /var/lib/postgresql/18/docker).
+      # This is what allows future pg_upgrade --link to work in place.
+      - dts_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dts} -d ${POSTGRES_DB:-dts}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Caps initdb needs: chown the data dir, set IDs. Everything else dropped.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 200
+    # ports: ["127.0.0.1:5432:5432"]  # uncomment for local debugging only
+
+  migrate:
+    image: migrate/migrate:v4.19.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./api/migrations:/migrations:ro
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'exec migrate -path /migrations -database "$$DATABASE_URL" up'
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: ${DATABASE_URL}
+      API_HTTP_ADDR: ":8080"
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      CAPACITOR_ORIGINS: ${CAPACITOR_ORIGINS:-capacitor://localhost,https://localhost}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
+      EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
+      EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - /api
+        - --healthcheck
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+  worker:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    entrypoint: ["/worker"]
+    environment:
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: ${DATABASE_URL}
+      EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
+      EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+volumes:
+  dts_pg_data:

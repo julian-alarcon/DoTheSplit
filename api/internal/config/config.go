@@ -13,12 +13,12 @@ import (
 
 type Config struct {
 	HTTPAddr string `envconfig:"API_HTTP_ADDR"        default:":8080"`
-	// DatabaseDriver selects the persistence engine: "sqlite" (default) or
-	// "postgres". For sqlite, DatabaseURL is a file DSN (defaults to
-	// file:./dts.db) or ":memory:"; migrations are applied in-process at boot and
-	// there is no separate migrate container. Postgres deployments must set
-	// DATABASE_DRIVER=postgres and a DATABASE_URL.
-	DatabaseDriver string `envconfig:"DATABASE_DRIVER"      default:"sqlite"`
+	// DatabaseDriver selects the persistence engine: "sqlite" or "postgres".
+	// REQUIRED - there is no default, so the engine is always an explicit choice.
+	// For sqlite, DatabaseURL is a file DSN (defaults to file:./dts.db) or
+	// ":memory:"; migrations are applied in-process at boot and there is no
+	// separate migrate container. Postgres additionally requires DATABASE_URL.
+	DatabaseDriver string `envconfig:"DATABASE_DRIVER"`
 	DatabaseURL    string `envconfig:"DATABASE_URL"`
 	// WorkerMode controls the recurring/outbox worker topology: "external"
 	// (default) runs it as a separate process/container; "embedded" runs it as
@@ -85,9 +85,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	driver := strings.ToLower(strings.TrimSpace(envStr("DATABASE_DRIVER", "sqlite")))
+	// DATABASE_DRIVER is required and has no default: the engine choice must be
+	// explicit so an unconfigured deployment fails loudly instead of silently
+	// picking one (e.g. an upgraded Postgres install missing the var would
+	// otherwise start a blank SQLite file and appear to have lost its data).
+	driver := strings.ToLower(strings.TrimSpace(os.Getenv("DATABASE_DRIVER")))
 	switch driver {
 	case "postgres", "sqlite":
+	case "":
+		return nil, errors.New("DATABASE_DRIVER is required: set it to 'sqlite' or 'postgres'")
 	default:
 		return nil, fmt.Errorf("DATABASE_DRIVER: must be 'postgres' or 'sqlite', got %q", driver)
 	}

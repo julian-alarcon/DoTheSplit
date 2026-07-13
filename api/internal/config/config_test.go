@@ -15,6 +15,7 @@ func setEnv(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	key := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	defaults := map[string]string{
+		"DATABASE_DRIVER": "postgres",
 		"DATABASE_URL":    "postgres://u:p@localhost/db?sslmode=disable",
 		"EMAIL_ENC_KEY":   key,
 		"EMAIL_HMAC_KEY":  key,
@@ -68,15 +69,22 @@ func TestLoadMissingDatabaseURL(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestLoadDefaultsToSQLite(t *testing.T) {
-	// With no DATABASE_DRIVER and no DATABASE_URL, the app defaults to a local
-	// SQLite file so it runs with zero configuration.
-	setEnv(t, map[string]string{"DATABASE_URL": ""})
+func TestLoadMissingDriverErrors(t *testing.T) {
+	// DATABASE_DRIVER is required: unset must fail loudly rather than defaulting.
+	setEnv(t, map[string]string{"DATABASE_DRIVER": ""})
+	_, err := Load()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DATABASE_DRIVER")
+}
+
+func TestLoadSQLiteDefaultsURL(t *testing.T) {
+	// With the driver explicitly sqlite and no DATABASE_URL, the URL defaults to
+	// a local file and the worker is forced embedded.
+	setEnv(t, map[string]string{"DATABASE_DRIVER": "sqlite", "DATABASE_URL": ""})
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, "sqlite", cfg.DatabaseDriver)
 	require.Equal(t, "file:./dts.db", cfg.DatabaseURL)
-	// SQLite forces the embedded worker regardless of WORKER_MODE.
 	require.Equal(t, "embedded", cfg.WorkerMode)
 }
 

@@ -36,7 +36,7 @@ const HEADER_PREFIX = ["Date", "Description", "Category", "Cost", "Currency"];
 
 // Optional metadata columns the DoTheSplit exporter inserts between Currency
 // and the per-member block. Mirrors the server's `dothesplitExtraColumns`
-// whitelist (api/internal/csvimport/splitwise.go); matched case-insensitively.
+// whitelist (server/internal/csvimport/splitwise.go); matched case-insensitively.
 // Without skipping these, a DoTheSplit-shaped CSV would parse Time/Payer/etc.
 // as members and the count would mismatch the server's, failing the import.
 const OPTIONAL_COLUMNS = new Set(["time", "payer", "notes", "created", "createdby"]);
@@ -61,7 +61,7 @@ export function memberNamesFromCsv(csv: string): string[] {
 /**
  * Derive a sensible default group name from an uploaded file name. DoTheSplit
  * exports are named `<slug>_<YYYY-MM-DD>_export.csv` (see the export handler in
- * api/internal/handlers/groups.go); strip that trailing `_<date>_export` and the
+ * server/internal/handlers/groups.go); strip that trailing `_<date>_export` and the
  * `.csv`, then tidy separators so "prost_2026-06-10_export.csv" becomes "prost".
  * Falls back to the bare stem for arbitrary Splitwise file names. group_name is
  * required server-side, so pre-filling it stops the import from failing on a

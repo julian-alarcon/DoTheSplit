@@ -30,8 +30,8 @@ cp .env.example .env
   echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
 } >> .env
 
-# One api container, one DB file on a volume. No Postgres, no migrate step,
-# no separate worker (all run in-process).
+# One dothesplit container, one DB file on a volume. No Postgres, no migrate
+# step, no separate worker (all run in-process).
 docker compose up -d --build
 ```
 
@@ -41,7 +41,7 @@ docker compose up -d --build
 # Same four keys as above, plus a Postgres password:
 echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
 # Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
-# The postgres compose file sets DATABASE_DRIVER=postgres on the api + worker services.
+# The postgres compose file sets DATABASE_DRIVER=postgres on the dothesplit service.
 
 docker compose -f docker-compose.postgres.yml up -d --build
 ```
@@ -50,13 +50,13 @@ Open http://localhost:8080.
 
 ## Layout
 
-- `/api`: Go 1.26 backend (standard-library `net/http`, oapi-codegen) plus a `worker` binary for recurring expenses. Persistence is behind a `repo.Store` abstraction with two engines - `api/internal/repo/postgres` (pgx/v5) and `api/internal/repo/sqlite` (modernc.org/sqlite, pure Go) - selected by `DATABASE_DRIVER`. The api binary also serves the embedded SPA.
+- `/server`: Go 1.26 backend (standard-library `net/http`, oapi-codegen) with a single binary (`server/cmd/server`) that serves the API, the embedded SPA, and the in-process recurring-expense worker. Persistence is behind a `repo.Store` abstraction with two engines - `server/internal/repo/postgres` (pgx/v5) and `server/internal/repo/sqlite` (modernc.org/sqlite, pure Go) - selected by `DATABASE_DRIVER`.
 - `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
 - `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
 - `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
 - `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
-- `/api/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/api/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
-- `/docker-compose.yml`: default (SQLite) deployment stack; `/docker-compose.postgres.yml` is the Postgres stack
+- `/server/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/server/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
+- `/docker-compose.yml`: default (SQLite) deployment stack; `/docker-compose.postgres.yml` is the Postgres stack (both run one `dothesplit` service)
 - `/scripts`: SBOM and third-party-license generators
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
@@ -77,16 +77,15 @@ the GitHub Container Registry:
 | ----------------------------------- | ------------------------------------ |
 | `ghcr.io/julian-alarcon/dothesplit` | `X.Y.Z`, `X.Y`, `X`, `latest`, `dev` |
 
-`:dev` always points at the latest commit on `main`. The api image embeds the
-SPA and hosts both the `/api` and `/worker` entrypoints; in compose, override
-`entrypoint: ["/worker"]` to run the worker. Pull a pinned release for
-production:
+`:dev` always points at the latest commit on `main`. The image embeds the SPA
+and runs a single `/dothesplit` binary that serves the API, the SPA, and the
+in-process background worker. Pull a pinned release for production:
 
 ```bash
 docker pull ghcr.io/julian-alarcon/dothesplit:0.3.0
 ```
 
-The running version is reported by `GET /healthz` (api) and the page footer,
+The running version is reported by `GET /healthz` and the page footer,
 so you can confirm what's deployed at a glance.
 
 ## Secrets you must back up
@@ -213,7 +212,7 @@ Third-party attribution lives in two places:
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md): generated list of every direct and transitive Go module and npm package with SPDX license + source link. Includes the Font Awesome CC BY 4.0 attribution.
 - `/about` route in the running app: human-readable summary linked from the user menu in the header.
 
-CycloneDX SBOMs (`sbom/api.cdx.json`, `sbom/worker.cdx.json`, `sbom/frontend.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
+CycloneDX SBOMs (`sbom/server.cdx.json`, `sbom/frontend.cdx.json`) are attached as artifacts to every tagged GitHub Release, so auditors can ingest them into Dependency-Track, Trivy, OSV-Scanner, Grype, or any CycloneDX 1.5+ consumer.
 
 Regenerate locally:
 

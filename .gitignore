@@ -25,9 +25,9 @@ node_modules/
 docker-compose.override.yml
 
 # Generated code (uncomment if you want to keep generated out of VCS)
-# /api/internal/apigen/*.gen.go
+# /server/internal/apigen/*.gen.go
 # /frontend/src/lib/api/schema.d.ts
-# (the embedded SPA bundle under api/internal/webui/dist/ has its own .gitignore)
+# (the embedded SPA bundle under server/internal/webui/dist/ has its own .gitignore)
 
 # SBOM artifacts (regenerated via `make sbom`, published per release)
 /sbom/

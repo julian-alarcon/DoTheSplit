@@ -87,7 +87,7 @@ describe("toBase64NoPrefix", () => {
 
 describe("SOURCE constant", () => {
   it("matches the server-side AvatarClientSize", () => {
-    // Pinned to 8 by the server contract (api/internal/service/me.go).
+    // Pinned to 8 by the server contract (server/internal/service/me.go).
     // If anyone changes this, the round-trip with the server breaks.
     expect(SOURCE).toEqual(8);
   });

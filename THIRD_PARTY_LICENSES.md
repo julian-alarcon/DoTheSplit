@@ -28,7 +28,7 @@ Font is used unmodified (Regular/SemiBold subset).
 
 ## Backend (Go modules)
 
-Generated from `go-licenses csv ./cmd/api ./cmd/worker` against [api/go.mod](api/go.mod).
+Generated from `go-licenses csv ./cmd/server` against [server/go.mod](server/go.mod).
 
 | Module | License | Source |
 |---|---|---|

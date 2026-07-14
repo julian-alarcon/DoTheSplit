@@ -92,7 +92,7 @@ const isReleasedVersion =
 
       <section class="mb-8">
         <h2 class="mb-2 text-lg font-semibold">Backend dependencies</h2>
-        <p class="mb-3 text-sm text-muted-foreground">Direct Go modules from <code class="[font-family:var(--font-mono)]">api/go.mod</code>.</p>
+        <p class="mb-3 text-sm text-muted-foreground">Direct Go modules from <code class="[font-family:var(--font-mono)]">server/go.mod</code>.</p>
         <div class="overflow-x-auto rounded-md border border-border [&_th]:bg-muted [&_th]:text-left [&_th]:px-3 [&_th]:py-2 [&_th]:font-medium [&_td]:border-t [&_td]:border-border [&_td]:px-3 [&_td]:py-2">
           <table class="w-full border-collapse text-sm">
             <thead>

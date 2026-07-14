@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // CSR SPA. Production output is static files in dist/, embedded into the Go
-// binary (see api/internal/webui). In dev, /v1 and /healthz are proxied to the
+// binary (see server/internal/webui). In dev, /v1 and /healthz are proxied to the
 // Go API on :8080 so the SPA runs same-origin against a real backend.
 // Build identity. CI/Make pass these as env vars at image-build time; they're
 // surfaced to the SPA as import.meta.env.VITE_BUILD_* so the footer can show

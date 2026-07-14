@@ -1,10 +1,10 @@
-# PostgreSQL stack (multi-instance / scale-out): postgres + migrate + api + worker.
+# PostgreSQL stack: postgres + migrate + dothesplit.
 #
 #   docker compose -f docker-compose.postgres.yml up -d --build
 #
 # Requires POSTGRES_PASSWORD + DATABASE_URL in .env. The default stack is SQLite
-# (docker-compose.yml); use this file when you want a separate database server,
-# multiple api instances, or an external worker.
+# (docker-compose.yml); use this file when you want a separate database server.
+# The recurring/outbox tick runs in-process inside the dothesplit container.
 services:
   postgres:
     image: postgres:18.4-alpine3.22
@@ -38,7 +38,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./api/migrations:/migrations:ro
+      - ./server/migrations:/migrations:ro
     environment:
       DATABASE_URL: ${DATABASE_URL}
     entrypoint: ["/bin/sh", "-c"]
@@ -52,10 +52,10 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
 
-  api:
+  dothesplit:
     build:
       context: .
-      dockerfile: api/Dockerfile
+      dockerfile: server/Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}
         BUILD_VERSION: ${BUILD_VERSION:-dev}
@@ -86,41 +86,12 @@ services:
     healthcheck:
       test:
         - CMD
-        - /api
+        - /dothesplit
         - --healthcheck
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
-    read_only: true
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=32m
-
-  worker:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
-      args:
-        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
-        BUILD_VERSION: ${BUILD_VERSION:-dev}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    entrypoint: ["/worker"]
-    environment:
-      DATABASE_DRIVER: postgres
-      DATABASE_URL: ${DATABASE_URL}
-      EMAIL_ENC_KEY: ${EMAIL_ENC_KEY:?EMAIL_ENC_KEY must be set in .env}
-      EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY:?EMAIL_HMAC_KEY must be set in .env}
-      PASSWORD_PEPPER: ${PASSWORD_PEPPER:?PASSWORD_PEPPER must be set in .env}
-      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY must be set in .env}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     security_opt:

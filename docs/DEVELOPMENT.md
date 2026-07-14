@@ -21,16 +21,16 @@ echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> .env
 docker compose up -d --build
 ```
 
-The app and API are both served by the api binary at <http://localhost:8080> (the Vue SPA is embedded in the Go binary). Health probes: `/healthz`, `/readyz`.
+The app and API are both served by the server binary at <http://localhost:8080> (the Vue SPA is embedded in the Go binary). Health probes: `/healthz`, `/readyz`.
 
 ## Database engines (dual)
 
 DoTheSplit speaks to **either SQLite or PostgreSQL** behind one `repo.Store` interface, with two implementations:
 
-- `api/internal/repo/postgres` - pgx/v5.
-- `api/internal/repo/sqlite` - `database/sql` + the pure-Go `modernc.org/sqlite` driver (no CGO). Connection pragmas: WAL, `busy_timeout`, `foreign_keys=ON`, `synchronous=NORMAL`.
+- `server/internal/repo/postgres` - pgx/v5.
+- `server/internal/repo/sqlite` - `database/sql` + the pure-Go `modernc.org/sqlite` driver (no CGO). Connection pragmas: WAL, `busy_timeout`, `foreign_keys=ON`, `synchronous=NORMAL`.
 
-The `DATABASE_DRIVER` env var selects the engine (`sqlite` or `postgres`); it is **required with no default**, so `config.Load()` errors if it is unset. `api/internal/storefactory` constructs the right `Store` and wires migrations. Because both implementations satisfy the same interface, the service/handler layers are engine-agnostic.
+The `DATABASE_DRIVER` env var selects the engine (`sqlite` or `postgres`); it is **required with no default**, so `config.Load()` errors if it is unset. `server/internal/storefactory` constructs the right `Store` and wires migrations. Because both implementations satisfy the same interface, the service/handler layers are engine-agnostic.
 
 Encryption at rest is application-level (above the DB) and identical on both engines - the engine choice never touches the crypto (see [What the keys do](#what-the-three-keys-do)).
 
@@ -39,8 +39,8 @@ Encryption at rest is application-level (above the DB) and identical on both eng
 Any change that touches the HTTP surface goes through the same loop:
 
 1. Edit [docs/openapi.yaml](openapi.yaml) first.
-2. `make gen` - regenerates Go types (`api/internal/apigen/`) and TypeScript types (`frontend/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
-3. If the DB schema changes, add a migration for **both** engines. Postgres migrations live under [api/migrations/](../api/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`, applied by golang-migrate (`make migrate-up` or the `migrate` one-shot container). SQLite migrations live under [api/internal/repo/sqlite/migrations](../api/internal/repo/sqlite/migrations/), embedded in the binary and applied in-process at boot (no make target, no migrate container). Migrations are append-only.
+2. `make gen` - regenerates Go types (`server/internal/apigen/`) and TypeScript types (`frontend/src/lib/api/schema.d.ts`). The build won't compile until your code matches.
+3. If the DB schema changes, add a migration for **both** engines. Postgres migrations live under [server/migrations/](../server/migrations/) - `NNNN_*.up.sql` + a matching `.down.sql`, applied by golang-migrate (`make migrate-up` or the `migrate` one-shot container). SQLite migrations live under [server/internal/repo/sqlite/migrations](../server/internal/repo/sqlite/migrations/), embedded in the binary and applied in-process at boot (no make target, no migrate container). Migrations are append-only.
 4. Backend order: **repo → service → handlers → router**.
 5. Frontend: add a typed call in a composable under `frontend/src/composables/` and the view/route that uses it. Never hand-write fetch/URLs - go through the `openapi-fetch` client.
 6. Tests, rebuild containers, smoke.
@@ -50,8 +50,8 @@ Any change that touches the HTTP surface goes through the same loop:
 ```bash
 make gen            # regenerate Go + TS types from docs/openapi.yaml
 make lint           # golangci-lint (Go) + eslint (SPA) - both gate CI
-cd api && go vet ./...
-cd api && go build ./...
+cd server && go vet ./...
+cd server && go build ./...
 cd frontend && npm run check    # vue-tsc type-check
 cd frontend && npm run build    # vite build (static bundle the api embeds)
 ```
@@ -70,22 +70,22 @@ make test-go                         # Go tests, Postgres engine (default)
 make test-go-sqlite                  # Go tests, SQLite engine (in-process, no Docker)
 make test-go-postgres                # Go tests, Postgres engine (testcontainers)
 make test-go-both                    # run against both engines
-cd api && go test ./... -race        # same as make test-go, one level down
-cd api && go test ./internal/server/ -run TestGoldenPath -v    # one test
+cd server && go test ./... -race        # same as make test-go, one level down
+cd server && go test ./internal/server/ -run TestGoldenPath -v    # one test
 ```
 
 CI runs the integration suite against both engines on every PR.
 
-The E2E suite in [api/internal/server/server_test.go](../api/internal/server/server_test.go) covers the full golden path (register, login, group, members, expense split modes, balances, settlements, soft-delete, category + revision log, payer swap, logout).
+The E2E suite in [server/internal/server/server_test.go](../server/internal/server/server_test.go) covers the full golden path (register, login, group, members, expense split modes, balances, settlements, soft-delete, category + revision log, payer swap, logout).
 
 **App (Vue SPA)**: two layers.
 
 - Unit (vitest, jsdom) under `frontend/src/**/*.test.ts`. Pure helpers only - the canvas-touching avatar pipeline isn't exercised here, only its color math. Run with `cd frontend && npm test` (or `npm run test:watch`).
-- E2E (Playwright, Chromium) under `frontend/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs api`. The SPA is served by the api on `:8080`, so there's a single origin to target:
+- E2E (Playwright, Chromium) under `frontend/tests/e2e/`. Requires the full docker stack already running and the install token from `docker compose logs dothesplit`. The SPA is served by the app on `:8080`, so there's a single origin to target:
 
   ```bash
   docker compose up -d --build
-  TOKEN=$(docker compose logs api | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
+  TOKEN=$(docker compose logs dothesplit | grep -oE 'token=[A-Za-z0-9_-]+' | head -1 | cut -d= -f2)
   SETUP_TOKEN=$TOKEN make test-e2e
   ```
 
@@ -96,14 +96,14 @@ The E2E suite in [api/internal/server/server_test.go](../api/internal/server/ser
 For local dev, build via compose. **Production deployments should pull pinned images from GHCR** (see "Releasing" below) - never build from `main` on a deployment host.
 
 ```bash
-docker compose build                 # build the api image (worker shares it)
-docker compose build api             # rebuild just the api
+docker compose build                 # build the dothesplit image
+docker compose build dothesplit      # rebuild just the app
 make up                              # rebuild + start, stamping BUILD_COMMIT + BUILD_VERSION
 ```
 
 Images:
 
-- `dothesplit` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage serves `/api` and the `/worker` command. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image now serves both the API and the frontend.
+- `dothesplit` - multi-stage build: a Node stage builds the Vue SPA, a Go stage copies the bundle into the embed dir and compiles the binary, and a distroless final stage runs the single `/dothesplit` binary. `BUILD_VERSION`/`BUILD_COMMIT` reach the SPA via Vite `define` (footer) and the Go binary via `-ldflags` (`/healthz`). One image serves the API, the frontend, and the in-process worker.
 
 The `make up` target reads `frontend/package.json` (release-please-managed) for `BUILD_VERSION` and the current git short SHA for `BUILD_COMMIT`.
 
@@ -139,8 +139,8 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 | `frontend/package.json` `version`              | release-please bump on merge (single source of truth) |
 | GitHub Release page                       | release-please on PR merge                            |
 | `ghcr.io/.../dothesplit:X.Y.Z`            | `publish.yml` on tag                                  |
-| API `GET /healthz` JSON                   | `-ldflags` baked in by `api/Dockerfile`               |
-| SPA page footer                           | `VITE_BUILD_VERSION` baked in by `api/Dockerfile`     |
+| API `GET /healthz` JSON                   | `-ldflags` baked in by `server/Dockerfile`               |
+| SPA page footer                           | `VITE_BUILD_VERSION` baked in by `server/Dockerfile`     |
 
 ### Emergency manual release
 
@@ -162,8 +162,8 @@ Bare `docker compose` targets the default **SQLite** stack (`docker-compose.yml`
 ```bash
 docker compose up -d                 # start/resume the stack
 docker compose up -d --build         # rebuild only stale images, then start
-docker compose up -d --build api     # rebuild + restart just the api (also rebuilds the embedded SPA)
-docker compose logs -f api           # follow api logs
+docker compose up -d --build dothesplit  # rebuild + restart just the app (also rebuilds the embedded SPA)
+docker compose logs -f dothesplit    # follow app logs
 docker compose ps                    # service status
 docker compose down                  # stop (keeps the DB volume)
 docker compose down -v               # stop AND destroy the DB volume
@@ -171,23 +171,19 @@ docker compose down -v               # stop AND destroy the DB volume
 
 ### Services
 
-The default stack is **SQLite** (`docker-compose.yml`, `DATABASE_DRIVER=sqlite`): a single `api` container plus one DB-file volume at `/data` - no `postgres`, `migrate`, or `worker` service. Migrations apply in-process at boot and the worker runs embedded (see below).
+The default stack is **SQLite** (`docker-compose.yml`, `DATABASE_DRIVER=sqlite`): a single `dothesplit` container plus one DB-file volume at `/data` - no `postgres`, `migrate`, or separate worker service. Migrations apply in-process at boot and the worker runs in-process (see below).
 
-The **Postgres** stack (`docker-compose.postgres.yml`, which sets `DATABASE_DRIVER: postgres` on `api`/`worker`) has four services:
+The **Postgres** stack (`docker-compose.postgres.yml`, which sets `DATABASE_DRIVER: postgres` on `dothesplit`) has three services:
 
-| Service    | Image               | Purpose                                           |
-| ---------- | ------------------- | ------------------------------------------------- |
-| `postgres` | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
-| `migrate`  | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
-| `api`      | `dothesplit`        | HTTP API + embedded Vue SPA on `:8080`            |
-| `worker`   | `dothesplit`        | Same image, runs `/worker` - materializes recurring expenses |
+| Service      | Image               | Purpose                                           |
+| ------------ | ------------------- | ------------------------------------------------- |
+| `postgres`   | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
+| `migrate`    | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
+| `dothesplit` | `dothesplit`        | HTTP API + embedded Vue SPA + in-process worker on `:8080` |
 
 ### Worker topology
 
-`WORKER_MODE` picks how the recurring-expense worker runs:
-
-- `external` (default) - a separate `worker` container, used by the Postgres stack.
-- `embedded` - a goroutine inside the api process. **SQLite forces `embedded`** (there is no separate worker container). Postgres may opt into embedded for a single-node deploy via `docker compose -f docker-compose.postgres.yml -f docker-compose.postgres-embedded.yml up -d --build` (worker container disabled). The embedded worker still takes a Postgres advisory lock, so it stays safe alongside an external worker during a transition.
+The recurring-expense worker runs as an in-process goroutine inside the `dothesplit` server, started at boot on both engines. There is no `WORKER_MODE` and no separate worker container: the app is single-node by design, so the tick runs unguarded (no advisory lock). This matches how comparable self-hosted apps (memos, vikunja) run their background jobs. For multi-replica Postgres scale-out you would need to reintroduce a singleton guard before running the tick on more than one instance.
 
 ## Smoke test the running stack
 
@@ -222,7 +218,7 @@ All three are 32 raw bytes, base64-encoded for transport. `openssl rand -base64 
 
 #### `EMAIL_ENC_KEY` - emails at rest
 
-Code: [api/internal/crypto/email.go](../api/internal/crypto/email.go).
+Code: [server/internal/crypto/email.go](../server/internal/crypto/email.go).
 
 Every email address goes into the `users.email_encrypted` column as `key_id ‖ nonce ‖ AES-GCM(EMAIL_ENC_KEY, plaintext)`:
 
@@ -230,7 +226,7 @@ Every email address goes into the `users.email_encrypted` column as `key_id ‖ 
 - **`nonce`** is 12 random bytes generated per row - required for AES-GCM, and the reason two users with the same email get two different ciphertexts.
 - **AES-GCM** is authenticated encryption: the auth tag is appended after the ciphertext, so any tampering with the row (or with `key_id` / `nonce`) makes decryption fail rather than producing garbage plaintext.
 
-The plaintext is only kept in memory for the duration of a request (e.g. when rendering an email template, when an admin views the user detail page, or when the SMTP outbox dispatcher mails it). The access logger ([api/internal/middleware/logger.go](../api/internal/middleware/logger.go)) never logs request bodies, only method, path, status, duration, client IP, and request id, so emails and passwords can't leak through it.
+The plaintext is only kept in memory for the duration of a request (e.g. when rendering an email template, when an admin views the user detail page, or when the SMTP outbox dispatcher mails it). The access logger ([server/internal/middleware/logger.go](../server/internal/middleware/logger.go)) never logs request bodies, only method, path, status, duration, client IP, and request id, so emails and passwords can't leak through it.
 
 #### `EMAIL_HMAC_KEY` - login lookups without storing the address
 
@@ -248,7 +244,7 @@ Splitting the two keys is deliberate: it means a leak of `EMAIL_HMAC_KEY` lets a
 
 #### `PASSWORD_PEPPER` - server-side secret added to password hashes
 
-Code: [api/internal/crypto/password.go](../api/internal/crypto/password.go).
+Code: [server/internal/crypto/password.go](../server/internal/crypto/password.go).
 
 Passwords are hashed with Argon2id (memory-hard, GPU-resistant), but Argon2id alone protects against an attacker with the database *and* nothing else. If they also walk away with the binary they can run dictionary attacks at full speed against the salted hashes. The pepper closes that gap:
 
@@ -314,7 +310,7 @@ The SPA ships a strict CSP (`script-src 'self'`, no inline scripts). All JS is b
 
 ### The api serves a stale SPA / a placeholder page
 
-The Go binary embeds whatever is in `api/internal/webui/dist/` at compile time. A fresh `go build` without the bundle serves a code fallback page. `make build` (and the Docker build) rebuild the SPA and copy it in first; if you built the binary by hand, run `make embed-frontend` then rebuild.
+The Go binary embeds whatever is in `server/internal/webui/dist/` at compile time. A fresh `go build` without the bundle serves a code fallback page. `make build` (and the Docker build) rebuild the SPA and copy it in first; if you built the binary by hand, run `make embed-frontend` then rebuild.
 
 ## Useful targets
 
@@ -332,8 +328,8 @@ Run `make help` for the full list. The ones you'll actually reach for:
 | `make test-e2e`   | Playwright e2e (needs the stack up + `SETUP_TOKEN`)                |
 | `make dev-api`    | Run the Go API locally against Docker Postgres                     |
 | `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |
-| `make build`      | Build the SPA, embed it, then build Go binaries (`bin/api`, `bin/worker`) |
+| `make build`      | Build the SPA, embed it, then build the Go binary (`bin/dothesplit`) |
 | `make up`         | `docker compose up -d --build`, baking current SHA in (default SQLite stack) |
 | `make compliance` | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/` |
 
-**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./frontend/package.json').version")` and passes both to the api Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../frontend/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The api/worker binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.
+**`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./frontend/package.json').version")` and passes both to the server Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../frontend/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The server binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.

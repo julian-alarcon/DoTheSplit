@@ -17,12 +17,12 @@ OUT_JSON="$ROOT/frontend/src/lib/credits.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "→ Collecting Go module licenses (api + worker)"
+echo "→ Collecting Go module licenses (server)"
 (
-  cd "$ROOT/api"
+  cd "$ROOT/server"
   go run github.com/google/go-licenses/v2@v2.0.1 csv \
-    ./cmd/api ./cmd/worker \
-    --ignore github.com/julian-alarcon/dothesplit/api \
+    ./cmd/server \
+    --ignore github.com/julian-alarcon/dothesplit/server \
     2>"$TMP/go-licenses.err" \
     | sort -u >"$TMP/go.csv"
 )
@@ -45,7 +45,7 @@ GO_DIRECT="$(awk '
   /^require \(/ { in_block=1; next }
   /^\)/ && in_block { in_block=0; next }
   in_block && !/indirect/ && NF>=2 { print $1 }
-' "$ROOT/api/go.mod")"
+' "$ROOT/server/go.mod")"
 
 # Map module name to license by matching go.csv prefixes (longest-prefix wins).
 # We iterate licenses descending by path length so e.g. github.com/foo/bar/sub
@@ -77,7 +77,7 @@ first=1
 while IFS= read -r mod; do
   [ -z "$mod" ] && continue
   # Resolve version from go.mod
-  version=$(awk -v m="$mod" '$1==m { print $2; exit }' "$ROOT/api/go.mod")
+  version=$(awk -v m="$mod" '$1==m { print $2; exit }' "$ROOT/server/go.mod")
   IFS=$'\t' read -r license url < <(go_license_for "$mod")
   # Fall back: derive URL from module name if go-licenses didn't find a match.
   if [ -z "$url" ]; then
@@ -209,7 +209,7 @@ EOF
 
   echo "## Backend (Go modules)"
   echo
-  echo "Generated from \`go-licenses csv ./cmd/api ./cmd/worker\` against [api/go.mod](api/go.mod)."
+  echo "Generated from \`go-licenses csv ./cmd/server\` against [server/go.mod](server/go.mod)."
   echo
   echo "| Module | License | Source |"
   echo "|---|---|---|"

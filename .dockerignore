@@ -10,9 +10,9 @@
 .env.*
 !.env.example
 
-# The api image builds from the repo root: it needs api/ + frontend/ + docs/ (it
+# The image builds from the repo root: it needs server/ + frontend/ + docs/ (it
 # embeds the Vue SPA built from frontend/ and typed against docs/openapi.yaml). So
-# we can't exclude api/ or frontend/ here. Exclude only things the build never needs.
+# we can't exclude server/ or frontend/ here. Exclude only things the build never needs.
 dummydata/
 sbom/
 scripts/

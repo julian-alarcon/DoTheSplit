@@ -21,8 +21,8 @@ existing sessions for the user are revoked atomically.
 
 ## First-run setup
 
-The first boot prints a single-use **setup token** in the API container log
-(`docker compose logs api`). Until that token is consumed via `/setup`, every
+The first boot prints a single-use **setup token** in the container log
+(`docker compose logs dothesplit`). Until that token is consumed via `/setup`, every
 UI route redirects there and `/v1/auth/register` returns
 `403 setup_required`. The token is 32 bytes of `crypto/rand` entropy, stored
 only as SHA-256, rotated on every boot, and consumed atomically with the first
@@ -96,7 +96,8 @@ detail page from which any member can bring it back into the balances.
 ## Recurring expenses
 
 Templates with daily / weekly / biweekly / monthly / yearly cadence. A
-separate Go worker materializes a real expense on each cadence tick. Both the
+background worker - an in-process goroutine inside the single server binary, not
+a separate process - materializes a real expense on each cadence tick. Both the
 API and the UI (`/groups/{id}/recurring`) are shipped.
 
 ## Transaction feed
@@ -164,9 +165,9 @@ they match literally. Two optional filters narrow the set:
 - **Category** (single-select): restricts hits to expenses in that category
   and excludes settlements entirely (settlements have no category).
 
-The response carries an `available_category_ids` list — the distinct
+The response carries an `available_category_ids` list: the distinct
 categories present in the unfiltered result set for the current `q` + group
-scope — so the category picker only offers categories that actually have
+scope, so the category picker only offers categories that actually have
 matches. The list is computed independently of the active category filter so
 the user can still switch off it. Both filters live in a collapsible panel
 below the search button and auto-open when any filter is active.
@@ -224,6 +225,24 @@ itself exposes a collapsible user menu so navigation, the theme switcher
   `Authorization: Bearer`, never cookies.
 - Step-up password prompt for destructive admin actions, and password
   confirmation before self-delete (with all refresh tokens revoked on success).
+
+## Storage & deployment
+
+Runs as a **single container**: one Go binary serves the JSON API, the embedded
+Vue SPA, and the in-process recurring-expense worker (no separate worker
+process). Two database engines sit behind one `repo.Store` abstraction, selected
+by the required `DATABASE_DRIVER` env var (no default, so the app fails fast if
+it is unset):
+
+- **SQLite** (`sqlite`): the default, zero-dependency single-node path. One
+  DB file, migrations embedded in the binary and applied in-process on first
+  boot, WAL journaling. No external database, migrate step, or worker container.
+- **PostgreSQL** (`postgres`): for multi-instance / scale-out. Adds `postgres`
+  and a one-shot `migrate` service; requires `DATABASE_URL`.
+
+Encryption at rest is application-level (above the DB) and identical on both
+engines, so switching between SQLite and Postgres never changes what is
+protected. See [../INSTALL.md](../INSTALL.md) for the install paths.
 
 ## API contract
 

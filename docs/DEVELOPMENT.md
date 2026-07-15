@@ -23,6 +23,17 @@ docker compose up -d --build
 
 The app and API are both served by the server binary at <http://localhost:8080> (the Vue SPA is embedded in the Go binary). Health probes: `/healthz`, `/readyz`.
 
+## Repository layout
+
+- `/server`: Go 1.26 backend (standard-library `net/http`, oapi-codegen) with a single binary (`server/cmd/server`) that serves the API, the embedded SPA, and the in-process recurring-expense worker. Persistence is behind a `repo.Store` abstraction with two engines - `server/internal/repo/postgres` (pgx/v5) and `server/internal/repo/sqlite` (modernc.org/sqlite, pure Go) - selected by `DATABASE_DRIVER`.
+- `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`.
+- `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen).
+- `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue.
+- `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one.
+- `/server/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/server/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
+- `/docker-compose.yml`: default (SQLite) deployment stack; `/docker-compose.postgres.yml` is the Postgres stack (both run one `dothesplit` service).
+- `/scripts`: SBOM and third-party-license generators.
+
 ## Database engines (dual)
 
 DoTheSplit speaks to **either SQLite or PostgreSQL** behind one `repo.Store` interface, with two implementations:
@@ -115,14 +126,14 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 
 1. **Land changes on `main`** with [conventional commit titles](https://www.conventionalcommits.org). Commit type drives the bump:
 
-   | Type                       | Bump  | Example                                            |
-   | -------------------------- | ----- | -------------------------------------------------- |
-   | `fix:`                     | patch | `fix(api): reject empty currency on group create`  |
-   | `feat:`                    | minor | `feat(app): currency picker flag glyphs`           |
-   | `feat!:` / `BREAKING CHANGE` footer | major | `feat(api)!: drop /v1/legacy/expenses` |
-   | `chore:`, `docs:`, `style:`, `test:`, `ci:`, `refactor:` | none | (still appears in CHANGELOG under their section)   |
+   | Type                                                     | Bump  | Example                                           |
+   | -------------------------------------------------------- | ----- | ------------------------------------------------- |
+   | `fix:`                                                   | patch | `fix(api): reject empty currency on group create` |
+   | `feat:`                                                  | minor | `feat(app): currency picker flag glyphs`          |
+   | `feat!:` / `BREAKING CHANGE` footer                      | major | `feat(api)!: drop /v1/legacy/expenses`            |
+   | `chore:`, `docs:`, `style:`, `test:`, `ci:`, `refactor:` | none  | (still appears in CHANGELOG under their section)  |
 
-2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `frontend/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.0.0`) and push - the PR will rewrite itself.
+2. **release-please opens (or updates) a Release PR** named `chore(main): release X.Y.Z`. It bumps `frontend/package.json` (the single version source of truth) and regenerates `CHANGELOG.md`. Review it like any other PR. If you don't like the proposed version, override via a commit footer (`Release-As: 1.2.0`) and push - the PR will rewrite itself.
 
 3. **Merging the Release PR** auto-creates the git tag `vX.Y.Z` and a GitHub Release with the changelog body.
 
@@ -134,13 +145,13 @@ Releases are automated by [release-please](https://github.com/googleapis/release
 
 ### Where the version surfaces
 
-| Location                                  | Source                                                |
-| ----------------------------------------- | ----------------------------------------------------- |
-| `frontend/package.json` `version`              | release-please bump on merge (single source of truth) |
-| GitHub Release page                       | release-please on PR merge                            |
-| `ghcr.io/.../dothesplit:X.Y.Z`            | `publish.yml` on tag                                  |
-| API `GET /healthz` JSON                   | `-ldflags` baked in by `server/Dockerfile`               |
-| SPA page footer                           | `VITE_BUILD_VERSION` baked in by `server/Dockerfile`     |
+| Location                          | Source                                                |
+| --------------------------------- | ----------------------------------------------------- |
+| `frontend/package.json` `version` | release-please bump on merge (single source of truth) |
+| GitHub Release page               | release-please on PR merge                            |
+| `ghcr.io/.../dothesplit:X.Y.Z`    | `publish.yml` on tag                                  |
+| API `GET /healthz` JSON           | `-ldflags` baked in by `server/Dockerfile`            |
+| SPA page footer                   | `VITE_BUILD_VERSION` baked in by `server/Dockerfile`  |
 
 ### Emergency manual release
 
@@ -175,11 +186,11 @@ The default stack is **SQLite** (`docker-compose.yml`, `DATABASE_DRIVER=sqlite`)
 
 The **Postgres** stack (`docker-compose.postgres.yml`, which sets `DATABASE_DRIVER: postgres` on `dothesplit`) has three services:
 
-| Service      | Image               | Purpose                                           |
-| ------------ | ------------------- | ------------------------------------------------- |
-| `postgres`   | `postgres:18-alpine`| Database; mounted at `/var/lib/postgresql`        |
-| `migrate`    | `migrate/migrate`   | One-shot; runs all `*.up.sql` and exits           |
-| `dothesplit` | `dothesplit`        | HTTP API + embedded Vue SPA + in-process worker on `:8080` |
+| Service      | Image                | Purpose                                                    |
+| ------------ | -------------------- | ---------------------------------------------------------- |
+| `postgres`   | `postgres:18-alpine` | Database; mounted at `/var/lib/postgresql`                 |
+| `migrate`    | `migrate/migrate`    | One-shot; runs all `*.up.sql` and exits                    |
+| `dothesplit` | `dothesplit`         | HTTP API + embedded Vue SPA + in-process worker on `:8080` |
 
 ### Worker topology
 
@@ -230,7 +241,7 @@ The plaintext is only kept in memory for the duration of a request (e.g. when re
 
 #### `EMAIL_HMAC_KEY` - login lookups without storing the address
 
-You can't query "user with email X" against an AES-GCM column - every row has a different nonce, so ciphertexts don't match even when plaintexts do. We store a *separate* deterministic fingerprint in `users.email_hash`:
+You can't query "user with email X" against an AES-GCM column - every row has a different nonce, so ciphertexts don't match even when plaintexts do. We store a _separate_ deterministic fingerprint in `users.email_hash`:
 
 ```
 email_hash = HMAC-SHA256(EMAIL_HMAC_KEY, normalize(email))
@@ -240,13 +251,13 @@ email_hash = HMAC-SHA256(EMAIL_HMAC_KEY, normalize(email))
 
 Login, register-conflict-detection, password-reset and "is this email already on file" all hash the input email and look it up by `email_hash`. The encrypted column is decrypted only after that lookup succeeds.
 
-Splitting the two keys is deliberate: it means a leak of `EMAIL_HMAC_KEY` lets an attacker test whether *specific* emails are registered (still bad), but they still can't read any email plaintext without `EMAIL_ENC_KEY`. And vice-versa.
+Splitting the two keys is deliberate: it means a leak of `EMAIL_HMAC_KEY` lets an attacker test whether _specific_ emails are registered (still bad), but they still can't read any email plaintext without `EMAIL_ENC_KEY`. And vice-versa.
 
 #### `PASSWORD_PEPPER` - server-side secret added to password hashes
 
 Code: [server/internal/crypto/password.go](../server/internal/crypto/password.go).
 
-Passwords are hashed with Argon2id (memory-hard, GPU-resistant), but Argon2id alone protects against an attacker with the database *and* nothing else. If they also walk away with the binary they can run dictionary attacks at full speed against the salted hashes. The pepper closes that gap:
+Passwords are hashed with Argon2id (memory-hard, GPU-resistant), but Argon2id alone protects against an attacker with the database _and_ nothing else. If they also walk away with the binary they can run dictionary attacks at full speed against the salted hashes. The pepper closes that gap:
 
 ```
 hash = Argon2id(password ‖ PASSWORD_PEPPER, salt, params)
@@ -316,20 +327,20 @@ The Go binary embeds whatever is in `server/internal/webui/dist/` at compile tim
 
 Run `make help` for the full list. The ones you'll actually reach for:
 
-| Target            | What it does                                                       |
-| ----------------- | ------------------------------------------------------------------ |
-| `make gen`        | Regenerate Go + TS API bindings from `docs/openapi.yaml`           |
-| `make lint`       | Lint everything: golangci-lint (Go) + eslint (SPA)                 |
-| `make migrate-up` | Apply all pending Postgres migrations (SQLite migrations are embedded, applied at boot) |
-| `make test-go`    | Full Go test suite, Postgres engine (unit + integration via testcontainers) |
-| `make test-go-sqlite` | Go test suite against SQLite (in-process, no Docker)           |
-| `make test-go-postgres` | Go test suite against Postgres (testcontainers)             |
-| `make test-go-both` | Go test suite against both engines                               |
-| `make test-e2e`   | Playwright e2e (needs the stack up + `SETUP_TOKEN`)                |
-| `make dev-api`    | Run the Go API locally against Docker Postgres                     |
-| `make dev-frontend`    | Run the Vite dev server (proxies `/v1` to the local API)           |
-| `make build`      | Build the SPA, embed it, then build the Go binary (`bin/dothesplit`) |
-| `make up`         | `docker compose up -d --build`, baking current SHA in (default SQLite stack) |
-| `make compliance` | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/` |
+| Target                  | What it does                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `make gen`              | Regenerate Go + TS API bindings from `docs/openapi.yaml`                                |
+| `make lint`             | Lint everything: golangci-lint (Go) + eslint (SPA)                                      |
+| `make migrate-up`       | Apply all pending Postgres migrations (SQLite migrations are embedded, applied at boot) |
+| `make test-go`          | Full Go test suite, Postgres engine (unit + integration via testcontainers)             |
+| `make test-go-sqlite`   | Go test suite against SQLite (in-process, no Docker)                                    |
+| `make test-go-postgres` | Go test suite against Postgres (testcontainers)                                         |
+| `make test-go-both`     | Go test suite against both engines                                                      |
+| `make test-e2e`         | Playwright e2e (needs the stack up + `SETUP_TOKEN`)                                     |
+| `make dev-api`          | Run the Go API locally against Docker Postgres                                          |
+| `make dev-frontend`     | Run the Vite dev server (proxies `/v1` to the local API)                                |
+| `make build`            | Build the SPA, embed it, then build the Go binary (`bin/dothesplit`)                    |
+| `make up`               | `docker compose up -d --build`, baking current SHA in (default SQLite stack)            |
+| `make compliance`       | Regenerate `THIRD_PARTY_LICENSES.md` + CycloneDX SBOMs into `sbom/`                     |
 
 **`make up`** computes `BUILD_COMMIT=$(git rev-parse --short HEAD)` and `BUILD_VERSION=$(node -p "require('./frontend/package.json').version")` and passes both to the server Dockerfile as build args. The SPA gets them via Vite `define` (`import.meta.env.VITE_BUILD_*`) and [`AppLayout.vue`](../frontend/src/components/AppLayout.vue) renders a footer with the version (linking to the GitHub Release) and the commit (linking to the commit page). The server binary gets them via `-ldflags` and surfaces them at `GET /healthz`. When building outside a git checkout, both default to `dev` and the surfaces show `dev` with no links.

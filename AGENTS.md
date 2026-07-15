@@ -8,11 +8,11 @@ See also: [BLUEPRINT.md](BLUEPRINT.md) for product scope and [README.md](README.
 
 DoTheSplit - a expense-sharing app.
 
-- **Backend**: Go 1.26, standard-library `net/http` (the 1.22+ `ServeMux` with method+wildcard patterns), pgx/v5, `golang-migrate`, `oapi-codegen`. No web framework. Source in [api/](api/). The api binary also serves the embedded SPA (see "Frontend" below).
-- **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([api/internal/webui/](api/internal/webui/)), so there is one container, not two.
+- **Backend**: Go 1.26, standard-library `net/http` (the 1.22+ `ServeMux` with method+wildcard patterns), pgx/v5, `golang-migrate`, `oapi-codegen`. No web framework. Source in [server/](server/) (module `github.com/julian-alarcon/dothesplit/server`, single binary [server/cmd/server/](server/cmd/server/)). The server binary serves the API, the embedded SPA (see "Frontend" below), and the in-process background worker.
+- **Frontend**: Vue 3 (Composition API, `<script setup>` SFCs) + Vite, client-side-rendered. TailwindCSS + PlainCSS when needed (no other UI library) - design tokens + the `.field-*`/`.btn-*` system live in [frontend/src/styles/global.css](frontend/src/styles/global.css); per-view styles are scoped `<style>` blocks. Source in [frontend/](frontend/). Built to static files and embedded into the Go binary via `go:embed` ([server/internal/webui/](server/internal/webui/)), so there is one container, not two.
 - **Auth**: JWT bearer tokens for all clients (SPA + native). `POST /v1/auth/token` exchanges credentials for a short-lived access token (sent as `Authorization: Bearer`) plus a rotating refresh token in the httpOnly `dts_refresh` cookie; `POST /v1/auth/refresh` rotates it. The `mw.Bearer` middleware attaches the authenticated user to the request context (`middleware.WithUser`, read via `middleware.User(r.Context())`), so `RequireSession`/`RequireAdmin` gate every authenticated route. (There is no cookie-session auth: the old Astro SSR `dts_session` flow was removed in migration `0004`.)
-- **Database**: SQLite (default) **or** PostgreSQL 18, selected by `DATABASE_DRIVER` (`sqlite` when unset; Postgres deployments must set `DATABASE_DRIVER=postgres` + `DATABASE_URL`). Postgres migrations in [api/migrations/](api/migrations/); SQLite migrations are embedded in [api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/) and applied in-process on first boot. See "Database" below.
-- **Worker**: recurring-expense materialization + email-outbox drain, ticking every 60s. Same logic ([api/internal/worker/](api/internal/worker/)) runs two ways per `WORKER_MODE`: as a standalone binary ([api/cmd/worker/](api/cmd/worker/), `external`, the Postgres default) or as a goroutine inside the api (`embedded`, forced on SQLite). See "Worker topology" below.
+- **Database**: SQLite **or** PostgreSQL 18, selected by `DATABASE_DRIVER` (**required, no default** - the app refuses to boot if unset; `sqlite` or `postgres`). Postgres additionally needs `DATABASE_URL`. Postgres migrations in [server/migrations/](server/migrations/); SQLite migrations are embedded in [server/internal/repo/sqlite/migrations/](server/internal/repo/sqlite/migrations/) and applied in-process on first boot. See "Database" below.
+- **Worker**: recurring-expense materialization + email-outbox drain, ticking every 60s ([server/internal/worker/](server/internal/worker/)). Runs as an in-process goroutine started by the server at boot on both engines: the app is single-node by design, so there is no separate worker process and the tick runs unguarded.
 - **Infra**: Docker Compose on TrueNAS LAN (HTTP-only).
 
 ## The golden rule: contract-first
@@ -22,12 +22,12 @@ DoTheSplit - a expense-sharing app.
 **Order for any user-facing change:**
 
 1. Edit [docs/openapi.yaml](docs/openapi.yaml) first - schemas, paths, responses.
-2. Run `make gen` to regenerate Go (`api/internal/apigen/`) and TypeScript (`frontend/src/lib/api/schema.d.ts`) types. The build won't compile until the code matches.
-3. Add a migration if the DB schema changes ([api/migrations/NNNN\_\*.up.sql](api/migrations/) + matching `.down.sql`).
+2. Run `make gen` to regenerate Go (`server/internal/apigen/`) and TypeScript (`frontend/src/lib/api/schema.d.ts`) types. The build won't compile until the code matches.
+3. Add a migration if the DB schema changes ([server/migrations/NNNN\_\*.up.sql](server/migrations/) + matching `.down.sql`).
 4. Wire the backend in this exact order: **repo → service → handlers → router**.
 5. Wire the SPA against the new generated types: add a typed call in a composable ([frontend/src/composables/](frontend/src/composables/)) and the view/route that uses it. Never hand-write fetch calls or URLs - go through the `openapi-fetch` client in [frontend/src/lib/api/client.ts](frontend/src/lib/api/client.ts).
 6. Update the worker only if the recurring flow is affected - it reuses services, so most changes propagate for free.
-7. Build, test, rebuild the affected containers (the SPA is embedded in the api image, so a frontend change means rebuilding `api`).
+7. Build, test, rebuild the container (the SPA is embedded in the image, so a frontend change still means rebuilding the `dothesplit` image).
 
 Don't change generated files by hand - re-run `make gen` instead.
 
@@ -47,10 +47,10 @@ Don't change generated files by hand - re-run `make gen` instead.
 handlers → services → repositories → DB
 ```
 
-- **Handlers** ([api/internal/handlers/](api/internal/handlers/)): bind JSON, call services, translate errors to HTTP status codes. No business logic. Use `errors.Is` on service sentinels.
-- **Services** ([api/internal/service/](api/internal/service/)): validate, orchestrate, enforce invariants. Return sentinel errors (`ErrNotMember`, `ErrBadSplit`, etc.). Use transactions for anything that writes more than one table.
-- **Repositories** ([api/internal/repo/](api/internal/repo/)): the `repo` package defines engine-neutral domain types + interfaces (`repo.Store`, `repo.Tx`, one interface per table) in [store.go](api/internal/repo/store.go)/[types.go](api/internal/repo/types.go). Two implementations satisfy them: [api/internal/repo/postgres/](api/internal/repo/postgres/) (pgx/v5) and [api/internal/repo/sqlite/](api/internal/repo/sqlite/) (`database/sql` + modernc.org/sqlite). Services depend only on the interfaces; [storefactory](api/internal/storefactory/) builds the right `Store` from `DATABASE_DRIVER`. No domain rules in repos; each maps its no-rows error → `repo.ErrNotFound` and its unique-violation → `repo.ErrConflict`. A `...Tx` method takes a `repo.Tx` (the engine unwraps it to its native `pgx.Tx`/`*sql.Tx`); a nilable `tx` means "run on the pool".
-- **Router** ([api/internal/server/router.go](api/internal/server/router.go)): register endpoints on a `net/http.ServeMux` with method+pattern routes (`"POST /v1/groups/{id}/expenses"`, read params via `r.PathValue`); compose global + per-route middleware with `mw.Chain`, gating authenticated routes with `mw.RequireSession()` (and `mw.RequireAdmin()` for admin). Middleware are `func(http.Handler) http.Handler`; the authenticated user and request id travel through the request context, not a framework context.
+- **Handlers** ([server/internal/handlers/](server/internal/handlers/)): bind JSON, call services, translate errors to HTTP status codes. No business logic. Use `errors.Is` on service sentinels.
+- **Services** ([server/internal/service/](server/internal/service/)): validate, orchestrate, enforce invariants. Return sentinel errors (`ErrNotMember`, `ErrBadSplit`, etc.). Use transactions for anything that writes more than one table.
+- **Repositories** ([server/internal/repo/](server/internal/repo/)): the `repo` package defines engine-neutral domain types + interfaces (`repo.Store`, `repo.Tx`, one interface per table) in [store.go](server/internal/repo/store.go)/[types.go](server/internal/repo/types.go). Two implementations satisfy them: [server/internal/repo/postgres/](server/internal/repo/postgres/) (pgx/v5) and [server/internal/repo/sqlite/](server/internal/repo/sqlite/) (`database/sql` + modernc.org/sqlite). Services depend only on the interfaces; [storefactory](server/internal/storefactory/) builds the right `Store` from `DATABASE_DRIVER`. No domain rules in repos; each maps its no-rows error → `repo.ErrNotFound` and its unique-violation → `repo.ErrConflict`. A `...Tx` method takes a `repo.Tx` (the engine unwraps it to its native `pgx.Tx`/`*sql.Tx`); a nilable `tx` means "run on the pool".
+- **Router** ([server/internal/server/router.go](server/internal/server/router.go)): register endpoints on a `net/http.ServeMux` with method+pattern routes (`"POST /v1/groups/{id}/expenses"`, read params via `r.PathValue`); compose global + per-route middleware with `mw.Chain`, gating authenticated routes with `mw.RequireSession()` (and `mw.RequireAdmin()` for admin). Middleware are `func(http.Handler) http.Handler`; the authenticated user and request id travel through the request context, not a framework context.
 
 Rules of thumb:
 
@@ -62,7 +62,7 @@ Rules of thumb:
 
 ## Database
 
-Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (`sqlite` default, or `postgres`). Pick per deployment: SQLite for a single-node, single-file, zero-dependency install (default; `DATABASE_URL` defaults to `file:./dts.db`); Postgres for multi-instance / scale-out (set `DATABASE_DRIVER=postgres` + `DATABASE_URL`).
+Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (**required, no default**: `sqlite` or `postgres` - `Load()` errors if unset). Pick per deployment: SQLite for a single-node, single-file, zero-dependency install (`DATABASE_URL` defaults to `file:./dts.db`); Postgres for multi-instance / scale-out (also set `DATABASE_URL`).
 
 **Portability rules (both engines must stay in lockstep):**
 
@@ -75,28 +75,21 @@ Two engines behind the `repo.Store` abstraction, chosen by `DATABASE_DRIVER` (`s
 
 - PostgreSQL **18** in compose. The volume mounts at `/var/lib/postgresql` (the parent, not `/var/lib/postgresql/data` like in PG 16) because PG 18's image stores data in a version-specific subdir (`/var/lib/postgresql/18/docker/`) so `pg_upgrade --link` can work across majors. Mounting at `data` makes the container fail to start.
 - Major-version upgrades require `pg_upgrade` or `pg_dump`/`pg_restore`. A plain image bump leaves the old data files unreadable.
-- Migrations ([api/migrations/](api/migrations/)) are append-only. Never edit a committed `*.up.sql`; add a new migration. Every migration needs a matching `.down.sql`. Apply with `make migrate-up` or the Docker `migrate` one-shot. Real-time uses a `pg_notify` trigger + LISTEN (see [realtime](api/internal/realtime/)).
+- Migrations ([server/migrations/](server/migrations/)) are append-only. Never edit a committed `*.up.sql`; add a new migration. Every migration needs a matching `.down.sql`. Apply with `make migrate-up` or the Docker `migrate` one-shot. Real-time uses a `pg_notify` trigger + LISTEN (see [realtime](server/internal/realtime/)).
 
 **SQLite specifics:**
 
-- Migrations ([api/internal/repo/sqlite/migrations/](api/internal/repo/sqlite/migrations/)) are embedded via `go:embed` and applied in-process on first boot - there is no separate migrate container. Keep them a faithful translation of the Postgres schema; the category seed uses fixed UUIDs (stable across both engines). Same append-only rule.
+- Migrations ([server/internal/repo/sqlite/migrations/](server/internal/repo/sqlite/migrations/)) are embedded via `go:embed` and applied in-process on first boot - there is no separate migrate container. Keep them a faithful translation of the Postgres schema; the category seed uses fixed UUIDs (stable across both engines). Same append-only rule.
 - The connection DSN sets `foreign_keys(ON)` (FK enforcement is off by default per-connection - the group-delete cascade depends on it), `journal_mode(WAL)`, `busy_timeout`, `synchronous(NORMAL)`.
-- No LISTEN/NOTIFY: the store publishes committed activity events to the in-process realtime hub after commit (`repo.ActivityPublisher`), so real-time only works within one process - hence SQLite forces the embedded worker.
+- No LISTEN/NOTIFY: the store publishes committed activity events to the in-process realtime hub after commit (`repo.ActivityPublisher`), so real-time only works within one process - consistent with the single-node, in-process worker.
 
 **Shared:** Keep FK cascades explicit (group deletion cascades to `group_members`, `expenses`→`splits`, `settlements`, `recurring_expenses`, `activity_events`). Amounts are integer cents; IDs are UUIDs.
 
 ## Worker topology
 
-The 60s tick (materialize due recurring expenses + drain the email outbox) is one code path ([api/internal/worker/](api/internal/worker/)) deployable two ways, selected by `WORKER_MODE`:
+The 60s tick (materialize due recurring expenses + drain the email outbox) is one code path ([server/internal/worker/](server/internal/worker/)) that runs as an in-process goroutine inside the server, started at boot by [server/cmd/server/main.go](server/cmd/server/main.go) (`go worker.Run(...)`) on both engines. There is no `WORKER_MODE` and no separate worker container.
 
-- **`external`** (Postgres default): a separate `worker` container/binary ([api/cmd/worker/](api/cmd/worker/)). The api does not run the tick. This is what [docker-compose.yml](docker-compose.yml) ships.
-- **`embedded`**: the tick runs as a goroutine inside the api ([cmd/api/main.go](api/cmd/api/main.go) starts `worker.Run` when `cfg.WorkerMode == "embedded"`). No separate container.
-
-**SQLite forces `embedded`** regardless of the env value: a separate process can't reach the api's in-process realtime hub (no LISTEN/NOTIFY) and would contend for the single writer.
-
-**Postgres can opt into `embedded`** for a single-node deployment (one fewer container). It's safe even alongside an external worker: each tick first takes a session advisory lock via the store's `TickLocker` (`pg_try_advisory_lock`, [repo/postgres/store.go](api/internal/repo/postgres/store.go)), so exactly one runner materializes per tick and the rest skip - no double-materialization. Verified live: with an embedded api worker + a standalone worker racing the same due recurring, exactly one expense was created.
-
-Trade-offs for choosing `embedded` on Postgres: **pro** - fewer containers, simpler ops for single-node. **con** - the tick shares the api's process/CPU/connection-pool (a heavy batch competes with request serving), an api restart bounces the worker with it, and N api replicas each wake per tick to contend for the lock (cheap but not free). Prefer `external` for multi-replica / scale-out; `embedded` for a lean single node. See [docker-compose.postgres-embedded.yml](docker-compose.postgres-embedded.yml) for a ready example.
+The app is **single-node by design** (like memos and vikunja), so the tick runs unguarded: no advisory lock, no cross-process coordination. If you ever need multi-replica Postgres scale-out, you must reintroduce a singleton guard (e.g. a `pg_advisory_lock`) before running the tick on more than one instance, or run exactly one instance with the worker.
 
 ## Frontend conventions
 
@@ -123,7 +116,7 @@ The SPA is an installable PWA with **read-only offline**, via `vite-plugin-pwa` 
 - **Strategy**: precache the shell + hashed assets; runtime-cache `/v1` **GETs** network-first (cache `dts-v1-get`, `networkTimeoutSeconds: 3`, cache fallback when offline/stalled). NetworkFirst (not StaleWhileRevalidate) so a read issued right after a mutation - e.g. the dashboard `reload()` after creating an expense - reflects the write instead of returning a stale cached page while revalidating in the background. Mutations are GET-only-excluded by Workbox and pass straight to the network; `/v1/auth/*` is excluded so tokens are never cached, and the SSE stream `/v1/groups/{id}/events` is excluded so the SW never tees its never-ending body into the cache (which buffers frames and stalls real-time delivery after a few minutes). `registerType: 'autoUpdate'` - a new SW applies silently on the next navigation.
 - **CSP-clean registration**: `injectRegister: null` plus a bundled `registerSW({ immediate: true })` import in [main.ts](frontend/src/main.ts). Never let the plugin inject its default inline registration snippet - the strict CSP (`script-src 'self'`) blocks inline scripts. The `virtual:pwa-register` type comes from `vite-plugin-pwa/client` referenced in [env.d.ts](frontend/env.d.ts).
 - **Offline UX**: [useNetworkStatus.ts](frontend/src/composables/useNetworkStatus.ts) (module-singleton reactive, like `useTheme`) drives an offline banner in [AppLayout.vue](frontend/src/components/AppLayout.vue). Offline mutations are short-circuited in [client.ts](frontend/src/lib/api/client.ts) - `onRequest` returns a synthetic `503` for non-GET, non-auth requests while `navigator.onLine` is false, so every composable surfaces a clear message instead of an opaque failure.
-- **Serving**: the Go binary serves `sw.js`, `workbox-*.js`, `manifest.webmanifest`, and the `pwa-*.png` icons from the dist root like any other static file. `.webmanifest` has no entry in Go's mime table, so [webui.go](api/internal/handlers/webui.go) sets `Content-Type: application/manifest+json` explicitly; [spa_test.go](api/internal/server/spa_test.go) asserts the SW/manifest/icon are served with the right content-types. Icons are rendered from `logo.svg` (the maskable one padded to its safe zone on the dark `theme_color`).
+- **Serving**: the Go binary serves `sw.js`, `workbox-*.js`, `manifest.webmanifest`, and the `pwa-*.png` icons from the dist root like any other static file. `.webmanifest` has no entry in Go's mime table, so [webui.go](server/internal/handlers/webui.go) sets `Content-Type: application/manifest+json` explicitly; [spa_test.go](server/internal/server/spa_test.go) asserts the SW/manifest/icon are served with the right content-types. Icons are rendered from `logo.svg` (the maskable one padded to its safe zone on the dark `theme_color`).
 
 ## Refresh cookie (important)
 
@@ -148,37 +141,36 @@ The only cookie the API sets is the rotating refresh token, `dts_refresh`: httpO
 - Emails: `email_hash = HMAC-SHA256(normalize(email), EMAIL_HMAC_KEY)` for lookups; `email_encrypted = key_id ‖ nonce ‖ AES-GCM(EMAIL_ENC_KEY, …)` for display. Keys are 32-byte base64 from env; fail fast if missing.
 - `/auth/token`, `/auth/register`, and the other credential-bearing `/auth/*` endpoints (verify, password-reset) are rate-limited; keep them on the `authG` group in the router.
 - Security headers middleware emits HSTS only when `COOKIE_SECURE=true`.
-- Never log `email`, `password`, or session tokens. The access logger ([api/internal/middleware/logger.go](api/internal/middleware/logger.go)) logs only method, path, status, duration, client IP, and request id - never request bodies. Don't add body/field logging there; if you ever do, redact sensitive fields first.
+- Never log `email`, `password`, or session tokens. The access logger ([server/internal/middleware/logger.go](server/internal/middleware/logger.go)) logs only method, path, status, duration, client IP, and request id - never request bodies. Don't add body/field logging there; if you ever do, redact sensitive fields first.
 
 ## Testing
 
 Three layers, all run in CI on every PR:
 
 - **Go unit tests** colocate with packages (`*_test.go`). Pure logic only - split math, balance simplification, Argon2 round-trip, config loading.
-- **Go integration tests** run against a real database. The full [api/internal/server/](api/internal/server/) suite is **engine-parameterized** by `TEST_DB_DRIVER` (`postgres` default via `testcontainers-go/postgres`, or `sqlite` in-process/in-memory) - the `setup()` harness builds the matching `repo.Store`, so every HTTP-level test (golden path, admin authz, group authz matrix, strict-JSON matrix, recurring worker tick, SSE stream, avatar pipeline, bearer flow) runs on both engines. Schema-only invariants live in [api/internal/repo/migrations_test.go](api/internal/repo/migrations_test.go) (Postgres) and [api/internal/repo/sqlite/migrations_sqlite_test.go](api/internal/repo/sqlite/migrations_sqlite_test.go) (SQLite): up/down round-trip + group-delete FK cascades. Tests that need dialect-specific raw SQL go through the `testRawStore` helpers ([repo/{postgres,sqlite}/testsupport.go](api/internal/repo/)), never inline SQL.
+- **Go integration tests** run against a real database. The full [server/internal/server/](server/internal/server/) suite is **engine-parameterized** by `TEST_DB_DRIVER` (`postgres` default via `testcontainers-go/postgres`, or `sqlite` in-process/in-memory) - the `setup()` harness builds the matching `repo.Store`, so every HTTP-level test (golden path, admin authz, group authz matrix, strict-JSON matrix, recurring worker tick, SSE stream, avatar pipeline, bearer flow) runs on both engines. Schema-only invariants live in [server/internal/repo/migrations_test.go](server/internal/repo/migrations_test.go) (Postgres) and [server/internal/repo/sqlite/migrations_sqlite_test.go](server/internal/repo/sqlite/migrations_sqlite_test.go) (SQLite): up/down round-trip + group-delete FK cascades. Tests that need dialect-specific raw SQL go through the `testRawStore` helpers ([repo/{postgres,sqlite}/testsupport.go](server/internal/repo/)), never inline SQL.
 - **SPA unit tests** via [vitest](https://vitest.dev) under [frontend/src/\*\*/\*.test.ts](frontend/src/). Pure helpers only (jsdom, no canvas) - the avatar-pixelate suite pins the GDPR-load-bearing color math; currency/short-name suites pin formatting.
 - **End-to-end** via [Playwright](https://playwright.dev) under [frontend/tests/e2e/](frontend/tests/e2e/). Boots the actual `docker compose` stack, scrapes the install token from `docker compose logs api`, and drives `/setup` + group create through the Vue SPA on the single api origin (`:8080`). Catches contract drift between the SPA and the Go API.
 
 Invariants for adding tests:
 
-- **When adding endpoints**, extend the integration suite with at least one positive case AND one authz-negative case. The strict-JSON matrix test ([api/internal/server/strict_json_test.go](api/internal/server/strict_json_test.go)) and the group authz matrix ([api/internal/server/group_authz_test.go](api/internal/server/group_authz_test.go)) are parameterized - add your new endpoint there too.
+- **When adding endpoints**, extend the integration suite with at least one positive case AND one authz-negative case. The strict-JSON matrix test ([server/internal/server/strict_json_test.go](server/internal/server/strict_json_test.go)) and the group authz matrix ([server/internal/server/group_authz_test.go](server/internal/server/group_authz_test.go)) are parameterized - add your new endpoint there too.
 - **Don't mock the DB.** We want real SQL behavior, including FK cascades, partial unique indexes, and `FOR UPDATE` semantics.
 - **Don't mock the mailer outbox** in tests that assert a user receives a code - the outbox is part of the contract.
-- **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](api/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
+- **HTTP client in tests** uses the per-package `testHTTPClient` ([server_test.go:36](server/internal/server/server_test.go#L36)) with `DisableKeepAlives: true` and a 90s timeout. Don't reach for `http.DefaultClient` - pooled stale connections to torn-down `httptest` servers cause 19-minute hangs under `-race` on CI.
 
-Run everything with `make test`. Go alone: `make test-go` (Postgres). Both engines: `make test-go-both` (or `make test-go-sqlite` / `make test-go-postgres` individually) - CI runs the Go suite once per engine. SPA unit alone: `make test-frontend`. E2E alone: `docker compose up -d --build`, scrape the token from `docker compose logs api`, then `SETUP_TOKEN=... make test-e2e`.
+Run everything with `make test`. Go alone: `make test-go` (Postgres). Both engines: `make test-go-both` (or `make test-go-sqlite` / `make test-go-postgres` individually) - CI runs the Go suite once per engine. SPA unit alone: `make test-frontend`. E2E alone: boot a stack (`docker compose up -d --build` for SQLite, or `docker compose -f docker-compose.postgres.yml up -d --build` for Postgres), scrape the token from the api logs, then `SETUP_TOKEN=... make test-e2e`. CI runs the e2e suite against both engines.
 
 Linting also gates CI on every PR: `make lint` runs golangci-lint (Go, pinned in the `lint-go` target) and eslint (SPA). Run it before pushing.
 
 ## Running the app
 
-- `docker compose up -d --build` - full Postgres stack; the api binary serves both `/v1` and the embedded SPA on `http://localhost:8080`. (postgres, migrate, api, worker - there is no separate web container.)
-- `docker compose -f docker-compose.sqlite.yml up -d --build` - single-container SQLite deployment (one api container + a DB-file volume; no postgres, no migrate one-shot, no separate worker - `WORKER_MODE=embedded` runs the tick in-process). `DATABASE_DRIVER=sqlite` forces the embedded worker regardless of `WORKER_MODE`.
-- `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` - Postgres stack with the worker embedded in the api (no separate worker container). Single-node only; see "Worker topology".
+- `docker compose up -d --build` - default single-container SQLite deployment (`docker-compose.yml`: one `dothesplit` container + a DB-file volume; no postgres, no migrate one-shot, no separate worker - the tick runs in-process). The server binary serves both `/v1` and the embedded SPA on `http://localhost:8080`.
+- `docker compose -f docker-compose.postgres.yml up -d --build` - full Postgres stack (postgres, migrate, dothesplit; requires `POSTGRES_PASSWORD` + `DATABASE_URL`). The tick runs in-process in the `dothesplit` container.
 - `make up` - Postgres stack, but stamps `BUILD_COMMIT` (git short SHA) and `BUILD_VERSION` (from `frontend/package.json`) into the image so `/healthz` and the page footer self-identify.
-- Local non-Docker dev: `make dev-api` (Go API on `:8080`) + `make dev-frontend` (Vite dev server on `:4321`, proxying `/v1` to `:8080`).
-- `make build` builds the SPA, copies it into the embed dir, then builds the Go binaries. After any change that affects the API contract: `make gen`, then rebuild the `api` + `worker` images (a frontend-only change still means rebuilding `api`, since the SPA is embedded).
-- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit:X.Y.Z` - one image now). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
+- Local non-Docker dev: `make dev-api` (Go server on `:8080`) + `make dev-frontend` (Vite dev server on `:4321`, proxying `/v1` to `:8080`).
+- `make build` builds the SPA, copies it into the embed dir, then builds the Go binary. After any change that affects the API contract: `make gen`, then rebuild the `dothesplit` image (a frontend-only change still means rebuilding it, since the SPA is embedded).
+- Production: pull pinned images from GHCR (`ghcr.io/julian-alarcon/dothesplit:X.Y.Z` - one image). Don't build from `main` on the deployment host: releases are published by CI and tagged via release-please from conventional-commit titles. The `:dev` tag tracks `main` for staging.
 
 ## Scope boundaries (don't build these without asking)
 

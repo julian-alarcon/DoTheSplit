@@ -2,17 +2,17 @@
 
 ## Choose a database engine first
 
-DoTheSplit runs on **SQLite (the default) or PostgreSQL**, selected by the `DATABASE_DRIVER` env var:
+DoTheSplit runs on **SQLite or PostgreSQL**, selected by the `DATABASE_DRIVER` env var. This var is **required and has no default** - the app refuses to start if it is unset, so the engine is always an explicit choice. The compose files below each set it for you.
 
-- **`DATABASE_DRIVER=sqlite`** (default when unset): a single `api` container plus one DB-file volume. No separate Postgres, migrate, or worker containers. Migrations are embedded in the binary and applied in-process on first boot; the recurring-expense worker runs embedded in the api process. This is the simplest path and the right choice for a single-node install. Compose file: `docker-compose.sqlite.yml`.
-- **`DATABASE_DRIVER=postgres`**: the scale-out / multi-instance path (separate `postgres`, `migrate`, `api`, and `worker` services). Now that SQLite is the default, Postgres deployments **must set `DATABASE_DRIVER=postgres` explicitly**. Compose file: `docker-compose.yml`.
+- **`DATABASE_DRIVER=sqlite`**: a single `dothesplit` container plus one DB-file volume. No separate Postgres or migrate containers. Migrations are embedded in the binary and applied in-process on first boot; the recurring-expense worker runs in-process. This is the simplest path and the right choice for a single-node install. Compose file: `docker-compose.yml` (the default).
+- **`DATABASE_DRIVER=postgres`**: a separate database server (`postgres`, `migrate`, `dothesplit` services), which also requires `DATABASE_URL`. Compose file: `docker-compose.postgres.yml`.
 
 The engine choice does **not** change encryption at rest: emails, passwords, SMTP credentials, and token hashes are encrypted/hashed at the application layer above the DB on both engines (see [Secrets](#secrets)). Neither engine encrypts the whole database file. The four crypto keys are required for both.
 
 Install paths below:
 
-- **[Generic Docker host](#generic-docker-host)**: any Linux box (or VM) with Docker and Docker Compose v2. Works for self-hosters who already run a compose stack, for evaluation on a workstation, or as the basis for adapting to other orchestrators (Portainer, Komodo, plain `systemd` units, etc.). Covers both the SQLite (default) and Postgres stacks.
-- **[TrueNAS SCALE Custom App](#truenas-scale-custom-app)**: full walkthrough through the Apps wizard, with host-path bind mounts so snapshots and replication can target the dataset.
+- **[Generic Docker host](#generic-docker-host)**: any Linux box (or VM) with Docker and Docker Compose v2. Works for self-hosters who already run a compose stack, for evaluation on a workstation, or as the basis for adapting to other orchestrators (Portainer, Komodo, plain `systemd` units, etc.). Covers both the SQLite and Postgres stacks.
+- **[TrueNAS SCALE Custom App](#truenas-scale-custom-app)**: full SQLite walkthrough through the Apps wizard, with host-path bind mounts so snapshots and replication can target the dataset (Postgres differences noted at the end).
 
 Both paths ship HTTP-only on the LAN by default. For internet-exposed deployments see [HTTPS / internet exposure](#https--internet-exposure).
 
@@ -20,7 +20,7 @@ Both paths ship HTTP-only on the LAN by default. For internet-exposed deployment
 
 ## Generic Docker host
 
-For local development you usually want the Quick start in [README.md](README.md#quick-start) instead, since it builds from the working tree. The flow below installs from the **pinned release images on GHCR**, which is the right choice for any deployment you're not actively hacking on.
+For local development you usually want the quick start in [README.md](README.md#sqlite-default) instead, since it builds from the working tree. The flow below installs from the **pinned release images on GHCR**, which is the right choice for any deployment you're not actively hacking on.
 
 ### Requirements
 
@@ -28,9 +28,9 @@ For local development you usually want the Quick start in [README.md](README.md#
 - `openssl` for key generation.
 - ~200 MB of disk for images plus whatever your data grows to.
 
-### SQLite (default, single container)
+### SQLite (single container)
 
-The simplest install: one `api` container and one DB-file volume. No Postgres, migrate, or worker containers. Migrations apply in-process on first boot and the recurring-expense worker runs embedded in the api process.
+The simplest install: one `dothesplit` container and one DB-file volume. No Postgres or migrate containers. Migrations apply in-process on first boot and the recurring-expense worker runs in-process.
 
 **Step 1: Generate the secrets.** SQLite needs only the four crypto keys - no `POSTGRES_PASSWORD`, no `DATABASE_URL` (it defaults to `file:./dts.db`):
 
@@ -46,11 +46,11 @@ mkdir -p ~/dothesplit && cd ~/dothesplit
 
 Save the secrets in a password manager **now** - see [Secrets](#secrets).
 
-**Step 2: Write `docker-compose.sqlite.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.0.0`:
+**Step 2: Write `docker-compose.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.0.0`:
 
 ```yaml
 services:
-  api:
+  dothesplit:
     image: ghcr.io/julian-alarcon/dothesplit:1.0.0
     environment:
       # sqlite is the default, but set it explicitly for clarity.
@@ -68,11 +68,11 @@ services:
     volumes:
       - dts_sqlite_data:/data
     ports:
-      # The api binary serves both the JSON API and the embedded Vue SPA here.
+      # The server binary serves both the JSON API and the embedded Vue SPA here.
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/api", "--healthcheck"]
+      test: ["CMD", "/dothesplit", "--healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -87,44 +87,60 @@ volumes:
   dts_sqlite_data:
 ```
 
-The api writes `dts.db` and its WAL/shm sidecars to `/data`; the container connects with WAL journaling, `busy_timeout`, `foreign_keys=ON`, and `synchronous=NORMAL` pragmas (pure-Go `modernc.org/sqlite` driver, no CGO). The host port binding is loopback-only; change `127.0.0.1:` to `0.0.0.0:` to expose it to the LAN.
+The app writes `dts.db` and its WAL/shm sidecars to `/data`; the container connects with WAL journaling, `busy_timeout`, `foreign_keys=ON`, and `synchronous=NORMAL` pragmas (pure-Go `modernc.org/sqlite` driver, no CGO). The host port binding is loopback-only; change `127.0.0.1:` to `0.0.0.0:` to expose it to the LAN.
 
 **Step 3: Bring it up.**
 
 ```sh
-docker compose -f docker-compose.sqlite.yml up -d
-docker compose -f docker-compose.sqlite.yml ps   # api healthy after ~10s
+docker compose up -d
+docker compose ps   # dothesplit healthy after ~10s
 ```
 
-Then continue at [Step 5: Consume the first-run setup token](#step-5-consume-the-first-run-setup-token) below (substitute the `-f docker-compose.sqlite.yml` flag in the log/verify commands).
+Then continue at [First-run setup](#first-run-setup) below.
 
-**Backups (SQLite):** stop the api (`docker compose -f docker-compose.sqlite.yml stop`) before snapshotting the `dts_sqlite_data` volume so the WAL is checkpointed, and back up `.env` separately - a DB file without the keys cannot be decrypted.
+**Backups (SQLite):** stop the app (`docker compose stop`) before snapshotting the `dts_sqlite_data` volume so the WAL is checkpointed, and back up `.env` separately - a DB file without the keys cannot be decrypted.
 
-**Updates (SQLite):** no migrations directory to refresh (they're embedded). Bump the image tag, then `docker compose -f docker-compose.sqlite.yml pull && docker compose -f docker-compose.sqlite.yml up -d`. Embedded migrations apply in-process on the next boot.
+**Updates (SQLite):** no migrations directory to refresh (they're embedded). Bump the image tag, then `docker compose pull && docker compose up -d`. Embedded migrations apply in-process on the next boot.
 
 ---
 
-### PostgreSQL (scale-out / multi-instance)
+### First-run setup
 
-Use this when you want a separate database server, multiple api instances, or an external worker. Requires `DATABASE_DRIVER=postgres` (now that sqlite is the default), a `DATABASE_URL`, and `POSTGRES_PASSWORD`.
+The first time the app boots, it prints a one-time setup token to its logs and refuses to create users until the token is consumed:
 
-### Step 1: Get the release artifacts
+```sh
+docker compose logs dothesplit | grep -A2 'first-run setup'
+```
 
-Pick a release tag from <https://github.com/julian-alarcon/dothesplit/releases> and substitute it for `v1.0.0` below.
+The log line includes `token=<value>` and `url=…/setup`. Open `http://<host>:8080/setup`, paste the token, fill in display name + email + password (≥10 chars). On success you are redirected to `/groups` and the setup form is permanently locked, even across restarts.
+
+### Verify
+
+```sh
+curl -fsS http://localhost:8080/healthz   # 200 with version + commit
+curl -fsS http://localhost:8080/readyz    # 200 once DB is reachable
+```
+
+The web footer also shows the running version, linked to the GitHub Release.
+
+---
+
+### PostgreSQL (what changes vs SQLite)
+
+Reach for Postgres only when you need multi-instance / scale-out; a single-node install should stay on SQLite. Everything above (secrets, first-run setup, verify, HTTPS) is identical. The differences:
+
+- **Extra services.** The stack grows from one container to three: `postgres` (the database), `migrate` (a one-shot that applies `server/migrations/*.up.sql`, then exits), and `dothesplit`. The recurring-expense worker still runs in-process inside `dothesplit`, so there is no separate worker service.
+- **Two more env vars.** Set `DATABASE_DRIVER=postgres` (sqlite is the default, so Postgres must opt in) and add `POSTGRES_PASSWORD`. `DATABASE_URL` is now required (no `file:` default): `postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable`. URL-encode the password if it contains any of `: / ? # [ ] @`.
+- **Migrations live on disk.** Unlike SQLite (migrations embedded in the binary, applied in-process), the Postgres path bind-mounts `server/migrations` into the `migrate` container. Fetch them per release tag.
+
+**Step 1: Get migrations + secrets.** Substitute your release tag for `v1.0.0`:
 
 ```sh
 mkdir -p ~/dothesplit && cd ~/dothesplit
 curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
   | tar -xz --strip-components=1 \
-      'dothesplit-1.0.0/api/migrations' \
+      'dothesplit-1.0.0/server/migrations' \
       'dothesplit-1.0.0/.env.example'
-```
-
-You should now have `api/migrations/*.sql` and `.env.example` in `~/dothesplit`.
-
-### Step 2: Generate the secrets
-
-```sh
 cp .env.example .env
 {
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
@@ -135,13 +151,9 @@ cp .env.example .env
 } >> .env
 ```
 
-Edit `.env` and update `DATABASE_URL` so the password matches `POSTGRES_PASSWORD`. URL-encode the password if it contains any of `: / ? # [ ] @`.
+Edit `.env` and set `DATABASE_URL` so its password matches `POSTGRES_PASSWORD`. Save all five secrets in a password manager now: see [Secrets](#secrets).
 
-Save the secrets in a password manager **now**. Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the database has data in it makes that data unrecoverable; rotating `JWT_SIGNING_KEY` only forces token clients to log in again. See [Secrets you must back up](README.md#secrets-you-must-back-up) for the rationale.
-
-### Step 3: Write `docker-compose.yml`
-
-Save this as `docker-compose.yml` next to `.env`. It mirrors the project's compose file but pulls pinned release images from GHCR instead of building from source. Substitute your release tag for `v1.0.0`:
+**Step 2: Write `docker-compose.postgres.yml`** next to `.env`. It pulls pinned GHCR release images instead of building from source. Substitute your release tag for `v1.0.0`:
 
 ```yaml
 services:
@@ -153,6 +165,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-dts}
     volumes:
+      # Mount the parent dir, not …/data: PG 18 stores data in a
+      # major-version-specific subdir so pg_upgrade --link works in place.
       - dts_pg_data:/var/lib/postgresql
     healthcheck:
       test:
@@ -175,7 +189,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./api/migrations:/migrations:ro
+      - ./server/migrations:/migrations:ro
     environment:
       DATABASE_URL: ${DATABASE_URL}
     entrypoint: ["/bin/sh", "-c"]
@@ -188,7 +202,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=8m
 
-  api:
+  dothesplit:
     image: ghcr.io/julian-alarcon/dothesplit:1.0.0
     depends_on:
       postgres:
@@ -196,7 +210,6 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      # Required: sqlite is the default, so a Postgres deployment must opt in.
       DATABASE_DRIVER: postgres
       DATABASE_URL: ${DATABASE_URL}
       API_HTTP_ADDR: ":8080"
@@ -208,11 +221,11 @@ services:
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      # The api binary serves both the JSON API and the embedded Vue SPA here.
+      # The server binary serves both the JSON API and the embedded Vue SPA here.
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/api", "--healthcheck"]
+      test: ["CMD", "/dothesplit", "--healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -223,78 +236,29 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m
 
-  worker:
-    image: ghcr.io/julian-alarcon/dothesplit:1.0.0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    entrypoint: ["/worker"]
-    environment:
-      DATABASE_DRIVER: postgres
-      DATABASE_URL: ${DATABASE_URL}
-      EMAIL_ENC_KEY: ${EMAIL_ENC_KEY}
-      EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY}
-      PASSWORD_PEPPER: ${PASSWORD_PEPPER}
-      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=32m
-
 volumes:
   dts_pg_data:
 ```
 
-The project's own `docker-compose.yml` already sets `DATABASE_DRIVER: postgres` on the `api` and `worker` services; the snippet above mirrors it. A single-node Postgres deployment can also run the worker embedded in the api process (dropping the separate `worker` container) via `docker compose -f docker-compose.yml -f docker-compose.postgres-embedded.yml up -d --build` - see [worker topology](docs/DEVELOPMENT.md#run).
-
-The Postgres mount target is `/var/lib/postgresql` (the parent dir, not `…/data`). PG 18 stores data in a major-version-specific subdir so future `pg_upgrade --link` works in place; mounting at `…/data` makes the container fail to start.
-
-The host port bindings are loopback-only (`127.0.0.1:`); change to `0.0.0.0:` (or just drop the prefix) to expose them to the LAN, or attach the services to a reverse-proxy network and stop publishing them to the host at all.
-
-### Step 4: Bring it up
+**Step 3: Bring it up**, then follow [First-run setup](#first-run-setup) and [Verify](#verify) above (swap `docker compose` for `docker compose -f docker-compose.postgres.yml`):
 
 ```sh
-docker compose up -d
-docker compose ps        # all services should be healthy after ~20s
+docker compose -f docker-compose.postgres.yml up -d
+docker compose -f docker-compose.postgres.yml ps   # all three services healthy after ~20s
 ```
 
-### Step 5: Consume the first-run setup token
+**Updates (Postgres):** refresh the migrations to the new tag, bump image tags, then pull + up. The `migrate` one-shot re-runs on every up and is idempotent:
 
 ```sh
-docker compose logs api | grep -A2 'first-run setup'
-```
-
-The log line includes `token=<value>` and `url=…/setup`. Open `http://<host>:8080/setup`, paste the token, fill in display name + email + password (≥10 chars). On success you are redirected to `/groups` and the setup form is permanently locked.
-
-### Step 6: Verify
-
-```sh
-curl -fsS http://localhost:8080/healthz   # 200 with version + commit
-curl -fsS http://localhost:8080/readyz    # 200 once DB is reachable
-```
-
-### Updates
-
-```sh
-# Refresh migrations to the new tag (replace v0.8.0)
 curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v0.8.0.tar.gz \
-  | tar -xz --strip-components=1 'dothesplit-0.8.0/api/migrations'
-
-# Bump image tags in docker-compose.yml, then:
-docker compose pull
-docker compose up -d
+  | tar -xz --strip-components=1 'dothesplit-0.8.0/server/migrations'
+docker compose -f docker-compose.postgres.yml pull
+docker compose -f docker-compose.postgres.yml up -d
 ```
 
-The `migrate` one-shot runs again on every up; it is idempotent. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for the special case of major Postgres version bumps.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for major Postgres version bumps.
 
-### Backups
-
-Postgres: stop the stack (`docker compose stop postgres`) before snapshotting the `dts_pg_data` volume, or run `pg_dump` against the running container. SQLite: stop the api and snapshot the `dts_sqlite_data` volume (holds `dts.db` + `-wal`/`-shm`). Either way, back up `.env` separately: a database dump/file without the keys cannot be decrypted.
+**Backups (Postgres):** stop the stack (`docker compose -f docker-compose.postgres.yml stop postgres`) before snapshotting the `dts_pg_data` volume, or run `pg_dump` against the running container. Back up `.env` separately: a dump without the keys cannot be decrypted.
 
 ---
 
@@ -306,10 +270,7 @@ The four crypto keys - `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, `PASSWORD_PEPPER`, `JW
 
 ## TrueNAS SCALE Custom App
 
-This path uses host-path bind mounts under `/mnt/<pool>/apps-data/dothesplit/` so TrueNAS Periodic Snapshots and Replication Tasks can target the dataset directly. It walks through the **Postgres** stack (postgres/migrate/api/worker).
-
-> [!TIP]
-> For a single-node TrueNAS install you can run the simpler **SQLite** stack instead: one `api` container, no Postgres/migrate/worker. Skip the `pgdata`/`migrations` directories and the Postgres/`DATABASE_URL`/`POSTGRES_PASSWORD` bits below. Create one dataset (e.g. `ssd-storage/apps-data/dothesplit/data`), bind-mount it at `/data`, set `DATABASE_DRIVER=sqlite` and `DATABASE_URL=file:/data/dts.db` plus the four crypto keys, and use the single-service YAML from [SQLite (default, single container)](#sqlite-default-single-container). Snapshot the `data` dataset (holds `dts.db` + WAL) for backups.
+This path uses host-path bind mounts under `/mnt/<pool>/apps-data/dothesplit/` so TrueNAS Periodic Snapshots and Replication Tasks can target the dataset directly. It walks through the **SQLite** stack (one `dothesplit` container), which is the right choice for a single-node TrueNAS install. To run Postgres instead, see [Postgres on TrueNAS](#postgres-on-truenas) at the end.
 
 ### Prerequisites
 
@@ -318,120 +279,48 @@ This path uses host-path bind mounts under `/mnt/<pool>/apps-data/dothesplit/` s
 - Shell access (System Settings → Shell, or SSH).
 - A machine with `openssl` available (TrueNAS shell works).
 
-### Step 1: Pre-create the dataset and host directories
+### Step 1: Pre-create the dataset and host directory
 
-The TrueNAS Custom App wizard cannot create directories on save, so the install will fail if the bind-mount source is missing. Create everything up front from the shell:
-
-Datasets:
-
-- `ssd-storage/apps-data/dothesplit`
-
-Then create the host directories:
+The TrueNAS Custom App wizard cannot create directories on save, so the install will fail if the bind-mount source is missing. Create the dataset `ssd-storage/apps-data/dothesplit`, then the host directory that holds the DB file:
 
 ```sh
-mkdir -p /mnt/ssd-storage/apps-data/dothesplit/pgdata
-mkdir -p /mnt/ssd-storage/apps-data/dothesplit/migrations
-chown -R 70:70 /mnt/ssd-storage/apps-data/dothesplit/pgdata
-chmod 700      /mnt/ssd-storage/apps-data/dothesplit/pgdata
+mkdir -p /mnt/ssd-storage/apps-data/dothesplit/data
 ```
 
-About UID **70**: the `postgres:18.4-alpine3.22` image ships an internal `postgres` user with UID/GID 70 (the Alpine convention; the Debian-based `postgres` images use 999 instead), and that's the user the engine drops to after `initdb`. **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres will refuse to start on a directory it can't own.
-
-The `migrations` directory does not need special ownership; the `migrate` container reads it `:ro`.
-
-### Step 2: Drop the migrations on disk
-
-The `migrate` one-shot container reads SQL files from a host path. Fetch the migrations matching the release you intend to install (replace `v1.0.0` with the tag you want):
+The distroless `dothesplit` image runs as UID 65532 (`nonroot`). Make the `data` directory writable by that user so SQLite can create `dts.db` and its WAL sidecars:
 
 ```sh
-cd /mnt/ssd-storage/apps-data/dothesplit/migrations
-curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
-  | tar -xz --strip-components=3 --wildcards '*/api/migrations'
-ls   # should list 0001_*.up.sql, 0001_*.down.sql, …
+chown -R 65532:65532 /mnt/ssd-storage/apps-data/dothesplit/data
 ```
 
-When you upgrade the app later, refresh this directory to the new tag before bumping the image versions; the migrate container applies whatever `*.up.sql` files it finds.
+### Step 2: Generate the secrets
 
-### Step 3: Generate the secrets
-
-Run on any machine with `openssl` and write the output down somewhere safe **before** continuing:
+SQLite needs only the four crypto keys - no `POSTGRES_PASSWORD`, no external `DATABASE_URL`. Run on any machine with `openssl` and write the output down somewhere safe **before** continuing:
 
 ```sh
 echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
 echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
 echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
 echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)"
 ```
 
 Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the database has data in it makes that data unrecoverable. See [Secrets you must back up](README.md#secrets-you-must-back-up) in the README for the full rationale.
 
-Construct the `DATABASE_URL` from the Postgres password you just generated:
-
-```
-postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable
-```
-
-URL-encode the password if it contains any of `: / ? # [ ] @`.
-
-### Step 4: Install the Custom App
+### Step 3: Install the Custom App
 
 1. **Apps → Discover Apps → Custom App**.
 2. **Application Name**: `dothesplit`.
-3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with two TrueNAS-specific changes: the named Postgres volume is replaced by a host-path bind mount, and the `migrate` bind mount points at the host path you populated in Step 2. The `api` and `worker` services use the pinned GHCR release image (one image serves both the JSON API and the embedded SPA) instead of building from source. Substitute your release tag for `v1.0.0`:
+3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with the named volume replaced by a host-path bind mount at the `data` dataset you created in Step 1. The `dothesplit` service uses the pinned GHCR release image (one image serves the JSON API, the embedded SPA, and the in-process worker) instead of building from source. Substitute your release tag for `v1.0.0`:
 
    ```yaml
    services:
-     postgres:
-       image: postgres:18.4-alpine3.22
-       restart: unless-stopped
-       environment:
-         POSTGRES_USER: dts
-         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-         POSTGRES_DB: dts
-       volumes:
-         - /mnt/ssd-storage/apps-data/dothesplit/pgdata:/var/lib/postgresql
-       healthcheck:
-         test: ["CMD-SHELL", "pg_isready -U dts -d dts"]
-         interval: 5s
-         timeout: 3s
-         retries: 10
-       cap_drop: [ALL]
-       cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
-       security_opt: ["no-new-privileges:true"]
-       mem_limit: 512m
-       pids_limit: 200
-
-     migrate:
-       image: migrate/migrate:v4.19.1
-       depends_on:
-         postgres:
-           condition: service_healthy
-       volumes:
-         - /mnt/ssd-storage/apps-data/dothesplit/migrations:/migrations:ro
-       environment:
-         DATABASE_URL: ${DATABASE_URL}
-       entrypoint: ["/bin/sh", "-c"]
-       command:
-         - 'exec migrate -path /migrations -database "$$DATABASE_URL" up'
-       restart: "no"
-       read_only: true
-       cap_drop: [ALL]
-       security_opt: ["no-new-privileges:true"]
-       tmpfs:
-         - /tmp:rw,noexec,nosuid,size=8m
-
-     api:
+     dothesplit:
        image: ghcr.io/julian-alarcon/dothesplit:1.0.0
-       depends_on:
-         postgres:
-           condition: service_healthy
-         migrate:
-           condition: service_completed_successfully
        environment:
-         # Required: sqlite is the default, so opt in to Postgres explicitly.
-         DATABASE_DRIVER: postgres
-         DATABASE_URL: ${DATABASE_URL}
+         # sqlite is the default, but set it explicitly for clarity.
+         DATABASE_DRIVER: sqlite
+         # Land the DB file on the bind-mounted dataset, not the read-only workdir.
+         DATABASE_URL: file:/data/dts.db
          API_HTTP_ADDR: ":8080"
          WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
          COOKIE_SECURE: ${COOKIE_SECURE:-false}
@@ -440,12 +329,14 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
          PASSWORD_PEPPER: ${PASSWORD_PEPPER}
          JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
          LOG_LEVEL: info
+       volumes:
+         - /mnt/ssd-storage/apps-data/dothesplit/data:/data
        ports:
-         # The api binary serves both the JSON API and the embedded Vue SPA.
+         # The server binary serves both the JSON API and the embedded Vue SPA.
          - "8080:8080"
        restart: unless-stopped
        healthcheck:
-         test: ["CMD", "/api", "--healthcheck"]
+         test: ["CMD", "/dothesplit", "--healthcheck"]
          interval: 10s
          timeout: 3s
          retries: 5
@@ -455,65 +346,38 @@ URL-encode the password if it contains any of `: / ? # [ ] @`.
        security_opt: ["no-new-privileges:true"]
        tmpfs:
          - /tmp:rw,noexec,nosuid,size=32m
-
-     worker:
-       image: ghcr.io/julian-alarcon/dothesplit:1.0.0
-       depends_on:
-         postgres:
-           condition: service_healthy
-         migrate:
-           condition: service_completed_successfully
-       entrypoint: ["/worker"]
-       environment:
-         DATABASE_DRIVER: postgres
-         DATABASE_URL: ${DATABASE_URL}
-         EMAIL_ENC_KEY: ${EMAIL_ENC_KEY}
-         EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY}
-         PASSWORD_PEPPER: ${PASSWORD_PEPPER}
-         JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
-         LOG_LEVEL: info
-       restart: unless-stopped
-       read_only: true
-       cap_drop: [ALL]
-       security_opt: ["no-new-privileges:true"]
-       tmpfs:
-         - /tmp:rw,noexec,nosuid,size=32m
    ```
 
-   Two details worth not changing:
-   - The Postgres mount target stays `/var/lib/postgresql` (parent dir, not `…/data`). PG 18 stores data in a major-version-specific subdir so future `pg_upgrade --link` works in place; mounting at `…/data` makes the container fail to start.
-   - The published port mapping drops the upstream `127.0.0.1:` host prefix because TrueNAS expects the app to be reachable on the LAN. If you put the app behind Traefik or another reverse proxy on the same host, prefer to attach it to the proxy's Docker network and stop publishing 8080 to the host at all.
+   The published port mapping drops the upstream `127.0.0.1:` host prefix because TrueNAS expects the app to be reachable on the LAN. If you put the app behind Traefik or another reverse proxy on the same host, prefer to attach it to the proxy's Docker network and stop publishing 8080 to the host at all.
 
-4. **Environment Variables**: add the four secrets and the connection string to the Custom App's environment table:
+4. **Environment Variables**: add the four secrets to the Custom App's environment table:
 
-   | Name                | Value                                                                  |
-   | ------------------- | ---------------------------------------------------------------------- |
-   | `POSTGRES_PASSWORD` | (from Step 3)                                                          |
-   | `DATABASE_URL`      | `postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable` |
-   | `EMAIL_ENC_KEY`     | (from Step 3)                                                          |
-   | `EMAIL_HMAC_KEY`    | (from Step 3)                                                          |
-   | `PASSWORD_PEPPER`   | (from Step 3)                                                          |
-   | `JWT_SIGNING_KEY`   | (from Step 3)                                                          |
+   | Name              | Value          |
+   | ----------------- | -------------- |
+   | `EMAIL_ENC_KEY`   | (from Step 2)  |
+   | `EMAIL_HMAC_KEY`  | (from Step 2)  |
+   | `PASSWORD_PEPPER` | (from Step 2)  |
+   | `JWT_SIGNING_KEY` | (from Step 2)  |
 
-5. **Networking**: leave on the default bridge. Port 8080 (api, which also serves the SPA) is exposed on the TrueNAS host. For internet exposure, see the section below.
+5. **Networking**: leave on the default bridge. Port 8080 (which also serves the SPA) is exposed on the TrueNAS host. For internet exposure, see the section below.
 
-6. **Storage**: nothing to add in the Storage step; the host paths are already wired in the YAML.
+6. **Storage**: nothing to add in the Storage step; the host path is already wired in the YAML.
 
-7. Click **Install** and watch the **Containers** tab until all four services (postgres, migrate, api, worker) are healthy.
+7. Click **Install** and watch the **Containers** tab until the `dothesplit` service is healthy (~10s).
 
-### Step 5: Consume the first-run setup token
+### Step 4: Consume the first-run setup token
 
-The first time the API container boots, it prints a one-time setup token to its logs and refuses to create users until that token is consumed. From the TrueNAS shell:
+The first time the container boots, it prints a one-time setup token to its logs and refuses to create users until that token is consumed. From the TrueNAS shell:
 
 ```sh
-docker logs ix-dothesplit-api-1 2>&1 | grep -A2 'first-run setup'
+docker logs ix-dothesplit-dothesplit-1 2>&1 | grep -A2 'first-run setup'
 ```
 
-(Container name pattern is `ix-<app>-<service>-1`. If TrueNAS picks a different name, find it via `docker ps | grep dothesplit-api`.) The log line includes `token=<value>` and `url=…/setup`.
+(Container name pattern is `ix-<app>-<service>-1`. If TrueNAS picks a different name, find it via `docker ps | grep dothesplit`.) The log line includes `token=<value>` and `url=…/setup`.
 
 Open `http://<truenas-ip>:8080/setup`, paste the token, fill in display name + email + password (≥10 chars), and submit. On success you are redirected to `/groups` and the setup form is permanently locked: even after restarts, only an explicit DB edit can re-open it.
 
-### Step 6: Verify
+### Step 5: Verify
 
 ```sh
 curl -fsS http://<truenas-ip>:8080/healthz   # 200 with version + commit
@@ -524,15 +388,38 @@ The web footer also shows the running version, linked to the GitHub Release.
 
 ### Backups
 
-- Snapshot the dataset `ssd-storage/apps-data/dothesplit` recursively (Periodic Snapshot Tasks). The Postgres data dir lives inside it. On the SQLite stack the `dts.db` file (plus its `-wal`/`-shm` sidecars) lives in the bind-mounted `data` dataset instead - snapshot that.
-- Keep the four secrets out of band, in a password manager or a separate secrets vault. A snapshot without the keys cannot be decrypted (true on both engines - the encryption is application-level, above the DB).
+- Snapshot the dataset `ssd-storage/apps-data/dothesplit` recursively (Periodic Snapshot Tasks). The SQLite `dts.db` file (plus its `-wal`/`-shm` sidecars) lives in the bind-mounted `data` dataset. Stop the app before snapshotting so the WAL is checkpointed.
+- Keep the four secrets out of band, in a password manager or a separate secrets vault. A snapshot without the keys cannot be decrypted (the encryption is application-level, above the DB).
 
 ### Updates
 
-1. Refresh the migrations directory to the new release (re-run the `curl | tar` command from Step 2 with the new tag).
-2. **Apps → dothesplit → Edit** → bump the `image:` tags for `api` and `worker` (they share one image) to the new `:X.Y.Z` and click **Save**.
+**Apps → dothesplit → Edit** → bump the `image:` tag to the new `:X.Y.Z` and click **Save**. Embedded migrations apply in-process on the next boot; there is no migrations directory to refresh.
 
-The `migrate` one-shot runs again on every up; it is idempotent and applies any new `*.up.sql` files. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#major-postgres-upgrades) for the special case of major Postgres version bumps.
+### Postgres on TrueNAS
+
+To run the Postgres stack instead, the [PostgreSQL (what changes vs SQLite)](#postgresql-what-changes-vs-sqlite) differences apply, plus these TrueNAS specifics:
+
+- **Two extra directories.** Alongside (or instead of) `data`, create `pgdata` (the database volume) and `migrations` (the `migrate` bind mount):
+
+  ```sh
+  mkdir -p /mnt/ssd-storage/apps-data/dothesplit/{pgdata,migrations}
+  chown -R 70:70 /mnt/ssd-storage/apps-data/dothesplit/pgdata
+  chmod 700      /mnt/ssd-storage/apps-data/dothesplit/pgdata
+  ```
+
+  UID **70** is the `postgres` user in the `postgres:18.4-alpine3.22` image (Alpine convention; Debian-based images use 999). **Do not** apply the dataset's `Apps` permission preset (UID 568) to `pgdata`, or Postgres refuses to start on a directory it can't own. The `migrations` directory needs no special ownership (`migrate` reads it `:ro`).
+
+- **Drop the migrations on disk** before installing, and refresh them on every upgrade:
+
+  ```sh
+  cd /mnt/ssd-storage/apps-data/dothesplit/migrations
+  curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
+    | tar -xz --strip-components=3 --wildcards '*/server/migrations'
+  ```
+
+- **Use the three-service YAML** from [PostgreSQL (what changes vs SQLite)](#postgresql-what-changes-vs-sqlite), swapping the named `dts_pg_data` volume for the `pgdata` bind mount and the `./server/migrations` mount for `/mnt/.../migrations`. Add `POSTGRES_PASSWORD` and `DATABASE_URL` (`postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable`) to the environment table. Keep the Postgres mount target at `/var/lib/postgresql` (parent dir, not `…/data`).
+
+- **Backups:** the Postgres data dir lives inside the recursively-snapshotted dataset. Updates also require refreshing the `migrations` directory before bumping the image tag.
 
 ---
 
@@ -552,10 +439,9 @@ When `COOKIE_SECURE=true` the `dts_refresh` cookie gains the `Secure` flag (sent
 
 For reference, the containers run as follows:
 
-| Service    | User                                         | Filesystem  | Notes                                                                                                                                                           |
-| ---------- | -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`      | `nonroot:nonroot` (UID 65532)                | `read_only` | Distroless image (also serves the embedded SPA), all caps dropped                                                                                               |
-| `worker`   | `nonroot:nonroot` (UID 65532)                | `read_only` | Same image as `api`                                                                                                                                             |
-| `postgres` | starts as root, drops to `postgres` (UID 70) | writable    | Standard upstream behaviour; needs root for `initdb`, runs as 70 thereafter, which is why the TrueNAS path chowns `pgdata` to 70 rather than the `apps` UID 568 |
+| Service      | User                                         | Filesystem  | Notes                                                                                                                                                           |
+| ------------ | -------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dothesplit` | `nonroot:nonroot` (UID 65532)                | `read_only` | Distroless image (serves the API, the embedded SPA, and the in-process worker), all caps dropped                                                                |
+| `postgres`   | starts as root, drops to `postgres` (UID 70) | writable    | Standard upstream behaviour; needs root for `initdb`, runs as 70 thereafter, which is why the TrueNAS path chowns `pgdata` to 70 rather than the `apps` UID 568 |
 
 On TrueNAS specifically: the data directory belongs to the database engine, not to the shared `apps` user pool, so deviating from the `Apps` permission preset for `pgdata` is intentional.

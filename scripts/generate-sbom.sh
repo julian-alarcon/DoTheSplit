@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Generates CycloneDX SBOMs for the api binary, the worker binary, and the app
-# (Vue SPA) package. Outputs go to /sbom/ at repo root (gitignored). Published
-# as release artifacts by .github/workflows/compliance.yml.
+# Generates CycloneDX SBOMs for the server binary and the app (Vue SPA) package.
+# Outputs go to /sbom/ at repo root (gitignored). Published as release artifacts
+# by .github/workflows/compliance.yml.
 #
 # Usage: ./scripts/generate-sbom.sh
 set -euo pipefail
@@ -10,18 +10,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/sbom"
 mkdir -p "$OUT"
 
-echo "→ CycloneDX SBOM: api"
+echo "→ CycloneDX SBOM: server"
 (
-  cd "$ROOT/api"
+  cd "$ROOT/server"
   go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 app \
-    -main ./cmd/api -json -output "$OUT/api.cdx.json" .
-)
-
-echo "→ CycloneDX SBOM: worker"
-(
-  cd "$ROOT/api"
-  go run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0 app \
-    -main ./cmd/worker -json -output "$OUT/worker.cdx.json" .
+    -main ./cmd/server -json -output "$OUT/server.cdx.json" .
 )
 
 echo "→ CycloneDX SBOM: frontend"
@@ -33,7 +26,7 @@ echo "→ CycloneDX SBOM: frontend"
 )
 
 echo "→ Verifying CycloneDX format"
-for f in "$OUT/api.cdx.json" "$OUT/worker.cdx.json" "$OUT/frontend.cdx.json"; do
+for f in "$OUT/server.cdx.json" "$OUT/frontend.cdx.json"; do
   if ! jq -e '.bomFormat == "CycloneDX"' "$f" >/dev/null; then
     echo "✗ $f is not a valid CycloneDX document" >&2
     exit 1

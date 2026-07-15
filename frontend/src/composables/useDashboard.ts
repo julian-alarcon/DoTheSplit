@@ -61,7 +61,7 @@ function isValidCadence(c: string): c is Cadence {
   return ["daily", "weekly", "biweekly", "monthly", "yearly"].includes(c);
 }
 
-// Mirrors api/internal/service/recurring.go advanceCadence so we can anchor the
+// Mirrors server/internal/service/recurring.go advanceCadence so we can anchor the
 // recurring template at the *next* occurrence without an extra round-trip.
 function advanceCadence(fromISO: string, cadence: Cadence): string {
   const d = new Date(fromISO);

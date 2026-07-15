@@ -58,8 +58,8 @@
     },
     {
       "customType": "regex",
-      "description": "Track Node version declared in api/Dockerfile ARG",
-      "managerFilePatterns": ["/api/Dockerfile$/"],
+      "description": "Track Node version declared in server/Dockerfile ARG",
+      "managerFilePatterns": ["/server/Dockerfile$/"],
       "matchStrings": [
         "ARG NODE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],

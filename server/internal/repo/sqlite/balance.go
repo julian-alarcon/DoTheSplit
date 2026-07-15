@@ -1,0 +1,89 @@
+package sqlite
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+
+	"github.com/julian-alarcon/dothesplit/server/internal/repo"
+)
+
+type BalanceRepo struct{ s *Store }
+
+// NetBalances computes per-user net cents for a group in a single query.
+// Positive means the user is owed; negative means they owe. Each SQLite `?`
+// is positional, so group_id is bound once per occurrence in left-to-right
+// order (five occurrences: paid, owed, settled_out, settled_in, members).
+func (r *BalanceRepo) NetBalances(ctx context.Context, groupID uuid.UUID) ([]repo.NetBalance, error) {
+	rows, err := r.s.db.QueryContext(ctx, `
+		WITH paid AS (
+			SELECT payer_id AS user_id, SUM(amount_cents) AS paid_cents
+			FROM expenses
+			WHERE group_id = ? AND deleted_at IS NULL
+			GROUP BY payer_id
+		),
+		owed AS (
+			SELECT s.user_id, SUM(s.share_cents) AS owed_cents
+			FROM splits s JOIN expenses e ON e.id = s.expense_id
+			WHERE e.group_id = ? AND e.deleted_at IS NULL
+			GROUP BY s.user_id
+		),
+		settled_out AS (
+			SELECT from_user AS user_id, SUM(amount_cents) AS paid_out
+			FROM settlements
+			WHERE group_id = ? AND deleted_at IS NULL
+			GROUP BY from_user
+		),
+		settled_in AS (
+			SELECT to_user AS user_id, SUM(amount_cents) AS received
+			FROM settlements
+			WHERE group_id = ? AND deleted_at IS NULL
+			GROUP BY to_user
+		)
+		SELECT m.user_id, u.display_name,
+			COALESCE(p.paid_cents, 0) - COALESCE(o.owed_cents, 0)
+			+ COALESCE(so.paid_out, 0) - COALESCE(si.received, 0) AS net_cents
+		FROM group_members m
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN paid p         ON p.user_id  = m.user_id
+		LEFT JOIN owed o         ON o.user_id  = m.user_id
+		LEFT JOIN settled_out so ON so.user_id = m.user_id
+		LEFT JOIN settled_in si  ON si.user_id = m.user_id
+		WHERE m.group_id = ?
+		ORDER BY net_cents DESC
+	`, groupID, groupID, groupID, groupID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []repo.NetBalance
+	for rows.Next() {
+		var b repo.NetBalance
+		if err := rows.Scan(&b.UserID, &b.DisplayName, &b.NetCents); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// NetForUser returns one user's net cents for a group, computed from their
+// historical paid/owed/settled rows - independent of current membership.
+// Used to gate member removal: a non-zero net would silently disappear from
+// the ledger if we let the user leave. Each subquery repeats (group_id,
+// user_id), so the args are bound in that pairwise order per occurrence.
+func (r *BalanceRepo) NetForUser(ctx context.Context, groupID, userID uuid.UUID) (int64, error) {
+	var net int64
+	err := r.s.db.QueryRowContext(ctx, `
+		SELECT
+			  COALESCE((SELECT SUM(amount_cents) FROM expenses
+			            WHERE group_id = ? AND payer_id = ? AND deleted_at IS NULL), 0)
+			- COALESCE((SELECT SUM(s.share_cents) FROM splits s JOIN expenses e ON e.id = s.expense_id
+			            WHERE e.group_id = ? AND s.user_id = ? AND e.deleted_at IS NULL), 0)
+			+ COALESCE((SELECT SUM(amount_cents) FROM settlements
+			            WHERE group_id = ? AND from_user = ? AND deleted_at IS NULL), 0)
+			- COALESCE((SELECT SUM(amount_cents) FROM settlements
+			            WHERE group_id = ? AND to_user = ? AND deleted_at IS NULL), 0)
+	`, groupID, userID, groupID, userID, groupID, userID, groupID, userID).Scan(&net)
+	return net, err
+}

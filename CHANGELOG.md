@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/julian-alarcon/DoTheSplit/compare/v1.1.0...v1.2.0) (2026-07-15)
+
+
+### Features
+
+* **api:** preserve original creator and timestamp on CSV export/import round-trip ([cc5df78](https://github.com/julian-alarcon/DoTheSplit/commit/cc5df7852f14155c16ebeb46f2b7afc4a6e08213))
+* **infra:** default docker deployment to SQLite and require DATABASE_DRIVER ([783839d](https://github.com/julian-alarcon/DoTheSplit/commit/783839dd9cf1853fef88c0d0785e7981b96ffa2c))
+
+
+### Bug Fixes
+
+* **ci:** scope Postgres DATABASE_URL to the postgres e2e leg so SQLite boots ([0b97976](https://github.com/julian-alarcon/DoTheSplit/commit/0b97976c95e1f09bb0cc33e858e9f319ba3af31a))
+
 ## [1.1.0](https://github.com/julian-alarcon/DoTheSplit/compare/v1.0.1...v1.1.0) (2026-07-10)
 
 

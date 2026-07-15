@@ -185,34 +185,38 @@ jobs:
 
       - name: generate stack secrets
         # Throw-away keys: the docker compose stack is destroyed after this
-        # job, so the secrets never leave the runner. The api refuses to boot
-        # without all four, so we always generate fresh ones. The Postgres vars
-        # are appended too but ignored by the SQLite stack.
+        # job, so the secrets never leave the runner. The app refuses to boot
+        # without all four, so we always generate fresh ones. The Postgres
+        # vars (DATABASE_URL, POSTGRES_*) are written ONLY for the Postgres
+        # leg: docker-compose.yml (the SQLite default) reads
+        # ${DATABASE_URL:-file:/data/dts.db}, so a Postgres URL leaking into
+        # .env would make SQLite try to open a file named "postgres://…" and
+        # fail with SQLITE_CANTOPEN.
         run: |
           {
             echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
             echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
             echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
             echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
-            # base64url alphabet (`-` and `_` instead of `+` and `/`) so the
-            # password is safe to drop into DATABASE_URL userinfo without
-            # percent-encoding. Plain base64 contains `/` ~64% of the time,
-            # which breaks URL parsing of the userinfo:host:port boundary.
-            echo "POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr '+/' '-_')"
-          } >> .env
-          # Patch DATABASE_URL with the random password so the migrate +
-          # api containers can both connect (Postgres stack only).
-          PWD=$(grep ^POSTGRES_PASSWORD= .env | cut -d= -f2-)
-          {
-            echo "POSTGRES_USER=dts"
-            echo "POSTGRES_DB=dts"
-            echo "DATABASE_URL=postgres://dts:${PWD}@postgres:5432/dts?sslmode=disable"
             echo "API_HTTP_ADDR=:8080"
             echo "WEB_ORIGIN=http://localhost:8080"
             echo "LOG_LEVEL=info"
             echo "COOKIE_SECURE=false"
             echo "COOKIE_DOMAIN="
           } >> .env
+          if [ "${{ matrix.engine }}" = "postgres" ]; then
+            # base64url alphabet (`-` and `_` instead of `+` and `/`) so the
+            # password is safe to drop into DATABASE_URL userinfo without
+            # percent-encoding. Plain base64 contains `/` ~64% of the time,
+            # which breaks URL parsing of the userinfo:host:port boundary.
+            PWD=$(openssl rand -base64 24 | tr '+/' '-_')
+            {
+              echo "POSTGRES_PASSWORD=${PWD}"
+              echo "POSTGRES_USER=dts"
+              echo "POSTGRES_DB=dts"
+              echo "DATABASE_URL=postgres://dts:${PWD}@postgres:5432/dts?sslmode=disable"
+            } >> .env
+          fi
 
       - name: boot stack
         run: docker compose -f ${{ matrix.compose }} up -d --build

@@ -15,58 +15,90 @@ DoTheSplit runs on **SQLite** (the default, zero-dependency single container) or
 `DATABASE_DRIVER` for you (it is required and has no default, so an unset env
 fails fast).
 
-### SQLite (default)
+## Install
+
+For production, run the pinned GHCR image (no build step). First generate the
+four encryption keys into `.env` - they protect every email and password, so
+generate them **once** and keep a copy somewhere safe (see [Backup](#backup)):
 
 ```bash
-cp .env.example .env
-
-# Generate the four encryption keys and append to .env. These protect every
-# email and password - generate them ONCE and keep a copy somewhere safe.
-# See "Secrets you must back up" below.
 {
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
   echo "EMAIL_HMAC_KEY=$(openssl rand -base64 32)"
   echo "PASSWORD_PEPPER=$(openssl rand -base64 32)"
   echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)"
 } >> .env
+```
 
-# One dothesplit container, one DB file on a volume. No Postgres, no migrate
-# step, no separate worker (all run in-process).
-docker compose up -d --build
+### SQLite (default)
+
+One `dothesplit` container, one DB file on a volume. No Postgres, no migrate
+step, no separate worker (all run in-process). Substitute your release tag for
+`1.2.0`:
+
+```yaml
+# docker-compose.yml
+services:
+  dothesplit:
+    image: ghcr.io/julian-alarcon/dothesplit:1.2.0
+    environment:
+      DATABASE_DRIVER: sqlite
+      DATABASE_URL: file:/data/dts.db
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      EMAIL_ENC_KEY: ${EMAIL_ENC_KEY}
+      EMAIL_HMAC_KEY: ${EMAIL_HMAC_KEY}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+    volumes:
+      - dts_sqlite_data:/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/dothesplit", "--healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  dts_sqlite_data:
+```
+
+```bash
+docker compose up -d
 ```
 
 ### PostgreSQL (scale-out)
 
+Add a Postgres password and point `DATABASE_URL` at the database. The Postgres
+compose file (`docker-compose.postgres.yml`) sets `DATABASE_DRIVER=postgres` on
+the `dothesplit` service and adds the `postgres` + `migrate` services:
+
 ```bash
-# Same four keys as above, plus a Postgres password:
 echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
 # Update DATABASE_URL in .env so the password matches POSTGRES_PASSWORD.
-# The postgres compose file sets DATABASE_DRIVER=postgres on the dothesplit service.
 
-docker compose -f docker-compose.postgres.yml up -d --build
+docker compose -f docker-compose.postgres.yml up -d
 ```
 
-Open http://localhost:8080.
+### First-run setup
 
-## Layout
+Read the one-time setup token from the logs, open http://localhost:8080/setup,
+and paste it:
 
-- `/server`: Go 1.26 backend (standard-library `net/http`, oapi-codegen) with a single binary (`server/cmd/server`) that serves the API, the embedded SPA, and the in-process recurring-expense worker. Persistence is behind a `repo.Store` abstraction with two engines - `server/internal/repo/postgres` (pgx/v5) and `server/internal/repo/sqlite` (modernc.org/sqlite, pure Go) - selected by `DATABASE_DRIVER`.
-- `/frontend`: Vue 3 + Vite single-page app (client-rendered, plain CSS), built to static files and embedded into the Go binary via `go:embed`
-- `/docs/openapi.yaml`: API contract (source of truth, drives Go + TypeScript codegen)
-- `/docs/DEVELOPMENT.md`, `/docs/FEATURES.md`: developer guide and feature catalogue
-- `/docs/IMPORT.md`: importing a group (Splitwise or DoTheSplit CSV) and exporting one
-- `/server/migrations`: append-only PostgreSQL 18 migrations (`golang-migrate`, paired `.up.sql` / `.down.sql`). SQLite migrations live in `/server/internal/repo/sqlite/migrations` and are embedded in the binary, applied in-process on first boot.
-- `/docker-compose.yml`: default (SQLite) deployment stack; `/docker-compose.postgres.yml` is the Postgres stack (both run one `dothesplit` service)
-- `/scripts`: SBOM and third-party-license generators
+```bash
+docker compose logs dothesplit | grep -A2 'first-run setup'
+```
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
-guide and [INSTALL.md](INSTALL.md) for production install paths.
+See [INSTALL.md](INSTALL.md) for the full production guide: hardened compose,
+HTTPS / reverse-proxy exposure, and updates.
 
-## Install on TrueNAS
+### Install on TrueNAS
 
-Running on TrueNAS SCALE? See [INSTALL.md](INSTALL.md) for the Custom App
-walkthrough: dataset layout for either engine, and consuming the first-run
-setup token from the API logs.
+Running on TrueNAS SCALE? See [INSTALL.md](INSTALL.md#truenas-scale-custom-app)
+for the Custom App walkthrough: dataset layout for either engine, host-path bind
+mounts for snapshots, and consuming the first-run setup token from the logs.
 
 ## Container images
 
@@ -82,15 +114,22 @@ and runs a single `/dothesplit` binary that serves the API, the SPA, and the
 in-process background worker. Pull a pinned release for production:
 
 ```bash
-docker pull ghcr.io/julian-alarcon/dothesplit:0.3.0
+docker pull ghcr.io/julian-alarcon/dothesplit:1.2.0
 ```
 
 The running version is reported by `GET /healthz` and the page footer,
 so you can confirm what's deployed at a glance.
 
-## Secrets you must back up
+## Backup
 
-Three values in `.env` are **the** load-bearing secrets for this app:
+A complete backup is **the data (DB volume) plus the `.env` keys**. Either half
+alone is useless: the database is encrypted at the application layer, so a
+data-only backup can't be decrypted without the keys, and the keys alone hold no
+data.
+
+### Secrets you must back up
+
+Four values in `.env` are **the** load-bearing secrets for this app:
 
 | Variable          | What it does                                  | If you lose it                                  | If it leaks                                        |
 | ----------------- | --------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
@@ -103,19 +142,47 @@ Three values in `.env` are **the** load-bearing secrets for this app:
 
 These keys are required and identical for both engines: the encryption is application-level (emails AES-GCM, passwords Argon2id + pepper), done above the storage layer, so switching between SQLite and Postgres does not change what's protected. Neither engine encrypts the whole database file/volume.
 
-**What this means for you:**
-
 - Generate these once on first install. Don't regenerate on a rebuild - the database won't decrypt anymore.
 - Store a copy in your password manager or secrets vault. Treat them like the master password to a vault: this app is the vault.
-- When you back up the data volume (`dts_pg_data` for Postgres, or the `/data` volume holding `dts.db` for SQLite), back up the `.env` alongside it. A backup without the keys is useless.
 - Never commit `.env`. It's gitignored for a reason.
+
+### SQLite
+
+Stop the app first so the WAL is checkpointed into `dts.db`, then snapshot the
+volume that holds `dts.db` (plus its `-wal` / `-shm` sidecars):
+
+```bash
+docker compose stop
+docker run --rm -v dts_sqlite_data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/dts-sqlite-$(date +%F).tar.gz -C /data .
+docker compose start
+```
+
+Restore by extracting the tarball back into a fresh `dts_sqlite_data` volume,
+then bring the stack up.
+
+### PostgreSQL
+
+Dump the database with `pg_dump` (no downtime needed):
+
+```bash
+docker compose -f docker-compose.postgres.yml exec postgres \
+  pg_dump -U dts dts | gzip > dts-pg-$(date +%F).sql.gz
+```
+
+Restore into a fresh database with `psql` (or `pg_restore` for a custom-format
+dump). Alternatively, stop the stack and snapshot the `dts_pg_data` volume.
+
+In both cases, back up `.env` alongside the data.
 
 ## Development
 
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full build / test / deploy
+guide, the repository layout, and the contract-first workflow. The targets you'll
+reach for most:
+
 ```bash
 make gen            # regenerate Go + TS API bindings from openapi.yaml
-make migrate-up     # apply Postgres migrations (SQLite migrates in-process on boot)
-make dev            # run api + frontend against a local postgres
 make lint           # golangci-lint (Go) + eslint (SPA)
 make test           # unit + integration tests
 make test-go-both   # run the Go integration suite against both SQLite and Postgres
@@ -124,21 +191,10 @@ make test-go-both   # run the Go integration suite against both SQLite and Postg
 ## Features
 
 See [docs/FEATURES.md](docs/FEATURES.md) for the long-form description. In short:
-
-- **Accounts**: register / login, display name + password change, verified email change (6-digit code), 8×8 pixel avatars (reducing privacy concerns on GDPR), soft-delete with stable tombstones.
-- **First-run setup**: boot-time token gate so the first user is provably the operator.
-- **Admin**: `/admin` area for users, groups, SMTP and audit, with step-up password prompts for destructive actions.
-- **Groups**: create / rename / delete, **single currency per group** (multi-currency groups are intentionally unsupported, see [Roadmap](#roadmap) for the FX deferral), invites, leave, transfer ownership, default percent split for 2-member groups.
-- **Expenses**: equal / exact / percent splits, ten categories, custom date, optional free-text notes, full edit history with per-member split diffs, reversible soft-delete (any member can restore from the expense's detail page).
-- **Balances & settle-up**: net balances, simplified "X owes Y" view, settlements in a paginated transaction feed with detail pages. Pick who is paying when settling up; any member can later edit from / to / amount / note / date, or soft-delete and restore.
-- **Recurring expenses**: daily / weekly / biweekly / monthly / yearly templates materialized by a background worker (UI shipped).
-- **Real-time updates**: the group dashboard subscribes to a per-group Server-Sent Events stream (`/v1/groups/{id}/events`) and re-fetches affected views the moment any member (or the worker) creates, edits, deletes, or restores an expense or settlement. Only minimal id/action signals ride the channel, never amounts or notes.
-- **Activity log & notifications**: an append-only per-group activity log with unread tracking, plus opt-in email notifications (recurring run, settlement recorded, added to a group), all off by default and gated on SMTP being configured.
-- **Themes & PWA**: light / dark / high-contrast themes (per-device, applied pre-paint), and an installable PWA with read-only offline (network-first `/v1` GET cache, offline banner, mutations short-circuited offline).
-- **Search**: cross-group substring search over expense descriptions / notes and settlement notes, with collapsible Group and Category filters. The category picker only lists categories present in the current result set.
-- **Import & export**: CSV in / out via `/import` (Splitwise or DoTheSplit) and group settings → Export. The DoTheSplit format keeps the Splitwise prefix and adds `Time`, `Payer`, `Notes`, `Created`, `CreatedBy`, so a round-trip preserves second-precision timestamps, explicit payers, and per-expense notes.
-- **Security**: Argon2id, AES-GCM email at rest, rate-limited auth + setup, strict JSON bodies, hashed-inline CSP, password confirmation for self-delete.
-- **API**: OpenAPI 3.0.3 contract at [docs/openapi.yaml](docs/openapi.yaml); every business endpoint is under `/v1/...`.
+Accounts, First-run setup, Admin, Groups, Expenses, Balances & settle-up,
+Recurring expenses, Transaction feed, Real-time updates, Activity log, Email
+notifications, Themes & PWA, Search, Import & export, Settings & about, dual
+SQLite/PostgreSQL storage, Security, and a contract-first OpenAPI 3.0.3 API.
 
 ## Related / similar projects
 
@@ -180,7 +236,6 @@ Reasonable next steps, roughly prioritized. Contributions welcome: open an issue
 
 ### Medium term
 
-- **Backup**
 - **i18n** (app is English-only today; amount and date formatting already respect the browser locale).
 - **Optimistic UI + refresh-on-focus** (the perf budget is ≤100ms perceived: reads are close but mutations still block). The hand-rolled composables would gain a caching/invalidation layer if this becomes painful.
 - **Import** from Tricount

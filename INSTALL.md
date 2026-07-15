@@ -46,12 +46,12 @@ mkdir -p ~/dothesplit && cd ~/dothesplit
 
 Save the secrets in a password manager **now** - see [Secrets](#secrets).
 
-**Step 2: Write `docker-compose.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.0.0`:
+**Step 2: Write `docker-compose.yml`.** Save this next to `.env`. It runs a single service, storing `dts.db` (plus its `-wal`/`-shm` sidecars) on a named volume mounted at `/data`. Substitute your release tag for `v1.2.0`:
 
 ```yaml
 services:
   dothesplit:
-    image: ghcr.io/julian-alarcon/dothesplit:1.0.0
+    image: ghcr.io/julian-alarcon/dothesplit:1.2.0
     environment:
       # sqlite is the default, but set it explicitly for clarity.
       DATABASE_DRIVER: sqlite
@@ -133,14 +133,14 @@ Reach for Postgres only when you need multi-instance / scale-out; a single-node 
 - **Two more env vars.** Set `DATABASE_DRIVER=postgres` (sqlite is the default, so Postgres must opt in) and add `POSTGRES_PASSWORD`. `DATABASE_URL` is now required (no `file:` default): `postgres://dts:<POSTGRES_PASSWORD>@postgres:5432/dts?sslmode=disable`. URL-encode the password if it contains any of `: / ? # [ ] @`.
 - **Migrations live on disk.** Unlike SQLite (migrations embedded in the binary, applied in-process), the Postgres path bind-mounts `server/migrations` into the `migrate` container. Fetch them per release tag.
 
-**Step 1: Get migrations + secrets.** Substitute your release tag for `v1.0.0`:
+**Step 1: Get migrations + secrets.** Substitute your release tag for `v1.2.0`:
 
 ```sh
 mkdir -p ~/dothesplit && cd ~/dothesplit
-curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
+curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.2.0.tar.gz \
   | tar -xz --strip-components=1 \
-      'dothesplit-1.0.0/server/migrations' \
-      'dothesplit-1.0.0/.env.example'
+      'dothesplit-1.2.0/server/migrations' \
+      'dothesplit-1.2.0/.env.example'
 cp .env.example .env
 {
   echo "EMAIL_ENC_KEY=$(openssl rand -base64 32)"
@@ -153,7 +153,7 @@ cp .env.example .env
 
 Edit `.env` and set `DATABASE_URL` so its password matches `POSTGRES_PASSWORD`. Save all five secrets in a password manager now: see [Secrets](#secrets).
 
-**Step 2: Write `docker-compose.postgres.yml`** next to `.env`. It pulls pinned GHCR release images instead of building from source. Substitute your release tag for `v1.0.0`:
+**Step 2: Write `docker-compose.postgres.yml`** next to `.env`. It pulls pinned GHCR release images instead of building from source. Substitute your release tag for `v1.2.0`:
 
 ```yaml
 services:
@@ -203,7 +203,7 @@ services:
       - /tmp:rw,noexec,nosuid,size=8m
 
   dothesplit:
-    image: ghcr.io/julian-alarcon/dothesplit:1.0.0
+    image: ghcr.io/julian-alarcon/dothesplit:1.2.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -293,6 +293,9 @@ The distroless `dothesplit` image runs as UID 65532 (`nonroot`). Make the `data`
 chown -R 65532:65532 /mnt/ssd-storage/apps-data/dothesplit/data
 ```
 
+> [!IMPORTANT]
+> **Do not** apply the dataset's `Apps` permission preset (UID 568) to `data`. TrueNAS sets that owner by default, and the read-only `nonroot` container (UID 65532) then can't write `dts.db`, so the app crash-loops on boot with `ping sqlite: unable to open database file (14)` (`SQLITE_CANTOPEN`). If the app is stopped, check with `ls -lan /mnt/ssd-storage/apps-data/dothesplit/data`: the owner must be `65532`, not `568`. Re-run the `chown` above (after the dataset is created, so the preset can't overwrite it) and restart the app. This mirrors the UID-70 caveat for Postgres `pgdata`.
+
 ### Step 2: Generate the secrets
 
 SQLite needs only the four crypto keys - no `POSTGRES_PASSWORD`, no external `DATABASE_URL`. Run on any machine with `openssl` and write the output down somewhere safe **before** continuing:
@@ -310,12 +313,17 @@ Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the databas
 
 1. **Apps → Discover Apps → Custom App**.
 2. **Application Name**: `dothesplit`.
-3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with the named volume replaced by a host-path bind mount at the `data` dataset you created in Step 1. The `dothesplit` service uses the pinned GHCR release image (one image serves the JSON API, the embedded SPA, and the in-process worker) instead of building from source. Substitute your release tag for `v1.0.0`:
+3. **Install via custom YAML**: paste the compose below. It is the project's [`docker-compose.yml`](docker-compose.yml) with the named volume replaced by a host-path bind mount at the `data` dataset you created in Step 1. The `dothesplit` service uses the pinned GHCR release image (one image serves the JSON API, the embedded SPA, and the in-process worker) instead of building from source. Substitute your release tag for `v1.2.0`:
 
    ```yaml
    services:
      dothesplit:
-       image: ghcr.io/julian-alarcon/dothesplit:1.0.0
+       image: ghcr.io/julian-alarcon/dothesplit:1.2.0
+       # Pin a stable container name so `docker logs`/`docker exec` don't depend
+       # on the app name you type in the wizard (TrueNAS otherwise derives it as
+       # ix-<app>-<service>-1, which doubles "dothesplit" if you name the app
+       # after the service).
+       container_name: custom-app-dothesplit-1
        environment:
          # sqlite is the default, but set it explicitly for clarity.
          DATABASE_DRIVER: sqlite
@@ -352,12 +360,12 @@ Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the databas
 
 4. **Environment Variables**: add the four secrets to the Custom App's environment table:
 
-   | Name              | Value          |
-   | ----------------- | -------------- |
-   | `EMAIL_ENC_KEY`   | (from Step 2)  |
-   | `EMAIL_HMAC_KEY`  | (from Step 2)  |
-   | `PASSWORD_PEPPER` | (from Step 2)  |
-   | `JWT_SIGNING_KEY` | (from Step 2)  |
+   | Name              | Value         |
+   | ----------------- | ------------- |
+   | `EMAIL_ENC_KEY`   | (from Step 2) |
+   | `EMAIL_HMAC_KEY`  | (from Step 2) |
+   | `PASSWORD_PEPPER` | (from Step 2) |
+   | `JWT_SIGNING_KEY` | (from Step 2) |
 
 5. **Networking**: leave on the default bridge. Port 8080 (which also serves the SPA) is exposed on the TrueNAS host. For internet exposure, see the section below.
 
@@ -370,10 +378,10 @@ Losing `EMAIL_ENC_KEY`, `EMAIL_HMAC_KEY`, or `PASSWORD_PEPPER` after the databas
 The first time the container boots, it prints a one-time setup token to its logs and refuses to create users until that token is consumed. From the TrueNAS shell:
 
 ```sh
-docker logs ix-dothesplit-dothesplit-1 2>&1 | grep -A2 'first-run setup'
+docker logs custom-app-dothesplit-1 2>&1 | grep -A2 'first-run setup'
 ```
 
-(Container name pattern is `ix-<app>-<service>-1`. If TrueNAS picks a different name, find it via `docker ps | grep dothesplit`.) The log line includes `token=<value>` and `url=…/setup`.
+(This uses the `container_name` pinned in the YAML above. Without it, TrueNAS derives the name as `ix-<app>-<service>-1`; find it via `docker ps | grep dothesplit`.) The log line includes `token=<value>` and `url=…/setup`.
 
 Open `http://<truenas-ip>:8080/setup`, paste the token, fill in display name + email + password (≥10 chars), and submit. On success you are redirected to `/groups` and the setup form is permanently locked: even after restarts, only an explicit DB edit can re-open it.
 
@@ -413,7 +421,7 @@ To run the Postgres stack instead, the [PostgreSQL (what changes vs SQLite)](#po
 
   ```sh
   cd /mnt/ssd-storage/apps-data/dothesplit/migrations
-  curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.0.0.tar.gz \
+  curl -fsSL https://github.com/julian-alarcon/dothesplit/archive/refs/tags/v1.2.0.tar.gz \
     | tar -xz --strip-components=3 --wildcards '*/server/migrations'
   ```
 

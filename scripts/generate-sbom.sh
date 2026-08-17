@@ -20,7 +20,7 @@ echo "→ CycloneDX SBOM: server"
 echo "→ CycloneDX SBOM: frontend"
 (
   cd "$ROOT/frontend"
-  npx --yes @cyclonedx/cyclonedx-npm@4.2.1 \
+  npx --yes @cyclonedx/cyclonedx-npm@6.0.1 \
     --output-file "$OUT/frontend.cdx.json" \
     --output-format JSON
 )

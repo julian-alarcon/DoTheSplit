@@ -33,7 +33,7 @@ services:
     # ports: ["127.0.0.1:5432:5432"]  # uncomment for local debugging only
 
   migrate:
-    image: migrate/migrate:v4.19.1
+    image: migrate/migrate:v4.20.1
     depends_on:
       postgres:
         condition: service_healthy
